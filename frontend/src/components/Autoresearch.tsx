@@ -1,11 +1,13 @@
 import { api } from '../api/client';
 import { useApi } from '../api/useApi';
-import type { AutoresearchSport, AutoresearchStatus } from '../api/types';
+import type { AutoresearchOutcome, AutoresearchSport, AutoresearchStatus, AutoresearchV3, AutoresearchV3Sport } from '../api/types';
 import { AsyncView } from './States';
 import { dateTime, num } from '../format';
 
 const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation three-way', spread: 'Spread / puck line', total: 'Total', team_total_home: 'Home team total', team_total_away: 'Away team total' };
 const signed = (x?: number | null) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x.toFixed(5)}`);
+const OUTCOME: Record<AutoresearchOutcome, string> = { evaluated: 'Evaluated', no_candidates: 'No candidates (nothing was searched)', refused: 'Refused', failed: 'Failed', skipped: 'Skipped (budget or time)' };
+const SPORT_NAME: Record<string, string> = { nba: 'NBA', nhl: 'NHL', nfl: 'NFL', soccer: 'Soccer', ncaab: 'NCAAB' };
 const DECISION: Record<string, string> = { keep: 'Kept (exploratory)', reject: 'Rejected', discard: 'Rejected', crash: 'Crashed', timeout: 'Timed out', invalid: 'Invalid', interrupted: 'Interrupted' };
 
 /** Sports autoresearch: an agent proposes train.py changes, the fixed evaluator fits and scores them on validation seasons of a
@@ -31,8 +33,45 @@ function AutoresearchBody({ d }: { d: AutoresearchStatus }) {
         <td>{r.outcome ?? '—'}</td><td>{r.trials ?? '—'}</td><td>{r.cost_usd == null ? (r.end ? 'unknown' : '—') : `$${r.cost_usd.toFixed(2)}`}{r.corrections?.map((c, i) => <div key={i} className="small muted">Corrected: {c.reason}</div>)}</td></tr>)}
     </tbody></table></div>}
     {d.last_daily && <p>Last evaluation sweep: {d.last_daily.finished_at ? dateTime(d.last_daily.finished_at) : '—'} · {d.last_daily.outcome} · {d.last_daily.stopped}</p>}
+    {d.v3 && <V3Research v={d.v3} />}
     {Object.entries(d.sports ?? {}).map(([sport, s]) => <SportResearch key={sport} sport={sport} s={s} />)}
   </>;
+}
+
+/** Five-sport research (protocol v3): per sport the explicit outcome of the last attempt, the last successful evaluation,
+ *  candidates, evaluated markets, blockers and the next run. Research only: a keep is exploratory, never a promotion. */
+function V3Research({ v }: { v: AutoresearchV3 }) {
+  return <section aria-labelledby="ar-v3-h"><h3 id="ar-v3-h">All sports ({v.protocol})</h3>
+    <p className="notice">{v.note}</p>
+    {v.last_daily && <p>Last daily run: {v.last_daily.finished_at ? dateTime(v.last_daily.finished_at) : '—'} · {Object.entries(v.last_daily.outcomes ?? {}).map(([s, o]) => `${SPORT_NAME[s] ?? s}: ${OUTCOME[o] ?? o}`).join(' · ')}</p>}
+    <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Last attempt</th><th>Last successful evaluation</th><th>Candidates</th><th>Evaluated markets</th><th>Blockers</th><th>Next run</th></tr></thead><tbody>
+      {Object.entries(v.sports).map(([sport, s]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
+        <td>{s.last_attempt ? <>{OUTCOME[s.last_attempt.outcome] ?? s.last_attempt.outcome}<br /><span className="small muted">{dateTime(s.last_attempt.at)}{s.last_attempt.reason ? ` · ${s.last_attempt.reason}` : ''}</span></> : '—'}</td>
+        <td>{s.last_success_at ? dateTime(s.last_success_at) : 'never'}</td>
+        <td>{s.candidate_count}{s.queue ? <span className="small muted"> · queue {s.queue.done}/{s.queue.total}{s.queue.remaining ? `, ${s.queue.remaining} waiting` : ''}</span> : null}</td>
+        <td>{s.evaluated_markets.length ? s.evaluated_markets.map(m => MARKET[m] ?? m).join(', ') : 'none'}</td>
+        <td>{s.blockers.length ? <ul className="small">{s.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul> : 'none'}</td>
+        <td>{s.next_run ?? '—'}</td></tr>)}
+    </tbody></table></div>
+    {Object.entries(v.sports).filter(([, s]) => s.evaluation).map(([sport, s]) => <V3Detail key={sport} sport={sport} s={s} />)}
+  </section>;
+}
+
+function V3Detail({ sport, s }: { sport: string; s: AutoresearchV3Sport }) {
+  const rows = Object.entries(s.evaluation ?? {});
+  return <details className="card"><summary><strong>{SPORT_NAME[sport] ?? sport}</strong> · {s.kept?.length ? `kept (exploratory): ${s.kept.join(', ')}` : 'no candidate kept'} · seasons search {s.periods?.search.join(', ')} / validation {s.periods?.validation.join(', ')} / holdout {s.periods?.holdout.join(', ')} (read once, never by daily runs)</summary>
+    {s.periods_note && <p className="small muted">{s.periods_note}</p>}
+    <div className="table-wrap"><table className="table"><thead><tr><th>Market</th><th>Best existing model (log loss, ECE)</th><th>Games</th><th>Baselines (log loss)</th><th>Sportsbook</th><th>Candidates: decision, validation Δ [95%]</th></tr></thead><tbody>
+      {rows.map(([m, e]) => <tr key={m}><th>{MARKET[m] ?? m}{s.markets?.[m]?.settlement ? <div className="small muted">{s.markets[m].settlement}</div> : null}</th>
+        {e.status !== 'evaluated' ? <td colSpan={5}>{e.status}: {e.reason}</td> : <>
+          <td>{e.incumbent} ({num(e.log_loss, 5)}, {num(e.ece, 4)})</td><td>{e.n}</td>
+          <td>{Object.entries(e.baselines ?? {}).map(([b, x]) => `${b.replace('baseline:', '')} ${num(x, 5)}`).join(' · ')}</td>
+          <td>{e.vs_book === 'ok' ? 'compared' : 'unavailable (no valid quote history)'}</td>
+          <td>{Object.keys(e.candidates ?? {}).length === 0 ? 'no candidates' : Object.entries(e.candidates ?? {}).map(([n, c]) => <div key={n}>{n}: {DECISION[c.decision] ?? c.decision}, {signed(c.validation_delta)}{c.validation_ci95 ? ` [${signed(c.validation_ci95[0])}, ${signed(c.validation_ci95[1])}]` : ''}</div>)}</td></>}
+      </tr>)}
+    </tbody></table></div>
+    {s.unsupported && Object.keys(s.unsupported).length > 0 && <p className="small">Not evaluable yet: {Object.entries(s.unsupported).map(([m, why]) => `${m} (${why})`).join('; ')}.</p>}
+  </details>;
 }
 
 function SportResearch({ sport, s }: { sport: string; s: AutoresearchSport }) {

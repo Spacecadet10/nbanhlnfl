@@ -137,4 +137,35 @@ def status(recent: int = 12) -> dict:
                 "driver_alive": _alive(active.get("driver_pid"), active.get("driver_token"))},
             "agent_runs": sorted(runs.values(), key=lambda r: r.get("started_at") or "", reverse=True)[:10],
             "last_daily": last_daily and {k: last_daily.get(k) for k in ("started_at", "finished_at", "outcome", "stopped", "refused")},
-            "sports": {s: sport_status(p, m, recent) for s, (p, m) in sorted(sports.items())}}
+            "sports": {s: sport_status(p, m, recent) for s, (p, m) in sorted(sports.items())},
+            "v3": v3_status(root)}
+
+
+# --- Protocol v3 (five sports): per-sport state written by autoresearch.run_sport_v3 -----------------------------------------
+V3_NOTE = ("Protocol v3 evaluates research candidates for NBA, NHL, NFL, Soccer and NCAAB on chronological search and validation "
+           "seasons, against the best existing model, simple baselines and (where valid quotes exist) sportsbook no-vig "
+           "probabilities. Exploratory and repeated looks are labelled; the holdout is read once; the forward test is a separate "
+           "store. Nothing here changes a live model, forecast or card; a promotion recommendation is advice, never an action.")
+
+
+def v3_status(root: Path) -> Optional[dict]:
+    """Latest state per sport (state.json of the newest protocol directory) and the latest daily5 report. Reads files only."""
+    latest = {}
+    for p in sorted((root / "v3").glob("*/*/state.json")):
+        st = _read(p)
+        if st and st.get("sport") and (st["sport"] not in latest or st.get("at", "") > latest[st["sport"]].get("at", "")):
+            latest[st["sport"]] = st
+    reports = sorted((root / "reports").glob("daily5-*.json"))
+    last = _read(reports[-1]) if reports else None
+    if not latest and not last:
+        return None
+    keep = ("protocol_id", "at", "last_attempt", "last_success_at", "outcome", "reason", "candidates", "evaluated_markets", "blockers",
+            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "evaluation", "data_version", "models", "markets")
+    sports = {}
+    for s, st in sorted(latest.items()):
+        sports[s] = {k: st.get(k) for k in keep} | {"candidate_count": len(st.get("candidates") or [])}
+        sports[s]["models"] = {n: {"role": m.get("role"), "version": m.get("version")} for n, m in (st.get("models") or {}).items()}
+        sports[s]["markets"] = {m: {"kind": v.get("kind"), "settlement": v.get("settlement"), "line_basis": v.get("line_basis")}
+                                for m, v in (st.get("markets") or {}).items()}
+    return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports,
+            "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport")}}

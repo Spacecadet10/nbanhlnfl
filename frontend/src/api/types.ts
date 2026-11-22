@@ -840,7 +840,26 @@ export interface AutoresearchRun {
   outcome?: string; trials?: number; cost_usd?: number | null; reason?: string; report?: string;
   corrections?: { at?: string; reason?: string }[];
 }
+/** Protocol v3 (five sports): one sport's explicit outcome and state. */
+export type AutoresearchOutcome = 'evaluated' | 'no_candidates' | 'refused' | 'failed' | 'skipped';
+export interface AutoresearchV3Market { status: string; reason?: string; kind?: string; incumbent?: string; n?: number; log_loss?: number | null; ece?: number | null;
+  baselines?: Record<string, number | null>; vs_book?: string | null;
+  candidates?: Record<string, { decision: string; reason: string; validation_delta?: number | null; validation_ci95?: [number, number] | null }> }
+export interface AutoresearchV3Sport {
+  protocol_id?: string | null; at?: string; outcome: AutoresearchOutcome; reason?: string | null;
+  last_attempt?: { at: string; outcome: AutoresearchOutcome; reason?: string | null } | null; last_success_at?: string | null;
+  candidates: string[]; candidate_count: number; evaluated_markets: string[]; blockers: string[]; kept?: string[];
+  queue?: { total: number; done: number; remaining: number; failed: string[]; ran_now: number; next_item: string | null } | null;
+  next_run?: string | null; periods?: { search: number[]; validation: number[]; holdout: number[] }; periods_note?: string | null;
+  unsupported?: Record<string, string>; evaluation?: Record<string, AutoresearchV3Market>;
+  models?: Record<string, { role?: string; version?: string }>; markets?: Record<string, { kind?: string; settlement?: string; line_basis?: string | null }>;
+}
+export interface AutoresearchV3 {
+  protocol: string; note: string; sports: Record<string, AutoresearchV3Sport>;
+  last_daily?: { started_at?: string; finished_at?: string; outcomes?: Record<string, AutoresearchOutcome> } | null;
+}
 export interface AutoresearchStatus {
+  v3?: AutoresearchV3 | null;
   mode: 'real' | 'demo'; configured: boolean; note: string; reason?: string; experiment_dir?: string; stopped?: string | null;
   active_run?: { run_id: string; branch?: string; started_at?: string; deadline?: number; max_trials?: number; driver_alive: boolean } | null;
   agent_runs?: AutoresearchRun[];

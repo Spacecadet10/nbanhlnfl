@@ -33,7 +33,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -819,16 +819,21 @@ def score_market(data: dict, market: str, cand: dict, incumbent: dict, scored) -
         [combine.log_loss(cand[r["game_id"]], r["realised"]) - combine.log_loss(r["vectors"][prim], r["realised"]) for r in rows], cuts)
     out["per_season"] = {s: {"games": len(g), "minus_incumbent": sum(d for d, r in zip(diffs, rows) if r["season"] == s) / len(g)}
                          for s in sorted({r["season"] for r in rows}) for g in [[r for r in rows if r["season"] == s]]}
-    upper = out["vs_incumbent"]["ci95"][1]
-    ca, ia = out["candidate_matched"]["accuracy"], out["incumbent_matched"]["accuracy"]
+    return out | keep_decision(out["vs_incumbent"]["ci95"][1], out["candidate_matched"]["accuracy"],
+                               out["incumbent_matched"]["accuracy"])
+
+
+def keep_decision(upper: float, ca: Optional[float], ia: Optional[float]) -> dict:
+    """The MODEL_SELECTION §6 keep rule (shared by the protocol-v2 trials and the v3 evaluator): the paired log-loss
+    difference's 95% upper bound is below 0 and the matched pick accuracy is not lower."""
     if upper >= 0:
-        return out | {"decision": "reject", "reason": f"log-loss difference upper bound {upper:+.5f} is not below 0"}
+        return {"decision": "reject", "reason": f"log-loss difference upper bound {upper:+.5f} is not below 0"}
     if ca is None or ia is None:        # §6 needs both accuracies; an undefined one is not treated as a pass
-        return out | {"decision": "reject", "reason": f"accuracy comparison undefined (candidate {ca}, incumbent {ia}: "
-                                                      "no decided picks)"}
+        return {"decision": "reject", "reason": f"accuracy comparison undefined (candidate {ca}, incumbent {ia}: "
+                                                "no decided picks)"}
     if ca < ia:
-        return out | {"decision": "reject", "reason": f"matched accuracy {ca:.4f} below the incumbent's {ia:.4f}"}
-    return out | {"decision": "keep", "reason": f"upper bound {upper:+.5f} < 0 and accuracy {ca:.4f} >= {ia:.4f}"}
+        return {"decision": "reject", "reason": f"matched accuracy {ca:.4f} below the incumbent's {ia:.4f}"}
+    return {"decision": "keep", "reason": f"upper bound {upper:+.5f} < 0 and accuracy {ca:.4f} >= {ia:.4f}"}
 
 
 def agreement(data: dict, market: str, cand: dict, scored) -> dict:
@@ -1209,8 +1214,1218 @@ def holdout(sport: str, exp_root: Path, workspace: Path, ask: Callable[[str], bo
             raise
 
 
+# =============================================================================================================================
+# Protocol v3: research evaluation for all five sports (NBA, NHL, NFL, Soccer, NCAAB). Adapter-driven: each sport supplies a
+# `research_adapter()` (contract in docs/AUTORESEARCH.md "Adapter contract"); everything below is the consumer. Protocol v2
+# (agent trials, NBA/NHL) above is untouched and keeps its own evidence. Nothing here writes an official store, forecast
+# table, record or card; nothing promotes: the output is a recommendation object a person decides on.
+# =============================================================================================================================
+FIVE_SPORTS = ("nba", "nhl", "nfl", "soccer", "ncaab")
+ISO = "%Y-%m-%dT%H:%M:%SZ"
+SETTLE_LAG_HOURS = 6                      # a baseline may use a game's outcome only this long after its start
+BINS = 10
+MIN_SCORED = 50                           # fewer scored games than this in a comparison: no keep decision
+
+# Promotion criteria, fixed BEFORE any forward result exists (docs/AUTORESEARCH.md "Promotion criteria"). Changing them changes
+# the protocol name and starts a new experiment; the code only produces a recommendation, never a promotion.
+PROMOTION = {
+    "min_settled_forward": {"default": 200, "nfl": 100},     # per market, candidate and incumbent both graded
+    "paired_test": "week-block bootstrap 95% upper bound of (candidate - incumbent) log loss < 0 on matched forward games",
+    "calibration": "candidate ECE <= incumbent ECE + 0.01 (10 equal-width bins)",
+    "accuracy": "candidate matched pick accuracy >= incumbent's (MODEL_SELECTION §6)",
+    "sportsbook": {"min_quotes": 100, "rule": "where at least 100 matched, valid, non-synthetic quotes exist (retrieved at or "
+                   "before the forecast cutoff, same line): the 95% lower bound of (candidate - book no-vig) log loss must be "
+                   "<= 0 (not demonstrably worse); below 100 quotes the check is reported as not evaluable, not as passed"},
+    "confirmatory_look": "the first look at which a market reaches its minimum settled count; every other look is exploratory",
+    "never_promotes": True,
+}
+PROTOCOL_V3 = {
+    "name": "sports-research-v3",
+    "sports": list(FIVE_SPORTS),
+    "stages": {"search": "chronological: candidates are ranked here", "validation": "chronological, after search: confirms",
+               "holdout": "reserved, read once per protocol and sport (logged), never by search or daily runs",
+               "forward": "prospective: candidate forecasts stored before the game, graded after it"},
+    "keep_rule": "MODEL_SELECTION §6 via keep_decision(): paired log-loss difference week-block bootstrap 95% upper bound < 0 "
+                 f"and matched pick accuracy not lower, against the best existing member (incumbent), on BOTH the search "
+                 f"and the validation stage, at least {MIN_SCORED} scored games, every incumbent game forecast",
+    "metrics": ["n", "coverage", "brier (3-vector convention)", "log_loss", "calibration bins + ECE", "score MAE/RMSE where "
+                "point predictions exist", "paired comparison vs incumbent, baselines and sportsbook no-vig"],
+    "baselines": {"baseline:uniform": "equal probability per allowed side",
+                  "baseline:base_rate": f"smoothed expanding outcome frequency, outcomes used {SETTLE_LAG_HOURS} h after the "
+                                        "game start"},
+    "returns": "only at executable, non-synthetic quotes retrieved at or before the forecast cutoff with the same line: flat "
+               "1 unit on the model's pick when model probability x decimal price > 1; pushes refund, voids excluded; "
+               "synthetic or non-executable quotes are counted, never returned",
+    "seed": 20261122,
+    "promotion": PROMOTION,
+}
+BUDGET_V3 = {"max_items_per_sport": 6, "max_seconds_per_sport": 900}
+
+
+class AdapterInvalid(RuntimeError):
+    """An adapter or its records break the contract (shape, probabilities, information cutoff): the sport run fails."""
+
+
+def _iso(ts) -> str:
+    dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime(ISO)
+
+
+def _key(r: dict) -> tuple:
+    line = r.get("line")
+    return (r["game_id"], r["market"], None if line is None else round(float(line), 4))
+
+
+def _vec3(r: dict) -> tuple:
+    p = r["probs"]
+    return (float(p["a"]), float(p.get("mid", 0.0)), float(p["b"]))
+
+
+def _outcome_idx(r: dict, kind: str) -> Optional[int]:
+    """Index into the 3-vector of a scoreable outcome, else None (unsettled, void, or a push nobody priced)."""
+    o = r.get("outcome")
+    if o == "a":
+        return 0
+    if o == "b":
+        return 2
+    if o == "mid" and kind == "three_way":
+        return 1
+    if o == "push" and kind == "line" and "mid" in r["probs"]:
+        return 1
+    return None
+
+
+def _sides(kind: str) -> tuple:
+    return (0, 1, 2) if kind == "three_way" else (0, 2)
+
+
+def _pick(vec, kind):
+    allowed = _sides(kind)
+    best = max(vec[i] for i in allowed)
+    top = [i for i in allowed if abs(vec[i] - best) <= 1e-12]
+    return top[0] if len(top) == 1 else None
+
+
+def _ll(vec, idx: int) -> float:
+    return -math.log(max(1e-15, vec[idx]))
+
+
+def _brier(vec, idx: int) -> float:
+    return sum((vec[i] - (1.0 if i == idx else 0.0)) ** 2 for i in range(3))
+
+
+def validate_adapter(adapter: dict) -> None:
+    for k in ("sport", "data_version", "markets", "unsupported", "periods", "models", "walk"):
+        if k not in adapter:
+            raise AdapterInvalid(f"adapter lacks {k!r}")
+    if adapter["sport"] not in FIVE_SPORTS:
+        raise AdapterInvalid(f"unknown sport {adapter['sport']!r}")
+    for m, spec in adapter["markets"].items():
+        if spec.get("kind") not in ("binary", "three_way", "line"):
+            raise AdapterInvalid(f"market {m}: kind must be binary, three_way or line")
+    per = adapter["periods"]
+    if not all(k in per for k in ("search", "validation", "holdout")):
+        raise AdapterInvalid("periods need search, validation and holdout")
+    seen = {}
+    for name in ("search", "validation", "holdout"):
+        for s in per[name]:
+            if s in seen:
+                raise AdapterInvalid(f"season {s} is in both {seen[s]} and {name}")
+            seen[s] = name
+    if max(max(per["search"], default=0), max(per["validation"], default=0)) >= min(per["holdout"], default=10 ** 9):
+        raise AdapterInvalid("holdout seasons must come after the search and validation seasons")
+    for n, m in adapter["models"].items():
+        if m.get("role") not in ("incumbent", "baseline", "candidate"):
+            raise AdapterInvalid(f"model {n}: role must be incumbent, baseline or candidate")
+        if not m.get("version"):
+            raise AdapterInvalid(f"model {n}: no version")
+    if not any(m["role"] == "incumbent" for m in adapter["models"].values()):
+        raise AdapterInvalid("no incumbent model")
+
+
+def validate_records(adapter: dict, recs: list, seasons) -> list:
+    """Contract checks on one model's walk. Returns the records normalised (ISO times). Raises AdapterInvalid."""
+    out, seen = [], set()
+    for r in recs:
+        for k in ("game_id", "season", "start_at", "forecast_cutoff", "market", "probs"):
+            if k not in r:
+                raise AdapterInvalid(f"record lacks {k!r}: {str(r)[:120]}")
+        spec = adapter["markets"].get(r["market"])
+        if spec is None:
+            raise AdapterInvalid(f"record for market {r['market']!r}, which the adapter does not declare")
+        if r["season"] not in seasons:
+            raise AdapterInvalid(f"{r['game_id']}: season {r['season']} outside the requested {list(seasons)}")
+        cut, start = _iso(r["forecast_cutoff"]), _iso(r["start_at"])
+        if cut > start:
+            raise AdapterInvalid(f"{r['game_id']} {r['market']}: forecast_cutoff {cut} is after the start {start}")
+        p, kind = r["probs"], spec["kind"]
+        keys = set(p)
+        allowed = {"binary": ({"a", "b"},), "three_way": ({"a", "mid", "b"},), "line": ({"a", "b"}, {"a", "mid", "b"})}[kind]
+        if keys not in allowed:
+            raise AdapterInvalid(f"{r['game_id']} {r['market']}: probs keys {sorted(keys)} do not fit kind {kind}")
+        vals = [p[k] for k in keys]
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) and -1e-9 <= v <= 1 + 1e-9 for v in vals) \
+                or abs(sum(vals) - 1) > 1e-6:
+            raise AdapterInvalid(f"{r['game_id']} {r['market']}: probabilities not finite, in [0, 1] and summing to 1")
+        if r.get("outcome") not in (None, "a", "b", "mid", "push", "void"):
+            raise AdapterInvalid(f"{r['game_id']} {r['market']}: unknown outcome {r.get('outcome')!r}")
+        k = _key(r)
+        if k in seen:
+            raise AdapterInvalid(f"duplicate forecast for {k}")
+        seen.add(k)
+        out.append({**r, "forecast_cutoff": cut, "start_at": start})
+    return out
+
+
+# --- Metrics ----------------------------------------------------------------------------------------------------------------
+def calibration(recs: list, kind: str) -> dict:
+    """Reliability bins over the probability of side a (binary / line without push mass) or over every side (anything with a
+    mid probability); ECE = n-weighted mean |observed - mean probability|."""
+    pairs = []
+    for r in recs:
+        idx = _outcome_idx(r, kind)
+        if idx is None:
+            continue
+        v = _vec3(r)
+        cls = (0, 1, 2) if (kind == "three_way" or "mid" in r["probs"]) else (0,)
+        pairs += [(v[c], 1.0 if idx == c else 0.0) for c in cls]
+    bins = [{"lo": i / BINS, "hi": (i + 1) / BINS, "n": 0, "mean_p": 0.0, "observed": 0.0} for i in range(BINS)]
+    for p, y in pairs:
+        b = bins[min(BINS - 1, int(p * BINS))]
+        b["n"] += 1
+        b["mean_p"] += p
+        b["observed"] += y
+    n = len(pairs)
+    ece = 0.0
+    for b in bins:
+        if b["n"]:
+            b["mean_p"] /= b["n"]
+            b["observed"] /= b["n"]
+            ece += b["n"] / n * abs(b["observed"] - b["mean_p"])
+    return {"bins": bins, "ece": ece if n else None, "n_pairs": n}
+
+
+def point_errors(recs: list) -> Optional[dict]:
+    """MAE/RMSE/bias of point predictions where both prediction and actual exist ({home, away} or one number)."""
+    acc: dict = {}
+    for r in recs:
+        pp, pa = r.get("point_pred"), r.get("point_actual")
+        if pp is None or pa is None:
+            continue
+        try:
+            if isinstance(pp, dict):
+                pairs = {"home": (pp["home"], pa["home"]), "away": (pp["away"], pa["away"]),
+                         "margin": (pp["home"] - pp["away"], pa["home"] - pa["away"]),
+                         "total": (pp["home"] + pp["away"], pa["home"] + pa["away"])}
+            else:
+                pairs = {"value": (pp, pa)}
+        except (KeyError, TypeError):
+            continue
+        for name, (p, a) in pairs.items():
+            acc.setdefault(name, []).append(p - a)
+    if not acc:
+        return None
+    return {n: {"n": len(e), "mae": sum(abs(x) for x in e) / len(e), "rmse": math.sqrt(sum(x * x for x in e) / len(e)),
+                "bias": sum(e) / len(e)} for n, e in acc.items()}
+
+
+def model_metrics(recs: list, kind: str, universe: Optional[int] = None) -> dict:
+    scored = [(r, _outcome_idx(r, kind)) for r in recs]
+    scored = [(r, i) for r, i in scored if i is not None]
+    n = len(scored)
+    out = {"records": len(recs), "n": n, "unsettled": sum(r.get("outcome") is None for r in recs),
+           "void": sum(r.get("outcome") == "void" for r in recs),
+           "push_unscored": sum(r.get("outcome") in ("push",) and _outcome_idx(r, kind) is None for r in recs),
+           "coverage": (len(recs) / universe) if universe else None}
+    if not n:
+        return out | {"log_loss": None, "brier": None, "accuracy": None, "calibration": calibration([], kind)}
+    wins = losses = abst = 0
+    for r, i in scored:
+        s = _pick(_vec3(r), kind)
+        if s is None:
+            abst += 1
+        elif i in _sides(kind):
+            wins += s == i
+            losses += s != i
+    return out | {"log_loss": sum(_ll(_vec3(r), i) for r, i in scored) / n,
+                  "brier": sum(_brier(_vec3(r), i) for r, i in scored) / n,
+                  "accuracy": wins / (wins + losses) if wins + losses else None, "wins": wins, "losses": losses,
+                  "abstentions": abst, "calibration": calibration(recs, kind), "score_errors": point_errors(recs)}
+
+
+def pair_compare(cand: list, ref: list, kind: str) -> dict:
+    """Paired log-loss difference (candidate minus reference) on the games both scored, with the same seeded week-block
+    bootstrap as the app's other studies, plus the matched pick accuracies."""
+    from . import backtest
+    rmap = {_key(r): r for r in ref if _outcome_idx(r, kind) is not None}
+    pairs = [(c, rmap[_key(c)], _outcome_idx(c, kind)) for c in cand if _key(c) in rmap and _outcome_idx(c, kind) is not None]
+    if not pairs:
+        return {"n": 0}
+    diffs = [_ll(_vec3(c), i) - _ll(_vec3(r), i) for c, r, i in pairs]
+    boot = backtest.block_bootstrap(diffs, [c["forecast_cutoff"] for c, _r, _i in pairs])
+
+    def acc(side):
+        w = l = 0
+        for c, r, i in pairs:
+            s = _pick(_vec3(c if side == 0 else r), kind)
+            if s is not None and i in _sides(kind):
+                w += s == i
+                l += s != i
+        return w / (w + l) if w + l else None
+    return {"n": len(pairs), "mean": boot["mean"], "ci95": boot["ci95"], "weeks": boot["weeks"],
+            "candidate_accuracy": acc(0), "reference_accuracy": acc(1)}
+
+
+def baselines_for(ref: list, kind: str) -> dict:
+    """Simple baselines on the reference's own games: uniform, and a smoothed expanding outcome frequency that only uses
+    outcomes of games that started SETTLE_LAG_HOURS before the forecast cutoff."""
+    import heapq
+    allowed = _sides(kind)
+    three = any("mid" in r["probs"] for r in ref)
+    classes = (0, 1, 2) if three else (0, 2)
+    uni = {0: 1 / len(classes), 1: 1 / len(classes) if three else 0.0, 2: 1 / len(classes)}
+    out_u, out_b = [], []
+    counts = {c: 0 for c in classes}
+    pending, order = [], sorted(ref, key=lambda r: (r["forecast_cutoff"], r["game_id"], r["market"]))
+    for r in order:
+        while pending and pending[0][0] <= r["forecast_cutoff"]:
+            counts[heapq.heappop(pending)[2]] += 1
+        base = {k: r[k] for k in ("game_id", "season", "start_at", "forecast_cutoff", "market", "line", "outcome") if k in r}
+        key = ("a", "mid", "b") if three else ("a", "b")
+        out_u.append({**base, "probs": {k: uni[i] for k, i in zip(("a", "mid", "b"), (0, 1, 2)) if k in key}})
+        tot = sum(counts.values())
+        pr = {"a": (counts[0] + 1) / (tot + len(classes)), "b": (counts[2] + 1) / (tot + len(classes))}
+        if three:
+            pr["mid"] = (counts[1] + 1) / (tot + len(classes))
+        out_b.append({**base, "probs": pr})
+        idx = _outcome_idx(r, kind)
+        if idx is not None and idx in classes:
+            start = datetime.strptime(r["start_at"], ISO) + timedelta(hours=SETTLE_LAG_HOURS)
+            heapq.heappush(pending, (start.strftime(ISO), r["game_id"], idx))
+    return {"baseline:uniform": out_u, "baseline:base_rate": out_b}
+
+
+# --- Sportsbook no-vig and returns --------------------------------------------------------------------------------------------
+def valid_quote(r: dict) -> Optional[dict]:
+    """The record's quote when it may be compared with the forecast: not synthetic, retrieved at or before the information
+    cutoff, same line, priced above 1. Decimal prices."""
+    q = r.get("quote")
+    if not q or q.get("synthetic"):
+        return None
+    try:
+        if _iso(q["retrieved_at"]) > r["forecast_cutoff"]:
+            return None
+        ql, rl = q.get("line"), r.get("line")
+        if (ql is None) != (rl is None) or (rl is not None and abs(float(ql) - float(rl)) > 1e-9):
+            return None
+        prices = [q["price_a"], q["price_b"]] + ([q["price_mid"]] if q.get("price_mid") else [])
+        return q if all(isinstance(p, (int, float)) and p > 1 for p in prices) else None
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def no_vig(q: dict) -> tuple:
+    """Proportional no-vig probabilities (a, mid or 0, b) from decimal prices."""
+    inv = [1 / q["price_a"], 1 / q["price_mid"] if q.get("price_mid") else 0.0, 1 / q["price_b"]]
+    s = sum(inv)
+    return tuple(x / s for x in inv)
+
+
+def book_compare(recs: list, kind: str) -> dict:
+    """Model vs the sportsbook's no-vig probabilities on records with a valid quote. A two-way book has no push mass, so
+    pushed games are dropped and the model's probabilities are renormalised over the two sides."""
+    from . import backtest
+    rows = []
+    for r in recs:
+        q = valid_quote(r)
+        i = _outcome_idx(r, kind)
+        if q is None or i is None:
+            continue
+        book = no_vig(q)
+        v = _vec3(r)
+        if not q.get("price_mid"):
+            if i == 1 and kind != "three_way":
+                continue
+            if kind != "three_way":
+                s = v[0] + v[2]
+                v = (v[0] / s, 0.0, v[2] / s) if s > 0 else v
+        rows.append((r, i, v, book))
+    quoted = sum(1 for r in recs if r.get("quote"))
+    out = {"quoted": quoted, "valid": len(rows), "synthetic": sum(1 for r in recs if (r.get("quote") or {}).get("synthetic")),
+           "invalid_or_late": quoted - len(rows)}
+    if not rows:
+        return out | {"status": "unavailable", "reason": "no valid non-synthetic quote at or before the forecast cutoff on "
+                                                          "the same line"}
+    diffs = [_ll(v, i) - _ll(b, i) for _r, i, v, b in rows]
+    boot = backtest.block_bootstrap(diffs, [r["forecast_cutoff"] for r, *_ in rows])
+    return out | {"status": "ok", "n": len(rows), "model_log_loss": sum(_ll(v, i) for _r, i, v, _b in rows) / len(rows),
+                  "book_log_loss": sum(_ll(b, i) for _r, i, _v, b in rows) / len(rows),
+                  "diff_mean": boot["mean"], "diff_ci95": boot["ci95"]}
+
+
+def roi(recs: list, kind: str) -> dict:
+    """Flat 1 unit on the model's pick when model probability x decimal price > 1, at executable non-synthetic matching
+    quotes only. Pushes refund (profit 0, stake counted), voids are excluded. Anything else is counted, never returned."""
+    synthetic = sum(1 for r in recs if (r.get("quote") or {}).get("synthetic"))
+    not_exec = sum(1 for r in recs if r.get("quote") and not r["quote"].get("synthetic") and not r["quote"].get("executable"))
+    stake = profit = bets = 0.0
+    for r in recs:
+        q = valid_quote(r)
+        if q is None or not q.get("executable") or r.get("outcome") in (None, "void"):
+            continue
+        v = _vec3(r)
+        side = _pick(v, kind)
+        if side is None:
+            continue
+        price = (q["price_a"], q.get("price_mid"), q["price_b"])[side]
+        if not price or v[side] * price <= 1:
+            continue
+        bets += 1
+        stake += 1
+        o = r["outcome"]
+        won = (o == "a" and side == 0) or (o == "b" and side == 2) or (o == "mid" and side == 1)
+        profit += (price - 1) if won else (0.0 if o == "push" else -1.0)
+    out = {"synthetic_quotes_excluded": synthetic, "non_executable_quotes_excluded": not_exec}
+    if not bets:
+        return out | {"status": "unavailable", "reason": "no executable, non-synthetic, matching quote with a bet signal"}
+    return out | {"status": "ok", "bets": int(bets), "staked": stake, "profit": profit, "roi": profit / stake,
+                  "note": "exploratory: flat stake at the quoted price, no bankroll model"}
+
+
+# --- Evaluator (pure: records in, metrics and decisions out) --------------------------------------------------------------
+def _choose_incumbent(adapter: dict, by_model: dict, market: str, kind: str) -> Optional[str]:
+    """The best existing member per market (lowest log loss among incumbents with the widest coverage): the bar, as in v2."""
+    best = None
+    rows = {}
+    for n, m in adapter["models"].items():
+        if m["role"] != "incumbent":
+            continue
+        recs = [r for r in by_model.get(n, []) if r["market"] == market]
+        scored = [r for r in recs if _outcome_idx(r, kind) is not None]
+        if scored:
+            rows[n] = (len(scored), sum(_ll(_vec3(r), _outcome_idx(r, kind)) for r in scored) / len(scored))
+    if rows:
+        widest = max(c for c, _ in rows.values())
+        best = min((n for n, (c, _) in rows.items() if c == widest), key=lambda n: (rows[n][1], n))
+    return best
+
+
+def decide_candidate(cand: list, inc: list, kind: str) -> dict:
+    """Keep/discard of one candidate against the incumbent on one stage's records (MODEL_SELECTION §6 via keep_decision)."""
+    cohort_ = [r for r in inc if _outcome_idx(r, kind) is not None]
+    have = {_key(r) for r in cand if _outcome_idx(r, kind) is not None}
+    covered = [r for r in cohort_ if _key(r) in have]
+    out = {"cohort": len(cohort_), "forecast": len(covered), "coverage": len(covered) / len(cohort_) if cohort_ else 0.0}
+    if not cohort_:
+        return out | {"decision": "reject", "reason": "empty cohort"}
+    if len(covered) < len(cohort_):
+        return out | {"decision": "reject", "reason": f"coverage loss: {len(cohort_) - len(covered)} of {len(cohort_)} incumbent "
+                                                      "games without a candidate forecast"}
+    if len(cohort_) < MIN_SCORED:
+        return out | {"decision": "reject", "reason": f"only {len(cohort_)} scored games (need {MIN_SCORED})"}
+    cmp_ = pair_compare(cand, inc, kind)
+    return out | {"vs_incumbent": cmp_} | keep_decision(cmp_["ci95"][1], cmp_["candidate_accuracy"], cmp_["reference_accuracy"])
+
+
+def _stage(recs: list, seasons) -> list:
+    return [r for r in recs if r["season"] in seasons]
+
+
+def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "validation")) -> dict:
+    """Everything the owner asked for, per market: per-model n/coverage/Brier/log loss/calibration/score errors; the
+    incumbent (best existing member); simple baselines; sportsbook no-vig; returns; each candidate vs incumbent, baselines and
+    book, with a keep/discard on the search AND validation stages. Pure; reads nothing."""
+    per = adapter["periods"]                        # stage name -> seasons (the forward stage passes its own periods)
+    cands = [n for n, m in adapter["models"].items() if m["role"] == "candidate"]
+    out = {"sport": adapter["sport"], "data_version": adapter["data_version"], "candidates": cands,
+           "unsupported": dict(adapter["unsupported"]), "markets": {}, "exploratory": True}
+    for market, spec in adapter["markets"].items():
+        kind = spec["kind"]
+        mk = {n: [r for r in recs if r["market"] == market] for n, recs in by_model.items()}
+        inc = _choose_incumbent(adapter, by_model, market, kind)
+        entry = {"kind": kind, "settlement": spec.get("settlement"), "line_basis": spec.get("line_basis")}
+        if inc is None:
+            out["markets"][market] = entry | {"status": "no_reference", "reason": "no incumbent forecasts for this market"}
+            continue
+        universe = len({_key(r) for recs in mk.values() for r in recs})
+        entry |= {"status": "evaluated", "incumbent": inc, "universe": universe, "models": {}}
+        base = baselines_for(mk[inc], kind)
+        for n in [*mk, *base]:
+            recs = mk.get(n) if n in mk else base[n]
+            if not recs and n in mk:
+                continue
+            role = adapter["models"][n]["role"] if n in adapter["models"] else "baseline"
+            met = model_metrics(recs, kind, universe)
+            met["role"] = role
+            met["by_stage"] = {st: {k: v for k, v in model_metrics(_stage(recs, per[st]), kind).items()
+                                    if k in ("n", "log_loss", "brier", "accuracy")} for st in stages}
+            met["vs_book"] = book_compare(recs, kind)
+            met["returns"] = roi(recs, kind)
+            entry["models"][n] = met
+        entry["comparisons"] = {}
+        for n in [*([inc] if inc else []), *[c for c in cands if c in mk]]:
+            recs = mk[n]
+            cmp_ = {"vs_baselines": {b: pair_compare(recs, brecs, kind) for b, brecs in base.items()}}
+            if n != inc:
+                stages = {st: decide_candidate(_stage(recs, per[st]), _stage(mk[inc], per[st]), kind)
+                          for st in stages}
+                kept = all(s["decision"] == "keep" for s in stages.values())
+                cmp_ |= {"vs_incumbent": stages, "decision": "keep" if kept else "reject",
+                         "reason": "kept on search and validation (exploratory, repeated search; not a promotion)" if kept else
+                                   "; ".join(f"{st}: {s['reason']}" for st, s in stages.items() if s["decision"] != "keep")}
+            entry["comparisons"][n] = cmp_
+        out["markets"][market] = entry
+    out["evaluated_markets"] = sorted(m for m, e in out["markets"].items() if e["status"] == "evaluated")
+    out["kept"] = sorted(f"{n}:{m}" for m, e in out["markets"].items() for n, c in e.get("comparisons", {}).items()
+                         if c.get("decision") == "keep")
+    return out
+
+
+# --- Adapters (NBA / NHL here, on the existing study path; the others live with their sports) -------------------------------
+_STUDY: dict = {}
+_OUTCOME = {0: "a", 1: "push", 2: "b"}
+NBA_NHL_MARKETS = {
+    "nba": {"winner": ("binary", "incl. overtime"), "spread": ("line", "push refunds, incl. OT"),
+            "total": ("line", "push refunds, incl. OT"), "team_total_home": ("line", "push refunds, incl. OT"),
+            "team_total_away": ("line", "push refunds, incl. OT")},
+    "nhl": {"winner": ("binary", "incl. OT/shootout"), "reg3": ("three_way", "regulation 60 min; draw = tied after 60"),
+            "spread": ("line", "puck line, push refunds"), "total": ("line", "push refunds"),
+            "team_total_home": ("line", "push refunds"), "team_total_away": ("line", "push refunds")}}
+NBA_NHL_NOTES = ("line markets use the primary model's own line (no historical bookmaker lines): ~50/50 by construction, no "
+                 "sportsbook comparison or returns are possible")
+
+
+def _study_tables(conn, sport: str, period: str) -> dict:
+    key = (sport, period, str(config.db_path(sport)))
+    if key not in _STUDY:
+        from .candidates import features, study
+        tables, _first, members, rows, events, recorder, dataset = study.existing_tables(conn, sport, period)
+        _STUDY[key] = {"tables": tables, "members": members, "rows": rows, "events": events, "recorder": recorder,
+                       "dataset": dataset, "features": features, "walk": None, "specs": {}}
+    return _STUDY[key]
+
+
+def _period_for(adapter_periods: dict, seasons) -> str:
+    return "test" if set(seasons) & set(adapter_periods["holdout"]) else "validation"
+
+
+def _study_record(sport: str, market: str, r: dict, vec) -> dict:
+    kind = NBA_NHL_MARKETS[sport][market][0]
+    pa, pm, pb = (float(x) for x in vec)
+    probs = {"a": pa, "b": pb} if kind == "binary" else {"a": pa, "mid": pm, "b": pb}
+    idx = r["realised"]
+    outcome = None if idx is None else ("mid" if (idx == 1 and kind == "three_way") else _OUTCOME[idx])
+    return {"game_id": r["game_id"], "season": r["season"], "start_at": _iso(r["tipoff_at"]), "forecast_cutoff": _iso(r["cutoff_at"]),
+            "market": market, "line": r["line"], "probs": probs, "outcome": outcome}
+
+
+def _study_walk(sport: str, adapter_periods: dict):
+    def walk(conn, seasons, model_name):
+        st = _study_tables(conn, sport, _period_for(adapter_periods, seasons))
+        seasons = set(seasons)
+        out = []
+        if model_name in st["members"]["winner"] or model_name in st["members"]["lines"]:
+            for market, rows in st["tables"].items():
+                for r in rows:
+                    if r["season"] in seasons and model_name in r["vectors"]:
+                        out.append(_study_record(sport, market, r, r["vectors"][model_name]))
+            return out
+        from .candidates import engine, registry
+        spec = next((s for s in registry.for_sport(sport) if s.name == model_name), None)
+        if spec is None:
+            raise AdapterInvalid(f"{sport}: unknown model {model_name}")
+        if st["walk"] is None:
+            walked = st["features"].walk(st["recorder"], st["rows"], st["events"])
+            # NHL starters are known only after the start: stripped from every row, as in protocol v2 (FORBIDDEN_FEATURES)
+            st["walk"] = {g: replace(r, x={k: v for k, v in r.x.items() if k not in FORBIDDEN_FEATURES}, meta={})
+                          for g, r in walked.items()}
+        if model_name not in st["specs"]:
+            outs, _fits, _sec = engine.walk(spec, list(st["walk"].values()))
+            st["specs"][model_name] = outs
+        outs = st["specs"][model_name]
+        for market, rows in st["tables"].items():
+            if market not in spec.markets:
+                continue
+            for r in rows:
+                o = outs.get(r["game_id"])
+                if r["season"] in seasons and o is not None and engine.ready(o):
+                    v = engine.vector(o, market, r["line"])
+                    if v is not None:
+                        out.append(_study_record(sport, market, r, v))
+        return out
+    return walk
+
+
+def _study_upcoming(sport: str):
+    def forecast_upcoming(conn, now, model_name):
+        """Forward forecasts of a registry candidate: its recorded pregame rows in the official store's candidate_forecasts
+        (read-only here; written by the existing candidate recorder, never by research)."""
+        names = {s.name for s in __import__("app.candidates.registry", fromlist=["x"]).for_sport(sport)}
+        if model_name not in names:
+            return []
+        rows = conn.execute("SELECT f.*, g.season FROM candidate_forecasts f JOIN games g USING (game_id) WHERE f.candidate=? "
+                            "AND f.tipoff_at > ? AND f.generated_at < f.tipoff_at ORDER BY f.generated_at", (model_name, now)).fetchall()
+        out = []
+        for f in rows:
+            kind = NBA_NHL_MARKETS[sport].get(f["market"], ("binary",))[0]
+            probs = {"a": f["p_a"], "b": f["p_b"]} if kind == "binary" else {"a": f["p_a"], "mid": f["p_mid"], "b": f["p_b"]}
+            out.append({"game_id": f["game_id"], "season": f["season"], "start_at": _iso(f["tipoff_at"]),
+                        "forecast_cutoff": _iso(f["training_cutoff"] or f["generated_at"]), "forecast_at": _iso(f["generated_at"]),
+                        "market": f["market"], "line": f["line"], "probs": probs, "outcome": None})
+        return out
+    return forecast_upcoming
+
+
+def _study_settle(sport: str):
+    def settle(conn, records):
+        """Official results (read-only) -> outcomes for forward records, through the app's own settlement (markets.settle)."""
+        from . import markets
+        out = []
+        for r in records:
+            g = conn.execute("SELECT status, home_score, away_score FROM games WHERE game_id=?", (r["game_id"],)).fetchone()
+            if g is None:
+                continue
+            dec = None
+            if sport == "nhl":
+                d = conn.execute("SELECT decision FROM game_decisions WHERE game_id=?", (r["game_id"],)).fetchone()
+                dec = d["decision"] if d else None
+            s = markets.settle(r["market"], r["line"], status=g["status"], home=g["home_score"], away=g["away_score"], decision=dec)
+            o = {"a": "a", "b": "b", "void": "void", "mid": "mid" if r["market"] == "reg3" else "push"}.get(s)
+            if o is None:                         # pending / unscorable: not graded yet
+                continue
+            out.append({"game_id": r["game_id"], "market": r["market"], "line": r["line"], "outcome": o,
+                        "point_actual": {"home": g["home_score"], "away": g["away_score"]}})
+        return out
+    return settle
+
+
+def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
+    """NBA/NHL on the existing study path: existing members are the incumbents (the best per market is the bar), registry
+    candidates (non-deep, installed) the candidates. Search seasons are the first validation seasons, validation the last:
+    protocol v2 already looked at all of them, so they are not pristine (stated in `periods_note`)."""
+    from .candidates import registry
+    from . import backtest, nhl_eval
+    per = (backtest.PERIODS if sport == "nba" else nhl_eval.PERIODS)
+    val = sorted(per["validation"])
+    periods = {"search": val[:-1], "validation": val[-1:], "holdout": sorted(per["test"])}
+    members = {"nba": {"winner": ["elo", "logistic", "logistic_v2", "efficiency_margin", "gbt_v1"],
+                       "lines": ["points_normal", "ridge_points", "gbt_points", "ridge_points@weekly", "gbt_points@weekly"]},
+               "nhl": {"winner": ["hockey_elo", "goals_poisson", "hockey_logistic", "hockey_gbt", "hockey_logistic_xg"],
+                       "lines": ["goals_poisson", "goals_draw", "goals_glm"]}}[sport]
+    models = {n: {"role": "incumbent", "description": f"existing {sport.upper()} member", "version": "app@" + app_identity()["files"]}
+              for n in dict.fromkeys(members["winner"] + members["lines"])}
+    for spec in registry.for_sport(sport):
+        from .candidates import deep
+        from .candidates.features import FEATURE_SETS
+        if deep.is_deep(spec) or not registry.available(spec) or (candidates is not None and spec.name not in candidates) \
+                or set(FEATURE_SETS[spec.features]) & set(FORBIDDEN_FEATURES):      # postgame goalie inputs: excluded
+            continue
+        models[spec.name] = {"role": "candidate", "description": f"registry candidate {spec.family}/{spec.features}",
+                             "version": registry.definition(spec)}
+    walk = _study_walk(sport, periods)
+
+    def study_adapter_walk(conn, seasons, model_name):
+        if model_name not in models:
+            raise AdapterInvalid(f"{sport}: unknown model {model_name}")
+        return walk(conn, seasons, model_name)
+    return {"sport": sport, "data_version": "study:" + _sha(json.dumps(
+                {"periods": periods, "protocol": "existing_tables", "libs": libraries()}, sort_keys=True).encode())[:16],
+            "markets": {m: {"kind": k, "settlement": s, "line_basis": "model line (no historical bookmaker lines)"
+                            if k == "line" else None} for m, (k, s) in NBA_NHL_MARKETS[sport].items()},
+            "unsupported": {"player_props": "no timestamped player history for the search seasons (PLAN rule 8)",
+                            "goalie-dependent NHL features": "historical rows know the starter only after the start"},
+            "periods": periods, "periods_note": "seasons 2022-2024 were already searched under protocol v2: not pristine; the "
+            "holdout was used by earlier studies (combination_research.STORED_NOTE)", "notes": NBA_NHL_NOTES,
+            "models": models, "walk": study_adapter_walk, "forecast_upcoming": _study_upcoming(sport),
+            "settle": _study_settle(sport)}
+
+
+def get_adapter(sport: str) -> Optional[dict]:
+    """The sport's adapter, or None when the adapter agent has not delivered one (reported as `refused`, never skipped)."""
+    import importlib
+    if sport in ("nba", "nhl"):
+        return nba_nhl_adapter(sport)
+    mod = {"ncaab": "ncaab_eval", "nfl": "nfl_eval", "soccer": "soccer_markets_eval"}[sport]
+    try:
+        fn = getattr(importlib.import_module(f"{__package__ or 'app'}.{mod}"), "research_adapter")
+    except (ImportError, AttributeError):
+        return None
+    return fn()
+
+
+# --- Runner: bounded, resumable per sport, explicit outcomes ---------------------------------------------------------------
+OUTCOMES = ("evaluated", "no_candidates", "refused", "failed", "skipped")
+
+
+def v3_protocol_id(adapter: dict) -> str:
+    blob = json.dumps({"protocol": PROTOCOL_V3, "sport": adapter["sport"], "data_version": adapter["data_version"],
+                       "periods": adapter["periods"], "markets": adapter["markets"]}, sort_keys=True, default=str)
+    return f"{PROTOCOL_V3['name']}-{_sha(blob.encode())[:12]}"
+
+
+def _item_key(pid: str, model: str, version: str) -> str:
+    return _sha(json.dumps([pid, model, version]).encode())[:16]
+
+
+def _jsonl_read(p: Path) -> list:
+    return [json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.is_file() else []
+
+
+def _jsonl_add(p: Path, rec: dict) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a") as fh:
+        fh.write(json.dumps(rec, sort_keys=True, default=str) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def _last_success(exp_root: Path, sport: str) -> Optional[str]:
+    best = None
+    for p in (exp_root / "v3").glob(f"*/{sport}/attempts.jsonl"):
+        for a in _jsonl_read(p):
+            if a.get("outcome") in ("evaluated", "no_candidates") and (best is None or a["at"] > best):
+                best = a["at"]
+    return best
+
+
+def _write_state(root: Path, state: dict) -> None:
+    tmp = root / "state.json.tmp"
+    tmp.write_text(json.dumps(state, indent=1, sort_keys=True, default=str))
+    tmp.replace(root / "state.json")
+
+
+def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_items_per_sport"],
+                 max_seconds: float = BUDGET_V3["max_seconds_per_sport"], adapter_fn: Callable = None) -> dict:
+    """One sport's bounded, resumable attempt. Scores each queue item (every incumbent, then every candidate) once on the
+    search and validation seasons; an item already stored is never re-scored. Returns the sport's status dict with an explicit
+    outcome: evaluated, no_candidates, refused (reason), failed (error) or skipped (budget/time)."""
+    adapter_fn = adapter_fn or get_adapter
+    t0, at = time.time(), _now()
+    status = {"sport": sport, "at": at, "outcome": "failed", "reason": None, "protocol_id": None, "candidates": [],
+              "evaluated_markets": [], "blockers": [], "queue": None, "next_run": None}
+    root = None
+    try:
+        guard_paths(exp_root)
+        adapter = adapter_fn(sport)
+        if adapter is None:
+            raise Refused(f"no research adapter for {sport} has been delivered yet")
+        validate_adapter(adapter)
+        pid = v3_protocol_id(adapter)
+        root = exp_root / "v3" / pid / sport
+        status |= {"protocol_id": pid, "data_version": adapter["data_version"], "periods": adapter["periods"],
+                   "periods_note": adapter.get("periods_note"), "markets": adapter["markets"],
+                   "unsupported": adapter["unsupported"], "models": {n: {k: m.get(k) for k in ("role", "version", "description")}
+                                                                  for n, m in adapter["models"].items()}}
+        status["blockers"] += [f"{m}: {why}" for m, why in adapter["unsupported"].items()]
+        with Lock(root):
+            _run_queue(status, adapter, root, pid, sport, t0, max_items, max_seconds)
+    except Refused as exc:
+        status |= {"outcome": "refused", "reason": str(exc)}
+        status["blockers"].append(f"refused: {exc}")
+    except Exception as exc:                                  # a bug or a broken adapter: recorded, never hidden
+        status |= {"outcome": "failed", "reason": f"{type(exc).__name__}: {exc}"[:500]}
+        status["blockers"].append(f"failed: {status['reason']}")
+    status["seconds"] = round(time.time() - t0, 1)
+    status["last_success_at"] = at if status["outcome"] in ("evaluated", "no_candidates") else _last_success(exp_root, sport)
+    if status["outcome"] == "failed" and status["reason"] is None:
+        status["reason"] = "unknown"
+    if root is None:
+        root = exp_root / "v3" / "unregistered" / sport
+        root.mkdir(parents=True, exist_ok=True)
+    _jsonl_add(root / "attempts.jsonl", {"at": at, "outcome": status["outcome"], "reason": status["reason"]})
+    status["last_attempt"] = {"at": at, "outcome": status["outcome"], "reason": status["reason"]}
+    _write_state(root, status)
+    return status
+
+
+def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0: float, max_items: int, max_seconds: float):
+    per = adapter["periods"]
+    seasons = sorted(set(per["search"]) | set(per["validation"]))
+    if set(seasons) & set(per["holdout"]):
+        raise Refused("search/validation seasons overlap the holdout")
+    models = adapter["models"]
+    order = [n for r in ("incumbent", "baseline", "candidate") for n, m in models.items() if m["role"] == r]
+    items = root / "items"
+    items.mkdir(parents=True, exist_ok=True)
+    log = root / "items.jsonl"
+    events = _jsonl_read(log)
+    done = {e["key"] for e in events if e["event"] == "scored"}
+    fails: dict = {}
+    for e in events:
+        if e["event"] == "item_failed":
+            fails[e["key"]] = fails.get(e["key"], 0) + 1
+    keys = {n: _item_key(pid, n, models[n]["version"]) for n in order}
+    conn = adapter["connect"]() if adapter.get("connect") else _snapshot_conn(sport)
+    ran = 0
+    stopped = None
+    try:
+        for n in order:
+            k = keys[n]
+            if k in done or fails.get(k, 0) > BUDGETS["max_retries"]:
+                continue
+            if ran >= max_items or time.time() - t0 >= max_seconds:
+                stopped = "item budget reached" if ran >= max_items else "time budget reached"
+                break
+            s0 = time.time()
+            try:
+                recs = validate_records(adapter, adapter["walk"](conn, seasons, n), seasons)
+            except AdapterInvalid as exc:
+                _jsonl_add(log, {"event": "item_failed", "key": k, "model": n, "at": _now(), "error": str(exc)[:400]})
+                fails[k] = fails.get(k, 0) + 1
+                if models[n]["role"] == "incumbent":
+                    raise
+                continue
+            except Exception as exc:
+                _jsonl_add(log, {"event": "item_failed", "key": k, "model": n, "at": _now(),
+                                 "error": f"{type(exc).__name__}: {exc}"[:400]})
+                fails[k] = fails.get(k, 0) + 1
+                if models[n]["role"] == "incumbent":
+                    raise
+                continue
+            tmp = items / f"{k}.json.gz.tmp"
+            tmp.write_bytes(gzip.compress(json.dumps(recs, default=str).encode()))
+            tmp.replace(items / f"{k}.json.gz")
+            _jsonl_add(log, {"event": "scored", "key": k, "model": n, "version": models[n]["version"], "records": len(recs),
+                             "seconds": round(time.time() - s0, 1), "at": _now()})
+            done.add(k)
+            ran += 1
+    finally:
+        if hasattr(conn, "close"):
+            conn.close()
+    remaining = [n for n in order if keys[n] not in done]
+    failed = [n for n in remaining if fails.get(keys[n], 0) > BUDGETS["max_retries"]]
+    pending = [n for n in remaining if n not in failed]
+    cands = [n for n, m in models.items() if m["role"] == "candidate"]
+    status["candidates"] = cands
+    status["queue"] = {"total": len(order), "done": len(order) - len(remaining), "remaining": len(pending), "failed": failed,
+                       "ran_now": ran, "next_item": pending[0] if pending else None}
+    status["blockers"] += [f"{n}: scoring failed {fails[keys[n]]} times (see items.jsonl)" for n in failed]
+    status["next_run"] = (f"resumes with {pending[0]} at the next daily run" if pending else
+                          "queue complete; the next daily run re-checks for new models or a new snapshot")
+    have_inc = all(keys[n] in done for n, m in models.items() if m["role"] == "incumbent")
+    if not have_inc:
+        status |= {"outcome": "skipped", "reason": stopped or "incumbent scoring incomplete"}
+        return
+    by_model = {n: json.loads(gzip.decompress((items / f"{keys[n]}.json.gz").read_bytes()))
+                for n in order if keys[n] in done}
+    ev = evaluate_records(adapter, by_model)
+    ev["protocol_id"] = pid
+    (root / "evaluation.json").write_text(json.dumps(ev, indent=1, default=str))
+    status["evaluated_markets"] = ev["evaluated_markets"]
+    status["evaluation"] = _brief(ev)
+    status["kept"] = ev["kept"]
+    scored_c = [n for n in cands if keys[n] in done]
+    if not cands:
+        status |= {"outcome": "no_candidates", "reason": "the adapter lists no candidate model: nothing was searched (reference "
+                                                          "metrics only; this is not a successful search)"}
+    elif not scored_c:
+        status |= {"outcome": "failed" if not pending else "skipped",
+                   "reason": ("every candidate failed to score" if not pending else stopped or "candidates pending")}
+    else:
+        status |= {"outcome": "evaluated", "reason": (f"{len(scored_c)} of {len(cands)} candidates scored"
+                                                      + (f"; {len(pending)} queued" if pending else "")) +
+                   (f"; kept: {', '.join(ev['kept'])}" if ev["kept"] else "; no candidate kept (no improvement found)")}
+
+
+def _brief(ev: dict) -> dict:
+    """Per market: incumbent, n, log loss, and each candidate's decision and delta: what the status page shows."""
+    out = {}
+    for m, e in ev["markets"].items():
+        if e["status"] != "evaluated":
+            out[m] = {"status": e["status"], "reason": e.get("reason")}
+            continue
+        inc = e["models"][e["incumbent"]]
+        out[m] = {"status": "evaluated", "kind": e["kind"], "incumbent": e["incumbent"], "n": inc["n"],
+                  "log_loss": inc["log_loss"], "ece": (inc.get("calibration") or {}).get("ece"),
+                  "baselines": {b: e["models"][b]["log_loss"] for b in e["models"] if b.startswith("baseline:")},
+                  "vs_book": inc["vs_book"].get("status"),
+                  "candidates": {n: {"decision": c["decision"], "reason": c["reason"],
+                                     "validation_delta": ((c["vs_incumbent"].get("validation") or {}).get("vs_incumbent") or {}).get("mean"),
+                                     "validation_ci95": ((c["vs_incumbent"].get("validation") or {}).get("vs_incumbent") or {}).get("ci95")}
+                                 for n, c in e["comparisons"].items() if "decision" in c}}
+    return out
+
+
+def daily_v3(sports_: Optional[list], exp_root: Path, max_items: int = BUDGET_V3["max_items_per_sport"],
+             max_seconds: float = BUDGET_V3["max_seconds_per_sport"], adapter_fn: Callable = None) -> dict:
+    """Every requested sport gets its own item and time budget (none can monopolise the run); the start rotates after the
+    last sport attempted. Writes reports/daily5-<time>.json with each sport's explicit outcome."""
+    sports_ = list(sports_ or FIVE_SPORTS)
+    rot = exp_root / "v3" / "rotation.json"
+    last = json.loads(rot.read_text()).get("last") if rot.is_file() else None
+    if last in sports_:
+        i = sports_.index(last) + 1
+        sports_ = sports_[i:] + sports_[:i]
+    report = {"protocol": PROTOCOL_V3["name"], "started_at": _now(), "budget_per_sport": {"max_items": max_items,
+              "max_seconds": max_seconds}, "sports": {}, "research_only": True,
+              "agent": "not used (no paid generation path in this runner)"}
+    for sport in sports_:
+        report["sports"][sport] = run_sport_v3(sport, exp_root, max_items=max_items, max_seconds=max_seconds, adapter_fn=adapter_fn)
+    rot.parent.mkdir(parents=True, exist_ok=True)
+    rot.write_text(json.dumps({"last": sports_[0], "at": _now()}))     # next run starts one sport later
+    report["outcomes"] = {s: r["outcome"] for s, r in report["sports"].items()}
+    report["finished_at"] = _now()
+    out = exp_root / "reports" / f"daily5-{report['started_at'].replace(':', '')}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, indent=1, default=str))
+    report["report_file"] = str(out)
+    return report
+
+
+# --- Protected holdout (v3): once per protocol and sport, logged first, never by search or daily -------------------------------
+def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty, reuse_reason: Optional[str] = None,
+               adapter_fn: Callable = None) -> dict:
+    guard_paths(exp_root)
+    adapter = (adapter_fn or get_adapter)(sport)
+    if adapter is None:
+        raise Refused(f"no research adapter for {sport}")
+    validate_adapter(adapter)
+    pid = v3_protocol_id(adapter)
+    root = exp_root / "v3" / pid / sport
+    ev_path = root / "evaluation.json"
+    if not ev_path.is_file():
+        raise Refused("no search/validation evaluation for this protocol: nothing is kept, so nothing to test on the holdout")
+    ev = json.loads(ev_path.read_text())
+    kept = sorted({k.rsplit(":", 1)[0] for k in ev["kept"]})      # "<candidate>:<market>"; candidate names may hold ':"
+    if not kept:
+        raise Refused("no candidate was kept on search and validation: nothing to test on the holdout (negative result stands)")
+    with Lock(root):
+        log = _holdout_log(root)
+        if any(h["event"] == "completed" for h in log):
+            raise Refused("holdout already used for this protocol and sport")
+        earlier = [h for p in sorted((exp_root / "v3").glob(f"*/{sport}/holdout_access.jsonl")) for h in _holdout_log(p.parent)
+                   if h["event"] == "completed"] + _sport_ledger(exp_root, sport)
+        if earlier and not reuse_reason:
+            raise Refused(f"the {sport} holdout was already used ({len(earlier)} time(s)); reuse needs --reuse-reason (logged; "
+                          "the result is then not an independent check)")
+        if not ask(f"spend holdout {sport} {pid}"):
+            raise Refused("holdout not confirmed at a terminal")
+        _holdout_append(root, {"event": "pending", "at": _now(), "kept": kept, "reuse_reason": reuse_reason})
+        try:
+            seasons = adapter["periods"]["holdout"]
+            names = [n for n, m in adapter["models"].items() if m["role"] == "incumbent"] + kept
+            conn = adapter["connect"]() if adapter.get("connect") else _snapshot_conn(sport)
+            try:
+                by_model = {n: validate_records(adapter, adapter["walk"](conn, seasons, n), seasons) for n in names}
+            finally:
+                if hasattr(conn, "close"):
+                    conn.close()
+            sub = {**adapter, "models": {n: adapter["models"][n] for n in names},
+                   "periods": {"holdout": seasons}}
+            res = evaluate_records(sub, by_model, stages=("holdout",))
+            res |= {"protocol_id": pid, "seasons": seasons, "earlier_uses": earlier,
+                    "note": "Report only: nothing is promoted; a holdout look is one-shot and a keep here is not a promotion."}
+            p = root / "holdout" / "result.json"
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(res, indent=1, default=str))
+            _holdout_append(root, {"event": "completed", "at": _now(), "result": str(p)})
+            return res
+        except Exception as exc:
+            _holdout_append(root, {"event": "failed", "at": _now(), "reason": f"{type(exc).__name__}: {exc}"[:500]})
+            raise
+
+
+# --- Forward test store (separate file; candidate forecasts are never official forecasts) -----------------------------------
+FORWARD_FILE = "forward-candidates.sqlite"
+FORWARD_SCHEMA = """
+CREATE TABLE IF NOT EXISTS forward_forecasts (
+  id INTEGER PRIMARY KEY, sport TEXT NOT NULL, protocol_id TEXT NOT NULL, model TEXT NOT NULL, role TEXT NOT NULL
+    CHECK (role IN ('incumbent','baseline','candidate')), model_version TEXT NOT NULL, data_version TEXT NOT NULL,
+  game_id TEXT NOT NULL, season INTEGER, market TEXT NOT NULL, line REAL, line_key TEXT NOT NULL,
+  start_at TEXT NOT NULL, forecast_cutoff TEXT NOT NULL, forecasted_at TEXT NOT NULL,
+  p_a REAL NOT NULL, p_mid REAL, p_b REAL NOT NULL, quote TEXT, recorded_at TEXT NOT NULL,
+  CHECK (forecasted_at < start_at), CHECK (forecast_cutoff <= forecasted_at),
+  CHECK (p_a >= 0 AND p_b >= 0 AND p_a <= 1 AND p_b <= 1),
+  UNIQUE (protocol_id, model, model_version, game_id, market, line_key, forecasted_at));
+CREATE TABLE IF NOT EXISTS forward_grades (
+  id INTEGER PRIMARY KEY, sport TEXT NOT NULL, game_id TEXT NOT NULL, market TEXT NOT NULL, line_key TEXT NOT NULL,
+  outcome TEXT NOT NULL CHECK (outcome IN ('a','b','mid','push','void')), point_actual TEXT, graded_at TEXT NOT NULL,
+  UNIQUE (sport, game_id, market, line_key));
+CREATE TABLE IF NOT EXISTS forward_looks (
+  id INTEGER PRIMARY KEY, protocol_id TEXT NOT NULL, sport TEXT NOT NULL, candidate TEXT NOT NULL, market TEXT NOT NULL,
+  look_at TEXT NOT NULL, n_matched INTEGER NOT NULL, status TEXT NOT NULL, confirmatory INTEGER NOT NULL);
+CREATE TRIGGER IF NOT EXISTS forward_forecasts_no_update BEFORE UPDATE ON forward_forecasts
+  BEGIN SELECT RAISE(ABORT, 'forward_forecasts is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS forward_forecasts_no_delete BEFORE DELETE ON forward_forecasts
+  BEGIN SELECT RAISE(ABORT, 'forward_forecasts is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS forward_grades_no_update BEFORE UPDATE ON forward_grades
+  BEGIN SELECT RAISE(ABORT, 'forward_grades is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS forward_grades_no_delete BEFORE DELETE ON forward_grades
+  BEGIN SELECT RAISE(ABORT, 'forward_grades is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS forward_looks_no_update BEFORE UPDATE ON forward_looks
+  BEGIN SELECT RAISE(ABORT, 'forward_looks is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS forward_looks_no_delete BEFORE DELETE ON forward_looks
+  BEGIN SELECT RAISE(ABORT, 'forward_looks is append-only'); END;
+"""
+
+
+def forward_path() -> Path:
+    """research/forward-candidates.sqlite under the data directory. It holds only candidate research forecasts; it is not
+    an official store, and nothing official reads it."""
+    return config.data_dir() / "research" / FORWARD_FILE
+
+
+def forward_connect(path: Optional[Path] = None):
+    import sqlite3
+    path = Path(path or forward_path())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(FORWARD_SCHEMA)
+    return conn
+
+
+def _lk(line) -> str:
+    return "" if line is None else repr(round(float(line), 4))
+
+
+def forward_record(path: Optional[Path], *, sport: str, protocol_id: str, model: str, role: str, model_version: str,
+                   data_version: str, forecasted_at: str, records: list) -> dict:
+    """Appends forecasts made at `forecasted_at` (before the game starts, from inputs at or before it). Rejected records are
+    listed with the reason, never stored; an identical forecast (same model version, game, market, line and time) is a no-op."""
+    default_at = _iso(forecasted_at)
+    conn = forward_connect(path)
+    ins, dup, rejected = 0, 0, []
+    try:
+        for r in records:
+            try:
+                forecasted_at = _iso(r["forecast_at"]) if r.get("forecast_at") else default_at   # when the model actually ran
+                cut, start = _iso(r["forecast_cutoff"]), _iso(r["start_at"])
+                if r.get("outcome") is not None:
+                    raise AdapterInvalid("a forward forecast must not carry an outcome")
+                if start <= forecasted_at:
+                    raise AdapterInvalid(f"forecast at {forecasted_at} is not before the start {start}")
+                if cut > forecasted_at:
+                    raise AdapterInvalid(f"information cutoff {cut} is after the forecast time {forecasted_at}")
+                p = r["probs"]
+                cur = conn.execute(
+                    "INSERT OR IGNORE INTO forward_forecasts (sport, protocol_id, model, role, model_version, data_version, "
+                    "game_id, season, market, line, line_key, start_at, forecast_cutoff, forecasted_at, p_a, p_mid, p_b, quote, "
+                    "recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (sport, protocol_id, model, role, model_version, data_version, r["game_id"], r.get("season"), r["market"],
+                     r.get("line"), _lk(r.get("line")), start, cut, forecasted_at, p["a"], p.get("mid"), p["b"],
+                     json.dumps(r["quote"]) if r.get("quote") else None, _now()))
+                ins += cur.rowcount
+                dup += 1 - cur.rowcount
+            except (AdapterInvalid, KeyError, TypeError, ValueError) as exc:
+                rejected.append({"game_id": r.get("game_id"), "market": r.get("market"), "reason": str(exc)[:200]})
+        conn.commit()
+    finally:
+        conn.close()
+    return {"inserted": ins, "already_recorded": dup, "rejected": rejected}
+
+
+def forward_grade(path: Optional[Path], adapter: dict, official, now: Optional[str] = None) -> dict:
+    """Grades stored forecasts whose game has started, from the official store read-only (`official` is only ever queried;
+    PRAGMA query_only is forced on it). Without an adapter `settle`, nothing is graded and that is said."""
+    if not adapter.get("settle"):
+        return {"graded": 0, "status": "unavailable", "reason": "the adapter has no settle(): grading is not possible yet"}
+    official.execute("PRAGMA query_only = ON")
+    now = _iso(now or _now())
+    conn = forward_connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT f.game_id, f.market, f.line, f.line_key FROM forward_forecasts f LEFT JOIN forward_grades g "
+            "ON g.sport=f.sport AND g.game_id=f.game_id AND g.market=f.market AND g.line_key=f.line_key "
+            "WHERE f.sport=? AND g.id IS NULL AND f.start_at < ?", (adapter["sport"], now)).fetchall()
+        recs = [{"game_id": r["game_id"], "market": r["market"], "line": r["line"]} for r in rows]
+        graded = 0
+        for g in adapter["settle"](official, recs):
+            if g.get("outcome") not in ("a", "b", "mid", "push", "void"):
+                continue
+            cur = conn.execute("INSERT OR IGNORE INTO forward_grades (sport, game_id, market, line_key, outcome, point_actual, "
+                               "graded_at) VALUES (?,?,?,?,?,?,?)",
+                               (adapter["sport"], g["game_id"], g["market"], _lk(g.get("line")), g["outcome"],
+                                json.dumps(g.get("point_actual")) if g.get("point_actual") is not None else None, _now()))
+            graded += cur.rowcount
+        conn.commit()
+        return {"graded": graded, "ungraded_started": len(recs) - graded, "status": "ok"}
+    finally:
+        conn.close()
+
+
+def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str] = None) -> tuple:
+    """(by_model records with outcomes, {model: {role, version}}): per model, game, market and line the LAST forecast made
+    before the start (every model by the same rule), joined to its grade."""
+    conn = forward_connect(path)
+    try:
+        q = ("SELECT f.*, g.outcome, g.point_actual FROM forward_forecasts f LEFT JOIN forward_grades g ON g.sport=f.sport AND "
+             "g.game_id=f.game_id AND g.market=f.market AND g.line_key=f.line_key WHERE f.sport=?"
+             + (" AND f.protocol_id=?" if protocol_id else "") + " ORDER BY f.forecasted_at, f.id")
+        rows = conn.execute(q, (sport, protocol_id) if protocol_id else (sport,)).fetchall()
+    finally:
+        conn.close()
+    latest, info = {}, {}
+    for r in rows:
+        latest[(r["model"], r["model_version"], r["game_id"], r["market"], r["line_key"])] = r
+        info[r["model"]] = {"role": r["role"], "version": r["model_version"], "description": "forward forecasts",
+                            "data_version": r["data_version"]}
+    by_model: dict = {}
+    for (model, *_), r in latest.items():
+        probs = {"a": r["p_a"], "b": r["p_b"]} if r["p_mid"] is None else {"a": r["p_a"], "mid": r["p_mid"], "b": r["p_b"]}
+        pa = json.loads(r["point_actual"]) if r["point_actual"] else None
+        by_model.setdefault(model, []).append({
+            "game_id": r["game_id"], "season": r["season"] if r["season"] is not None else 0, "start_at": r["start_at"],
+            "forecast_cutoff": r["forecast_cutoff"], "market": r["market"], "line": r["line"], "probs": probs,
+            "outcome": r["outcome"], "point_actual": pa, "quote": json.loads(r["quote"]) if r["quote"] else None})
+    return by_model, info
+
+
+def min_forward(sport: str) -> int:
+    return PROMOTION["min_settled_forward"].get(sport, PROMOTION["min_settled_forward"]["default"])
+
+
+def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] = None) -> dict:
+    """The recommendation object: per candidate and market, each pre-registered criterion as passed / failed / not_evaluable.
+    It never promotes: a person decides, on the forward record, under MODEL_SELECTION §6."""
+    prior_looks = prior_looks or {}
+    cands = ev.get("candidates") or []
+    out = {"protocol": PROTOCOL_V3["name"], "sport": sport, "never_promotes": True, "manual_decision_required": True,
+           "criteria_version": PROMOTION, "candidates": {}}
+    if not cands:
+        return out | {"status": "no_candidates", "reason": "no candidate forecasts exist: there is nothing to recommend "
+                                                           "(this is not a successful search)"}
+    need = min_forward(sport)
+    for c in cands:
+        per_market = {}
+        for m, e in ev["markets"].items():
+            cmp_ = e.get("comparisons", {}).get(c) if e.get("status") == "evaluated" else None
+            if cmp_ is None:
+                continue
+            fw = cmp_["vs_incumbent"]["forward"]
+            vi = fw.get("vs_incumbent") or {}
+            n = vi.get("n", 0)
+            crit = {"min_settled_forward": {"status": "passed" if n >= need else "failed", "n": n, "need": need},
+                    "full_coverage": {"status": "passed" if fw["coverage"] == 1.0 else "failed", "coverage": fw["coverage"]}}
+            if n >= need and vi:
+                inc_ece = (e["models"][e["incumbent"]].get("calibration") or {}).get("ece")
+                c_ece = (e["models"][c].get("calibration") or {}).get("ece")
+                crit["paired_log_loss"] = {"status": "passed" if vi["ci95"][1] < 0 else "failed", "mean": vi["mean"],
+                                           "ci95": vi["ci95"]}
+                crit["calibration"] = {"status": "passed" if (c_ece is not None and inc_ece is not None and c_ece <= inc_ece + 0.01)
+                                       else "failed", "candidate_ece": c_ece, "incumbent_ece": inc_ece}
+                ca, ia = vi.get("candidate_accuracy"), vi.get("reference_accuracy")
+                crit["accuracy"] = {"status": "passed" if ca is not None and ia is not None and ca >= ia else "failed",
+                                    "candidate": ca, "incumbent": ia}
+                book = e["models"][c]["vs_book"]
+                if book.get("status") == "ok" and book["valid"] >= PROMOTION["sportsbook"]["min_quotes"]:
+                    crit["sportsbook"] = {"status": "passed" if book["diff_ci95"][0] <= 0 else "failed", "n": book["valid"],
+                                          "diff_ci95": book["diff_ci95"]}
+                else:
+                    crit["sportsbook"] = {"status": "not_evaluable", "valid_quotes": book.get("valid", 0),
+                                          "reason": "fewer than the minimum matched valid quotes (or none)"}
+            else:
+                for k in ("paired_log_loss", "calibration", "accuracy", "sportsbook"):
+                    crit[k] = {"status": "not_evaluable", "reason": f"only {n} of the required {need} settled matched games"}
+            failed = [k for k, v in crit.items() if v["status"] == "failed"]
+            if n < need:
+                status = "insufficient_evidence"
+            else:
+                status = "not_recommended" if failed else "recommend_for_review"
+            per_market[m] = {"status": status, "criteria": crit, "failed": failed,
+                             "confirmatory_look": n >= need and not prior_looks.get((c, m)),
+                             "look_label": "confirmatory (first look at the minimum count)" if n >= need and not prior_looks.get((c, m))
+                             else "exploratory (repeated or early look)"}
+        order = [v["status"] for v in per_market.values()]
+        out["candidates"][c] = {"status": ("recommend_for_review" if "recommend_for_review" in order and "not_recommended" not in order
+                                           else "not_recommended" if "not_recommended" in order else "insufficient_evidence"),
+                                "markets": per_market}
+    return out
+
+
+def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[str] = None, record_look: bool = True) -> dict:
+    """Evaluates the stored forward forecasts with the same evaluator (stage `forward`) and builds the promotion
+    recommendation. Each call is a look: logged; only the first look at a market's minimum count is confirmatory."""
+    by_model, info = forward_records(path, adapter["sport"], protocol_id)
+    if not by_model:
+        return {"status": "no_forward_forecasts", "recommendation": promotion_recommendation(
+            adapter["sport"], {"candidates": [], "markets": {}})}
+    seasons = sorted({r["season"] for recs in by_model.values() for r in recs})
+    fw = {**adapter, "models": {n: {"role": i["role"], "version": i["version"], "description": i["description"]}
+                                for n, i in info.items()}, "periods": {"forward": seasons}}
+    ev = evaluate_records(fw, by_model, stages=("forward",))
+    conn = forward_connect(path)
+    try:
+        prior = {}
+        for r in conn.execute("SELECT candidate, market, n_matched FROM forward_looks WHERE sport=? AND protocol_id=?",
+                              (adapter["sport"], protocol_id or "")):
+            if r["n_matched"] >= min_forward(adapter["sport"]):
+                prior[(r["candidate"], r["market"])] = True
+        rec = promotion_recommendation(adapter["sport"], ev, prior)
+        if record_look:
+            for c, cv in rec["candidates"].items():
+                for m, mv in cv["markets"].items():
+                    n = mv["criteria"]["min_settled_forward"]["n"]
+                    conn.execute("INSERT INTO forward_looks (protocol_id, sport, candidate, market, look_at, n_matched, status, "
+                                 "confirmatory) VALUES (?,?,?,?,?,?,?,?)", (protocol_id or "", adapter["sport"], c, m, _now(), n,
+                                                                            mv["status"], int(mv["confirmatory_look"])))
+            conn.commit()
+    finally:
+        conn.close()
+    return {"status": "evaluated", "evaluation": ev, "recommendation": rec,
+            "graded": sum(1 for recs in by_model.values() for r in recs if r["outcome"] is not None),
+            "ungraded": sum(1 for recs in by_model.values() for r in recs if r["outcome"] is None)}
+
+
+# --- CLI for protocol v3 (python -m app.autoresearch v3 <cmd>) -----------------------------------------------------------------
+def main_v3(argv: list) -> int:
+    p = argparse.ArgumentParser(prog="python -m app.autoresearch v3")
+    p.add_argument("cmd", choices=("daily", "holdout", "forward-record", "forward-grade", "forward-eval"))
+    p.add_argument("--exp-root", type=Path, help="experiment root (outside the repository and the live data)")
+    p.add_argument("--sport", choices=FIVE_SPORTS, action="append")
+    p.add_argument("--model", action="append")
+    p.add_argument("--max-items", type=int, default=BUDGET_V3["max_items_per_sport"])
+    p.add_argument("--max-seconds", type=float, default=BUDGET_V3["max_seconds_per_sport"])
+    p.add_argument("--reuse-reason")
+    p.add_argument("--now")
+    a = p.parse_args(argv)
+    chosen = a.sport or list(FIVE_SPORTS)
+    try:
+        if a.cmd == "daily":
+            r = daily_v3(chosen, a.exp_root, a.max_items, a.max_seconds)
+            print(json.dumps({"outcomes": r["outcomes"], "report_file": r["report_file"],
+                              "reasons": {s: v["reason"] for s, v in r["sports"].items()}}, indent=1))
+        elif a.cmd == "holdout":
+            print(json.dumps(holdout_v3(chosen[0], a.exp_root, reuse_reason=a.reuse_reason), indent=1, default=str))
+        else:
+            import sqlite3
+            adapter = get_adapter(chosen[0])
+            if adapter is None:
+                raise Refused(f"no research adapter for {chosen[0]}")
+            pid = v3_protocol_id(adapter)
+            uri = f"file:{config.db_path(chosen[0])}?mode=ro"          # official store: read-only, only ever queried
+            if a.cmd == "forward-eval":
+                r = forward_evaluate(None, adapter, pid)
+                print(json.dumps(r["recommendation"], indent=1, default=str))
+            elif a.cmd == "forward-grade":
+                oc = sqlite3.connect(uri, uri=True)
+                oc.row_factory = sqlite3.Row
+                print(json.dumps(forward_grade(None, adapter, oc, a.now)))
+            else:
+                oc = sqlite3.connect(uri, uri=True)
+                oc.row_factory = sqlite3.Row
+                oc.execute("PRAGMA query_only = ON")
+                now = _iso(a.now or _now())
+                for name in a.model or [n for n in adapter["models"]]:
+                    m = adapter["models"][name]
+                    recs = adapter["forecast_upcoming"](oc, now, name) if adapter.get("forecast_upcoming") else []
+                    print(json.dumps({name: forward_record(None, sport=chosen[0], protocol_id=pid, model=name, role=m["role"],
+                                                           model_version=m["version"], data_version=adapter["data_version"],
+                                                           forecasted_at=now, records=recs)}))
+    except Refused as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 # --- CLI -------------------------------------------------------------------------------------------------------------
 def main(argv=None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "v3":
+        return main_v3(list(argv[1:]))
     p = argparse.ArgumentParser(prog="python -m app.autoresearch", description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     for name in ("prepare", "trial", "status", "daily", "holdout", "agent", "stop"):
