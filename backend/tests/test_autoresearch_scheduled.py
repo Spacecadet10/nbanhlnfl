@@ -529,3 +529,12 @@ sys.exit(ar._daily_cli(ns))
     assert st["nhl"][2] == "no_candidates" and st["nhl"][3] == "" and st["ncaab"][3] == ""
     assert st["nfl"][2] == "failed" and st["soccer"][2] == "refused" and st["soccer"][3] == ""
     assert "scored=1 no_candidates=2 refused=1 failed=1" in r.stdout and r.returncode == 1
+
+
+def test_the_wrapper_keeps_a_reason_with_nested_parentheses_whole():
+    """Review round 2: the reason extraction must start at the FIRST '(' (reasons contain '(no improvement found)')."""
+    line = next(x for x in DAILY.read_text().splitlines() if "reason=$(sed -n" in x and "sport-outcome" in x)
+    cmd = line.split("reason=$(", 1)[1].rsplit("| tail -1)", 1)[0].replace('"$tmp"', "")
+    out = subprocess.run(["bash", "-c", f"s=ncaab; printf '%s\\n' 'sport-outcome: ncaab evaluated v3=evaluated "
+                          f"(3 of 3 scored; no candidate kept (no improvement found))' | {cmd}"], capture_output=True, text=True)
+    assert out.stdout.strip() == "3 of 3 scored; no candidate kept (no improvement found)"

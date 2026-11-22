@@ -940,3 +940,41 @@ def test_forward_record_refuses_a_game_that_started_before_the_recording_time_an
     late = ar.forward_record(path, forecasted_at=_t(2, 5), records=[ok], now=_t(2), **kw)       # forecast time after the recording time
     assert late["inserted"] == 0 and "after the recording time" in late["rejected"][0]["reason"]
     assert ar.forward_record(path, forecasted_at=_t(2), records=[ok], now=_t(2), **kw)["inserted"] == 1
+
+
+# --- review round 3 (lead) ---
+def test_outcome_codes_must_fit_the_market_kind():
+    """'mid' is the three-way draw; a line market settles 'push'. A 'mid' on a line market would be scored as a loss by roi."""
+    line = {"spread": {"kind": "line", "settlement": "push refunds"}, "reg3": {"kind": "three_way", "settlement": "60 min"}}
+    a = fixture_adapter({"inc": []}, markets=line)
+    with pytest.raises(ar.AdapterInvalid, match="outcome"):
+        ar.validate_records(a, [rec(0, market="spread", p=0.5, mid=0.1, outcome="mid", line=3.0)], [2020])
+    with pytest.raises(ar.AdapterInvalid, match="outcome"):
+        ar.validate_records(a, [rec(0, market="reg3", p=0.4, mid=0.3, outcome="push")], [2020])
+    ok = ar.validate_records(a, [rec(0, market="spread", p=0.5, mid=0.1, outcome="push", line=3.0),
+                                 rec(1, market="reg3", p=0.4, mid=0.3, outcome="mid")], [2020])
+    assert len(ok) == 2
+
+
+def test_nba_nhl_line_records_are_marked_as_graded_at_the_models_own_line():
+    """NBA/NHL line markets are graded at the primary model's own line: the same artefact risk as NCAAB's reference lines, so a
+    beat there must go to human review, never straight to keep or the forward test."""
+    r = {"game_id": "g1", "season": 2023, "tipoff_at": "2023-01-01T00:00:00Z", "cutoff_at": "2022-12-31T00:00:00Z",
+         "line": 5.5, "realised": 0}
+    assert ar._study_record("nba", "spread", r, (0.5, 0.0, 0.5))["line_source"] == "reference_model"
+    assert "line_source" not in ar._study_record("nba", "winner", r, (0.6, 0.0, 0.4))
+
+
+def test_the_adapter_digest_reads_a_live_wal_store_with_mode_ro_not_immutable(tmp_path, monkeypatch):
+    """immutable=1 is only safe on a static copy; on the forward path the store is live (WAL, changing), so the digest
+    connection opens it mode=ro when its folder is writable."""
+    import sqlite3
+    db = tmp_path / "soccer.sqlite"
+    c = sqlite3.connect(db); c.execute("PRAGMA journal_mode=WAL"); c.execute("CREATE TABLE t(x)"); c.commit(); c.close()
+    monkeypatch.setattr(ar.config, "db_path", lambda sport: db)
+    conn = ar._adapter_conn("soccer")
+    try:
+        assert conn.execute("PRAGMA query_only").fetchone()[0] == 1
+        assert "immutable" not in ar._adapter_conn_uri("soccer")
+    finally:
+        conn.close()

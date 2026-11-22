@@ -189,6 +189,23 @@ def snapshot_identity(sport: str) -> dict:
             "derived": {str(x.relative_to(root)): _sha(x.read_bytes())[:16] for x in other}}
 
 
+def _adapter_conn_uri(sport: str) -> str:
+    """mode=ro for a store in a writable folder (the live, WAL-mode store on the forward path: immutable=1 could read a
+    changing file inconsistently); immutable=1 only for a read-only snapshot folder, where WAL cannot be opened mode=ro."""
+    path = config.db_path(sport)
+    return f"file:{path}?" + ("mode=ro" if os.access(path.parent, os.W_OK) else "immutable=1")
+
+
+def _adapter_conn(sport: str):
+    import sqlite3
+    if not config.db_path(sport).is_file():
+        raise Refused(f"no {sport} store at {config.db_path(sport)}")
+    conn = sqlite3.connect(_adapter_conn_uri(sport), uri=True)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
+
+
 def _snapshot_conn(sport: str):
     import sqlite3
     if not config.db_path(sport).is_file():
@@ -1395,6 +1412,9 @@ def validate_records(adapter: dict, recs: list, seasons) -> list:
             raise AdapterInvalid(f"{r['game_id']} {r['market']}: probabilities not finite, in [0, 1] and summing to 1")
         if r.get("outcome") not in (None, "a", "b", "mid", "push", "void"):
             raise AdapterInvalid(f"{r['game_id']} {r['market']}: unknown outcome {r.get('outcome')!r}")
+        if (r.get("outcome") == "mid" and kind != "three_way") or (r.get("outcome") == "push" and kind == "three_way"):
+            raise AdapterInvalid(f"{r['game_id']} {r['market']}: outcome {r['outcome']!r} does not fit kind {kind} "
+                                 "('mid' is a three-way draw, a line market settles 'push')")
         k = _key(r)
         if k in seen:
             raise AdapterInvalid(f"duplicate forecast for {k}")
@@ -1843,8 +1863,11 @@ def _study_record(sport: str, market: str, r: dict, vec) -> dict:
     probs = {"a": pa, "b": pb} if kind == "binary" else {"a": pa, "mid": pm, "b": pb}
     idx = r["realised"]
     outcome = None if idx is None else ("mid" if (idx == 1 and kind == "three_way") else _OUTCOME[idx])
-    return {"game_id": r["game_id"], "season": r["season"], "start_at": _iso(r["tipoff_at"]), "forecast_cutoff": _iso(r["cutoff_at"]),
-            "market": market, "line": r["line"], "probs": probs, "outcome": outcome}
+    out = {"game_id": r["game_id"], "season": r["season"], "start_at": _iso(r["tipoff_at"]), "forecast_cutoff": _iso(r["cutoff_at"]),
+           "market": market, "line": r["line"], "probs": probs, "outcome": outcome}
+    if kind == "line":           # graded at the primary model's own line: a beat there goes to human review (NBA_NHL_NOTES)
+        out["line_source"] = "reference_model"
+    return out
 
 
 def _study_walk(sport: str, adapter_periods: dict):
@@ -1988,7 +2011,7 @@ def get_adapter(sport: str) -> Optional[dict]:
         return None
     import inspect
     if "conn" in inspect.signature(fn).parameters:         # Soccer: the data digest needs the store
-        conn = _snapshot_conn(sport)
+        conn = _adapter_conn(sport)
         try:
             return fn(conn)
         finally:
@@ -2246,7 +2269,9 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
     else:
         status |= {"outcome": "evaluated", "reason": (f"{len(scored_c)} of {len(cands)} candidates scored"
                                                       + (f"; {len(pending)} queued" if pending else "")) +
-                   (f"; kept: {', '.join(ev['kept'])}" if ev["kept"] else "; no candidate kept (no improvement found)")}
+                   (f"; kept: {', '.join(ev['kept'])}" if ev["kept"] else "; no candidate kept")
+                   + (f"; {len(ev['needs_human_review'])} reference-line beat(s) need human review"
+                      if ev.get("needs_human_review") else ("" if ev["kept"] else "; no improvement found"))}
 
 
 def data_problems(result) -> tuple:

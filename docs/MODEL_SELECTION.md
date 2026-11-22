@@ -122,6 +122,8 @@ probability of its pick ≥ threshold and the filter holds.
   Rollback = run the old code version; its rows remain distinguishable. Off switch: `RESEARCH_SELECTION=0` disables research
   cohorts, decisions and selections in the jobs (primary forecasts unaffected).
 
+**Amendment 2026-11-22 (research keep rule, recorded before the five-sport v3 runs were used for any decision).** The autoresearch keep test that applies this section's paired rule (`autoresearch.keep_decision`, shared by protocol v2 and `sports-research-v3`) now requires the paired log-loss 95% upper bound to be below -1e-9, not merely below 0, and treats a candidate whose forecasts are identical to the incumbent's as a tie (never kept). Reason: independent review found keeps at -1.6e-17 (floating-point noise from a marginal-preserving tilt). This changes recorded v2 behaviour only for differences smaller than 1e-9; no earlier v2 keep is affected. A beat on a line graded at a model's own reference line is routed to human review, never kept or forward-tracked.
+
 ## 7. Storage (migration 0016; append-only, idempotent)
 - Member forecasts: `predictions` (winner, existing) and `market_forecasts` (lines/reg3: model version
   `research-v3:<name>:<digest>-window=2h-policy=near_tipoff`, same line, line source and quote id as the primary in that run).

@@ -321,7 +321,7 @@ all others are labelled exploratory. A candidate version that changes during the
 "No candidate kept", "no candidates", failed items and refused sports are recorded (`attempts.jsonl`, `items.jsonl`, `state.json`)
 and shown; none is reported as a successful search.
 
-`IDENTITY.json` of the snapshot: the sport's `last_final` is the evaluation cutoff (records starting after it are dropped and counted in `data_cutoff`). `python -m app.autoresearch daily --sport nfl|ncaab|soccer` runs v3 and prints `sport-outcome: <sport> <outcome> <reason>` per sport; kept candidates are listed in `state.json` as `forward_candidates` for the Ops driver to register with `candidates.live.forward_register` (this module must not import the live-forecast code; a test guards that). The wrapper's `daily-state.tsv` is shown under `v3.wrapper_state`.
+`IDENTITY.json` of the snapshot: the sport's `last_final` is the evaluation cutoff (records starting after it are dropped and counted in `data_cutoff`). `python -m app.autoresearch daily --sport nfl|ncaab|soccer` runs v3 and prints `sport-outcome: <sport> <outcome> <reason>` per sport; kept candidates are listed in `state.json` as `forward_candidates`; the scheduled driver (`python -m app.candidates.live record|grade`) reads that list and calls `autoresearch.record`/`grade` (this module never imports the driver or live-forecast code; a test guards that). The wrapper's `daily-state.tsv` is shown under `v3.wrapper_state`.
 
 ### Not done in v3
 Score MAE/RMSE for NBA/NHL (the study tables hold probabilities only); sportsbook comparison and returns for NBA/NHL line

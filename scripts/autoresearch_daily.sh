@@ -74,7 +74,7 @@ for s in $ORDER; do
         *) outcome=failed; reason="rc $rc" ;;
       esac
     else
-      reason=$(sed -n "s/^sport-outcome: $s [a-z_]* .*(\(.*\))\$/\1/p" "$tmp" | tail -1)
+      reason=$(sed -n "s/^sport-outcome: $s [a-z_]* [^(]*(\(.*\))\$/\1/p" "$tmp" | tail -1)
     fi
     [ "$outcome" = refused ] && reason="guard refused (lock held, game window or forecasting load; see learning-runs.jsonl)"
   fi
