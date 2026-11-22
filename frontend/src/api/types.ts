@@ -852,11 +852,13 @@ export interface AutoresearchV3Sport {
   queue?: { total: number; done: number; remaining: number; failed: string[]; ran_now: number; next_item: string | null } | null;
   next_run?: string | null; periods?: { search: number[]; validation: number[]; holdout: number[] }; periods_note?: string | null;
   unsupported?: Record<string, string>; evaluation?: Record<string, AutoresearchV3Market>;
+  data_validation?: { ok: boolean; issues: string[]; notes: string[] } | null; data_cutoff?: { last_final: string | null; records_after_cutoff_dropped_now: number } | null; caveats?: string[] | null; forward_candidates?: string[];
   models?: Record<string, { role?: string; version?: string }>; markets?: Record<string, { kind?: string; settlement?: string; line_basis?: string | null }>;
 }
 export interface AutoresearchV3 {
   protocol: string; note: string; sports: Record<string, AutoresearchV3Sport>;
-  last_daily?: { started_at?: string; finished_at?: string; outcomes?: Record<string, AutoresearchOutcome> } | null;
+  last_daily?: { started_at?: string; finished_at?: string; outcomes?: Record<string, AutoresearchOutcome>; combined?: Record<string, { outcome: AutoresearchOutcome; v3: { outcome: string | null; reason?: string | null }; v2: { outcome: string | null; reason?: string | null } }>; v2?: { stopped?: string; note?: string } | null } | null;
+  wrapper_state?: { sport: string; last_attempt_utc: string; last_outcome: string; last_success_utc: string; last_reason: string }[] | null;
 }
 export interface AutoresearchStatus {
   v3?: AutoresearchV3 | null;

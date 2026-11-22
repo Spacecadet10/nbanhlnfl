@@ -1656,10 +1656,43 @@ def _stage(recs: list, seasons) -> list:
     return [r for r in recs if r["season"] in seasons]
 
 
+def apply_push_mode(adapter: dict, recs: list) -> list:
+    """`push_scoring: "conditional"` (Soccer): a line market's two sides are scored conditional on no push (the stake-returned
+    share carries no information): probabilities renormalised over a and b, pushed games unscored. Default ("score", as the v2
+    study tables): the push probability is scored like a third outcome."""
+    if adapter.get("push_scoring") != "conditional":
+        return recs
+    out = []
+    for r in recs:
+        if adapter["markets"][r["market"]]["kind"] == "line" and "mid" in r["probs"]:
+            p = r["probs"]
+            t = p["a"] + p["b"]
+            r = {**r, "probs": {"a": p["a"] / t, "b": p["b"] / t} if t > 0 else {"a": 0.5, "b": 0.5}}
+        out.append(r)
+    return out
+
+
+def suite_scores(recs: list, adapter: dict) -> dict:
+    """{game_id: (mean log loss, mean Brier)} over the game's scoreable records of all markets (the market-suite score the
+    Soccer adapter's research_compare reports)."""
+    acc: dict = {}
+    for r in recs:
+        i = _outcome_idx(r, adapter["markets"][r["market"]]["kind"])
+        if i is None:
+            continue
+        v = _vec3(r)
+        x = acc.setdefault(r["game_id"], [0.0, 0.0, 0])
+        x[0] += _ll(v, i)
+        x[1] += _brier(v, i)
+        x[2] += 1
+    return {g: (x[0] / x[2], x[1] / x[2]) for g, x in acc.items()}
+
+
 def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "validation")) -> dict:
     """Everything the owner asked for, per market: per-model n/coverage/Brier/log loss/calibration/score errors; the
     incumbent (best existing member); simple baselines; sportsbook no-vig; returns; each candidate vs incumbent, baselines and
     book, with a keep/discard on the search AND validation stages. Pure; reads nothing."""
+    by_model = {n: apply_push_mode(adapter, recs) for n, recs in by_model.items()}
     per = adapter["periods"]                        # stage name -> seasons (the forward stage passes its own periods)
     cands = [n for n, m in adapter["models"].items() if m["role"] == "candidate"]
     out = {"sport": adapter["sport"], "data_version": adapter["data_version"], "candidates": cands,
@@ -1712,6 +1745,13 @@ def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "
                                    "; ".join(f"{st}: {s['reason']}" for st, s in stages.items() if s["decision"] != "keep")}
             entry["comparisons"][n] = cmp_
         out["markets"][market] = entry
+    suite = {}
+    for n, recs in by_model.items():
+        sc = suite_scores(recs, adapter)
+        if sc:
+            suite[n] = {"games": len(sc), "log_loss": sum(v[0] for v in sc.values()) / len(sc),
+                        "brier": sum(v[1] for v in sc.values()) / len(sc)}
+    out["suite"] = suite
     out["evaluated_markets"] = sorted(m for m, e in out["markets"].items() if e["status"] == "evaluated")
     out["kept"] = sorted(f"{n}:{m}" for m, e in out["markets"].items() for n, c in e.get("comparisons", {}).items()
                          if c.get("decision") == "keep")
@@ -2133,6 +2173,7 @@ def _walk_item(adapter: dict, conn, seasons, model: str, partial: Path, t0: floa
                                             resume=saved["next"], state=state)
         saved["next"] = state.get("next")
         if state.get("done", True):
+            partial.unlink(missing_ok=True)
             return saved["records"]
         partial.write_text(json.dumps(saved, default=str))
         if time.time() - t0 >= max_seconds:

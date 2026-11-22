@@ -762,3 +762,23 @@ def test_public_forward_api_records_references_and_candidates_then_grades_read_o
 def test_the_driver_imports_the_evaluator_never_the_reverse():
     src = Path(ar.__file__).read_text()
     assert "candidates.live" not in src and "candidates import live" not in src
+
+
+def test_conditional_push_scoring_and_the_game_suite_agree_with_the_soccer_per_game_scores():
+    from app import soccer_markets_eval as sme
+    recs = [rec(0, "goals_total", p=0.4, mid=0.2, outcome="a", line=2.0), rec(0, "goals_total", p=0.45, mid=0.1, outcome="push", line=3.0),
+            rec(0, "result_1x2", p=0.5, mid=0.3, outcome="mid") | {"probs": {"a": 0.5, "mid": 0.3, "b": 0.2}},
+            rec(1, "btts_yes", p=0.55, outcome="b"), rec(1, "goals_total", p=0.3, mid=0.3, outcome="b", line=2.0)]
+    soccer_style = [dict(r, probs={("push" if k == "mid" else k): v for k, v in r["probs"].items()} if r["market"] == "goals_total"
+                         else r["probs"]) for r in recs]
+    theirs = sme._per_game(soccer_style)
+    markets = {"goals_total": {"kind": "line", "settlement": "x"}, "result_1x2": {"kind": "three_way", "settlement": "x"},
+               "btts_yes": {"kind": "binary", "settlement": "x"}}
+    a = fixture_adapter({"inc": recs}, markets=markets, push_scoring="conditional")
+    norm = ar.apply_push_mode(a, ar.validate_records(a, [dict(r, probs=dict(r["probs"])) for r in soccer_style], [2020]))
+    mine = ar.suite_scores(norm, a)
+    for g, (ll, br) in theirs.items():
+        assert mine[g][0] == pytest.approx(ll, abs=1e-9) and mine[g][1] == pytest.approx(br, abs=1e-9)
+    assert not any(r["outcome"] == "push" and ar._outcome_idx(r, "line") is not None for r in norm)
+    ev = ar.evaluate_records(a, {"inc": norm})
+    assert ev["suite"]["inc"]["games"] == 2 and ev["suite"]["inc"]["log_loss"] == pytest.approx(sum(v[0] for v in theirs.values()) / 2, abs=1e-9)

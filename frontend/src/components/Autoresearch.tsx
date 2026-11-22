@@ -43,6 +43,8 @@ function AutoresearchBody({ d }: { d: AutoresearchStatus }) {
 function V3Research({ v }: { v: AutoresearchV3 }) {
   return <section aria-labelledby="ar-v3-h"><h3 id="ar-v3-h">All sports ({v.protocol})</h3>
     <p className="notice">{v.note}</p>
+    {v.last_daily?.combined && <p className="small">Per sport, protocol v3 and the v2 agent queue: {Object.entries(v.last_daily.combined).map(([s, c]) => `${SPORT_NAME[s] ?? s}: ${OUTCOME[c.outcome] ?? c.outcome} (v3 ${c.v3.outcome ?? '—'}${c.v2.outcome ? `, v2 ${c.v2.outcome}` : ''})`).join(' · ')}</p>}
+    {v.wrapper_state && v.wrapper_state.length > 0 && <p className="small muted">Scheduled wrapper: {v.wrapper_state.map(w => `${SPORT_NAME[w.sport] ?? w.sport} ${w.last_outcome} at ${w.last_attempt_utc}`).join(' · ')}</p>}
     {v.last_daily && <p>Last daily run: {v.last_daily.finished_at ? dateTime(v.last_daily.finished_at) : '—'} · {Object.entries(v.last_daily.outcomes ?? {}).map(([s, o]) => `${SPORT_NAME[s] ?? s}: ${OUTCOME[o] ?? o}`).join(' · ')}</p>}
     <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Last attempt</th><th>Last successful evaluation</th><th>Candidates</th><th>Evaluated markets</th><th>Blockers</th><th>Next run</th></tr></thead><tbody>
       {Object.entries(v.sports).map(([sport, s]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
@@ -51,7 +53,7 @@ function V3Research({ v }: { v: AutoresearchV3 }) {
         <td>{s.candidate_count}{s.queue ? <span className="small muted"> · queue {s.queue.done}/{s.queue.total}{s.queue.remaining ? `, ${s.queue.remaining} waiting` : ''}</span> : null}</td>
         <td>{s.evaluated_markets.length ? s.evaluated_markets.map(m => MARKET[m] ?? m).join(', ') : 'none'}</td>
         <td>{s.blockers.length ? <ul className="small">{s.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul> : 'none'}</td>
-        <td>{s.next_run ?? '—'}</td></tr>)}
+        <td>{s.next_run ?? '—'}{s.data_cutoff?.last_final ? <div className="small muted">data through {dateTime(s.data_cutoff.last_final)}</div> : null}</td></tr>)}
     </tbody></table></div>
     {Object.entries(v.sports).filter(([, s]) => s.evaluation).map(([sport, s]) => <V3Detail key={sport} sport={sport} s={s} />)}
   </section>;

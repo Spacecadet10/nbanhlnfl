@@ -1020,7 +1020,7 @@ def research_adapter(conn: Optional[sqlite3.Connection] = None) -> dict:
                            "rule": "a walk over these seasons needs allow_holdout=True and is logged; the prospective season is never read"}}
     return {"sport": "soccer", "data_version": f"{ADAPTER_VERSION}:{protocol_sha256()[:12]}" + (f":{data_digest(conn, LAST_OPEN)[:12]}" if conn is not None else ""),
             "markets": markets, "unsupported": unsupported, "periods": periods, "models": models,
-            "competitions": list(RESEARCH_COMPETITIONS), "walk": adapter_walk, "forecast_upcoming": forecast_upcoming,
+            "competitions": list(RESEARCH_COMPETITIONS), "push_scoring": "conditional", "walk": adapter_walk, "forecast_upcoming": forecast_upcoming,
             "validate_data": validate_data}
 
 
