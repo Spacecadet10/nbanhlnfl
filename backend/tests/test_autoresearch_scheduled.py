@@ -46,13 +46,100 @@ def test_daily_refuses_without_the_switch_file_and_runs_nothing(home, tmp_path):
     assert r.returncode == 78 and calls == [] and "SCHEDULE_DAILY_ENABLED" in r.stdout + r.stderr
 
 
-def test_daily_runs_prepare_daily_through_learning_run_when_switched_on(home, tmp_path):
+def sport_args(calls):
+    return [c[c.index("--sport") + 1] for c in calls]
+
+
+def on(home):
     (home / "SCHEDULE_DAILY_ENABLED").write_text("")
+
+
+def state(home):
+    return {r.split("\t")[0]: r.split("\t") for r in (home / "daily-state.tsv").read_text().splitlines()}
+
+
+def test_daily_runs_prepare_daily_per_sport_through_learning_run_when_switched_on(home, tmp_path):
+    on(home)
     r, calls = run(DAILY, home, tmp_path)
     assert r.returncode == 0, r.stderr
-    assert calls == [["daily", "--sport", "nba", "--sport", "nhl", "--max-trials", "4", "--max-minutes", "60", "--timeout", "900"]]
+    assert calls == [["daily", "--sport", s, "--max-trials", "3", "--max-minutes", "12", "--timeout", "600"]
+                     for s in ("nba", "nhl", "ncaab", "nfl", "soccer")]
     ev = [json.loads(x) for x in (tmp_path / "data" / "research" / "learning-runs.jsonl").read_text().splitlines()]
-    assert ev[0]["name"] == "autoresearch-daily" and ev[0]["event"] == "start" and ev[-1]["rc"] == 0
+    assert [e["name"] for e in ev if e["event"] == "start"] == [f"autoresearch-daily-{s}" for s in ("nba", "nhl", "ncaab", "nfl", "soccer")]
+    assert all(e["rc"] == 0 for e in ev if e["event"] == "end")
+    lines = [x for x in r.stdout.splitlines() if x.startswith("autoresearch-daily: sport=")]
+    assert [x.split()[1:3] for x in lines] == [[f"sport={s}", "outcome=evaluated"] for s in ("nba", "nhl", "ncaab", "nfl", "soccer")]
+    st = state(home)
+    assert set(st) == {"nba", "nhl", "ncaab", "nfl", "soccer"} and st["soccer"][2] == "evaluated" and st["soccer"][3] == st["soccer"][1]
+
+
+def test_a_failed_refused_or_skipped_sport_does_not_stop_the_others_and_is_reported(tmp_path, home, monkeypatch):
+    on(home)
+    (home / "workspace" / "prepare.py").write_text(
+        "import json, sys, os\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "s = sys.argv[sys.argv.index('--sport') + 1]\n"
+        "if s == 'nhl': sys.exit(3)\n"
+        "if s == 'nfl': print('sport-outcome: no_candidates')\n"
+        "if s == 'ncaab': print('{\"trials\": 0}')\n")
+    data = tmp_path / "data"
+    data.mkdir()
+    import sqlite3
+    c = sqlite3.connect(data / "soccer.sqlite")
+    c.execute("CREATE TABLE soccer_matches (match_id TEXT PRIMARY KEY, kickoff_at TEXT, status TEXT)")
+    c.execute("INSERT INTO soccer_matches VALUES ('m', ?, 'scheduled')", ((NOW + timedelta(minutes=40)).strftime(FMT),))
+    c.commit()
+    c.close()
+    r, calls = run(DAILY, home, tmp_path)
+    out = {x.split()[1].split("=")[1]: x.split()[2].split("=")[1] for x in r.stdout.splitlines() if x.startswith("autoresearch-daily: sport=")}
+    assert out == {"nba": "evaluated", "nhl": "failed", "ncaab": "no_candidates", "nfl": "no_candidates", "soccer": "refused"}
+    assert sport_args(calls) == ["nba", "nhl", "ncaab", "nfl"]               # soccer's own 0.75 h window refused it; the others ran
+    assert r.returncode == 1 and "failed=1" in r.stdout
+    assert state(home)["nhl"][2] == "failed" and state(home)["nhl"][3] == ""   # no success recorded for a failure
+    assert state(home)["soccer"][2] == "refused"
+
+
+def test_the_sport_that_has_gone_longest_without_a_success_runs_first_and_other_rows_survive(tmp_path, home):
+    on(home)
+    (home / "daily-state.tsv").write_text(
+        "nba\t2026-11-20T11:00:00Z\tevaluated\t2026-11-20T11:00:00Z\t-\n"
+        "nhl\t2026-11-20T11:00:00Z\tevaluated\t2026-11-20T11:00:00Z\t-\n"
+        "soccer\t2026-11-20T11:00:00Z\trefused\t2026-11-10T11:00:00Z\t-\n"
+        "extra\t2026-11-01T00:00:00Z\tevaluated\t2026-11-01T00:00:00Z\t-\n")
+    env_sports = "nba nhl soccer ncaab"
+    os.environ["AUTORESEARCH_SPORTS"] = env_sports
+    try:
+        r, calls = run(DAILY, home, tmp_path)
+    finally:
+        del os.environ["AUTORESEARCH_SPORTS"]
+    assert sport_args(calls) == ["ncaab", "soccer", "nba", "nhl"]            # never succeeded, then oldest success, then ties in list order
+    st = state(home)
+    assert set(st) == {"nba", "nhl", "soccer", "ncaab", "extra"}
+
+
+def test_the_total_wall_cap_skips_the_sports_that_no_longer_fit(tmp_path, home):
+    on(home)
+    (home / "workspace" / "prepare.py").write_text(
+        "import json, sys, os, time\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\ntime.sleep(2)\n")
+    os.environ.update(AUTORESEARCH_TOTAL_SECONDS="8", AUTORESEARCH_MIN_START_SECONDS="5")
+    try:
+        r, calls = run(DAILY, home, tmp_path)
+    finally:
+        del os.environ["AUTORESEARCH_TOTAL_SECONDS"], os.environ["AUTORESEARCH_MIN_START_SECONDS"]
+    assert 1 <= len(calls) < 5 and r.returncode == 0
+    assert "outcome=skipped" in r.stdout and "total wall cap" in r.stdout
+
+
+def test_every_sport_refused_exits_75(tmp_path, home):
+    on(home)
+    import fcntl
+    (tmp_path / "data").mkdir()
+    fh = open(tmp_path / "data" / ".learning-heavy.lock", "w")
+    fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        r, calls = run(DAILY, home, tmp_path)
+    finally:
+        fh.close()
+    assert r.returncode == 75 and calls == [] and r.stdout.count("outcome=refused") == 5
 
 
 def test_daily_never_names_the_agent_command():

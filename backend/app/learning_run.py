@@ -76,11 +76,12 @@ def _log(path: Path, **event) -> None:
         os.close(fd)
 
 
-def games_in_window(data_dir: Path, sports: Sequence[str], hours: float, now: datetime) -> list:
-    """(sport, game id, tipoff) of games tipping off in (now - IN_PROGRESS_HOURS, now + hours] that are not final, postponed
+def games_in_window(data_dir: Path, sports: Sequence[str], hours: float, now: datetime,
+                    lookback_hours: float = IN_PROGRESS_HOURS) -> list:
+    """(sport, game id, tipoff) of games tipping off in (now - lookback_hours, now + hours] that are not final, postponed
     or canceled (so also games in progress), from read-only queries. A store that does not
     exist is not a window; a store that exists but cannot be read raises, so the caller refuses (fail closed)."""
-    lo, hi = (now - timedelta(hours=IN_PROGRESS_HOURS)).strftime(FMT), (now + timedelta(hours=hours)).strftime(FMT)
+    lo, hi = (now - timedelta(hours=lookback_hours)).strftime(FMT), (now + timedelta(hours=hours)).strftime(FMT)
     found = []
     for sport in sports:
         path = Path(data_dir) / f"{sport}.sqlite"
@@ -138,8 +139,13 @@ def _kill_group(proc: subprocess.Popen) -> None:
 def run_guarded(argv: Sequence[str], *, name: str, max_minutes: float, max_rss_gb: float,
                 defer_hours: float = DEFAULT_DEFER_HOURS, defer_sports: Sequence[str] = DEFAULT_SPORTS, nice: int = 10,
                 threads: int = 2, data_dir: Optional[Path] = None, poll_s: float = 1.0, now: Optional[datetime] = None,
-                rss_reader: Callable[[int], Optional[int]] = group_rss_bytes, light: bool = False) -> int:
-    """`light` (prospective recorders that must run inside game windows): no machine-wide heavy lock (a per-name lock only, so
+                rss_reader: Callable[[int], Optional[int]] = group_rss_bytes, light: bool = False,
+                lookback_hours: float = IN_PROGRESS_HOURS, global_sports: Sequence[str] = (), global_hours: float = 0.0) -> int:
+    """Per-sport windows (five-sport schedule): `defer_sports`/`defer_hours`/`lookback_hours` are this run's own sport window
+    (a soccer step defers only for soccer kick-offs); `global_sports`/`global_hours` are the live-forecasting guard: refuse when
+    ANY of those sports has a game tipping off within `global_hours` (forecasts are recorded just before tip-off; games already
+    in progress only need grading, which is light, so they do not count).
+    `light` (prospective recorders that must run inside game windows): no machine-wide heavy lock (a per-name lock only, so
     one recorder never overlaps itself) and no game-window deferral; the nice, thread, wall-clock and memory limits still apply."""
     data_dir = Path(data_dir or config.data_dir())
     log = log_path(data_dir)
@@ -158,13 +164,19 @@ def run_guarded(argv: Sequence[str], *, name: str, max_minutes: float, max_rss_g
             _log(log, event="refused", reason=f"another {'light' if light else 'heavy'} learning job holds the lock {lp}", **base)
             return EXIT_REFUSED
         try:
-            window = [] if light else games_in_window(data_dir, defer_sports, defer_hours, now or datetime.now(timezone.utc))
+            clock = now or datetime.now(timezone.utc)
+            window = [] if light else games_in_window(data_dir, defer_sports, defer_hours, clock, lookback_hours)
+            imminent = [] if light or not global_sports or global_hours <= 0 else games_in_window(data_dir, global_sports, global_hours, clock, 0.0)
         except Exception as exc:
             _log(log, event="refused", reason=f"game schedule unreadable ({type(exc).__name__}: {exc}); refusing to start", **base)
             return EXIT_REFUSED
         if window:
             shown = ", ".join(f"{s} {g} {t}" for s, g, t in window[:5])
             _log(log, event="refused", reason=f"{len(window)} game(s) tip off within {defer_hours} h or are in progress: {shown}", **base)
+            return EXIT_REFUSED
+        if imminent:
+            shown = ", ".join(f"{s} {g} {t}" for s, g, t in imminent[:5])
+            _log(log, event="refused", reason=f"live forecasting load: {len(imminent)} game(s) tip off within {global_hours} h: {shown}", **base)
             return EXIT_REFUSED
         env = dict(os.environ)
         for v in THREAD_VARS:
@@ -237,6 +249,9 @@ def main(argv: Optional[list] = None) -> int:
     p.add_argument("--max-rss-gb", type=float, required=True)
     p.add_argument("--defer-hours", type=float, default=DEFAULT_DEFER_HOURS)
     p.add_argument("--defer-sports", default=",".join(DEFAULT_SPORTS), help="comma list of nba,nhl,ncaab,nfl,soccer")
+    p.add_argument("--lookback-hours", type=float, default=IN_PROGRESS_HOURS, help="how long after tip-off a game still counts as in progress")
+    p.add_argument("--global-sports", default="", help="comma list: refuse when any of these has a tip-off within --global-hours")
+    p.add_argument("--global-hours", type=float, default=0.0)
     p.add_argument("--nice", type=int, default=10)
     p.add_argument("--threads", type=int, default=2)
     p.add_argument("--light", action="store_true", help="recorder mode: per-name lock instead of the heavy lock, no game-window deferral")
@@ -245,11 +260,13 @@ def main(argv: Optional[list] = None) -> int:
     except SystemExit as e:
         return EXIT_USAGE if e.code else 0
     sports = tuple(s for s in a.defer_sports.split(",") if s)
-    if not cmd or any(s not in GAME_TABLES for s in sports):
+    gsports = tuple(s for s in a.global_sports.split(",") if s)
+    if not cmd or any(s not in GAME_TABLES for s in sports + gsports):
         print("usage: a command after -- and known --defer-sports are required", file=sys.stderr)
         return EXIT_USAGE
     return run_guarded(cmd, name=a.name, max_minutes=a.max_minutes, max_rss_gb=a.max_rss_gb, defer_hours=a.defer_hours,
-                       defer_sports=sports, nice=a.nice, threads=a.threads, light=a.light)
+                       defer_sports=sports, nice=a.nice, threads=a.threads, light=a.light,
+                       lookback_hours=a.lookback_hours, global_sports=gsports, global_hours=a.global_hours)
 
 
 if __name__ == "__main__":

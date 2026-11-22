@@ -658,3 +658,292 @@ def core_members(conn, sport: str, as_of: str) -> list:
 
 def _has(conn, table: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+
+
+# --- Forward-test driver (five sports; light scheduled jobs around the research system's forward store) ---------------------
+# The forward store, recording rules, grading and promotion evidence belong to app.autoresearch (tables rf_forecasts, rf_grades,
+# rf_looks in <data dir>/research/forward-candidates.sqlite). This is the thin scheduled driver:
+#   record: per sport, the models the research system selected (every incumbent plus the `forward_candidates` of that sport's
+#           v3 state.json) are asked for contract records of games still ahead through the sport's adapter
+#           (`forecast_upcoming(conn, now, model)`, on a read-only official store) and stored by `autoresearch.forward_record`
+#           (look-ahead checks, append-only, first-forecast rules are the core's).
+#   grade:  `autoresearch.forward_grade` with the adapter's own `settle` when it has one, otherwise `_settle` here: the games
+#           table + markets.settle rules for nba/nhl/ncaab/nfl (OT as the market says, whole-line pushes, NFL tie voids the
+#           winner, a moved start voids), the 90-minute score or corner counts with the soccer adapter's rules for soccer.
+# Run through `python -m app.learning_run --light --name forward-<kind> ...` (per-name lock, no heavy lock, no game-window
+# deferral). One extra table, rf_runs (kind, sport, at, outcome, detail), keeps the per-sport run history for the status page.
+FORWARD_SPORTS = ("nba", "nhl", "ncaab", "nfl", "soccer")
+FORWARD_CALL_TIMEOUT_S = 60
+THREE_WAY = {"reg3", "result_1x2"}
+RUNS_SCHEMA = """CREATE TABLE IF NOT EXISTS rf_runs (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, sport TEXT NOT NULL, at TEXT NOT NULL,
+  outcome TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '')"""
+
+
+class _Timeout(Exception):
+    pass
+
+
+@contextmanager
+def _deadline(seconds: float):
+    """SIGALRM time limit for one adapter call (main thread only; elsewhere the guard's wall clock is the limit)."""
+    import signal
+    import threading
+    if not seconds or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def fire(_s, _f):
+        raise _Timeout(f"adapter call exceeded {seconds} s")
+    old = signal.signal(signal.SIGALRM, fire)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def _official(data_dir: Path, sport: str):
+    """The official store, strictly read-only; None when this sport has no store."""
+    import sqlite3
+    from .. import sports
+    p = Path(data_dir) / sports.store(sport).db_file
+    if not p.is_file():
+        return None
+    conn = sqlite3.connect(f"{p.resolve().as_uri()}?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
+
+
+def _exp_root() -> Path:
+    return Path(os.environ.get("AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports") / "experiments"
+
+
+def _sealed_kwargs(produce) -> dict:
+    """The NFL adapter reads the reserved seasons' results as forward state only through the sealed, logged read (nfl_live's
+    activation): pass that choice and the access log when `forecast_upcoming` asks for them. Without an activation the call is
+    refused by the adapter (reported as that model's error), never bypassed."""
+    import inspect
+    try:
+        names = set(inspect.signature(produce).parameters)
+    except (TypeError, ValueError):
+        return {}
+    if not {"sealed", "access_log"} <= names:
+        return {}
+    from .. import nfl_eval, nfl_live
+    act = nfl_live.activation()
+    return {"sealed": act["sealed"] if act else None, "access_log": nfl_eval.access_log_path()}
+
+
+def forward_models(adapter: dict, sport: str, exp_root: Path, pid: str, baselines: bool = False) -> list:
+    """(name, model dict) to forecast forward: every incumbent, the sport's `forward_candidates` (from the core's state.json), and
+    optionally the baselines. No state.json (nothing kept yet) means no candidates are registered."""
+    try:
+        cands = set(json.loads((exp_root / "v3" / pid / sport / "state.json").read_text()).get("forward_candidates") or [])
+    except (OSError, ValueError):
+        cands = set()
+    wanted = {"incumbent"} | ({"baseline"} if baselines else set())
+    return [(n, m) for n, m in adapter["models"].items() if m.get("role") in wanted or n in cands]
+
+
+def _note(data_dir: Path, kind: str, sport: str, outcome: str, detail: str, at: str) -> None:
+    import sqlite3
+    conn = sqlite3.connect(Path(data_dir) / "research" / "forward-candidates.sqlite", timeout=30)
+    try:
+        conn.execute(RUNS_SCHEMA)
+        conn.execute("INSERT INTO rf_runs (kind, sport, at, outcome, detail) VALUES (?,?,?,?,?)", (kind, sport, at, outcome, detail[:500]))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _adapter(sport: str, adapters: Optional[dict]):
+    if adapters is not None:
+        return adapters.get(sport)
+    from .. import autoresearch
+    return autoresearch.get_adapter(sport)
+
+
+def forward_record(data_dir: Path, *, now: Optional[str] = None, sports=FORWARD_SPORTS, adapters: Optional[dict] = None,
+                   exp_root: Optional[Path] = None, timeout_s: float = FORWARD_CALL_TIMEOUT_S, baselines: bool = False) -> dict:
+    """{sport: {"outcome", "inserted", "already_recorded", "rejected", "models", "errors"}}, outcome evaluated | no_candidates
+    (no model selected, or nothing ahead) | refused (no adapter) | skipped (no store) | failed. One model's or sport's failure
+    never stops the others."""
+    from .. import autoresearch as ar
+    now, exp_root = now or utc_now(), exp_root or _exp_root()
+    out = {}
+    for sport in sports:
+        res = out[sport] = {"outcome": "no_candidates", "inserted": 0, "already_recorded": 0, "rejected": 0, "models": 0, "errors": []}
+        try:
+            adapter = _adapter(sport, adapters)
+            if adapter is None or not adapter.get("forecast_upcoming"):
+                res["outcome"] = "refused"
+                res["errors"].append("no adapter with forecast_upcoming")
+            else:
+                conn = _official(data_dir, sport)
+                if conn is None:
+                    res["outcome"] = "skipped"
+                    res["errors"].append("no store")
+                else:
+                    try:
+                        _record_sport(ar, sport, adapter, conn, now, exp_root, timeout_s, baselines, res)
+                    finally:
+                        conn.close()
+        except Exception as exc:
+            res["outcome"] = "failed"
+            res["errors"].append(f"{type(exc).__name__}: {exc}")
+        _note(data_dir, "record", sport, res["outcome"], f"inserted={res['inserted']} rejected={res['rejected']} {'; '.join(res['errors'])}", now)
+    return out
+
+
+def _record_sport(ar, sport, adapter, conn, now, exp_root, timeout_s, baselines, res) -> None:
+    pid = ar.v3_protocol_id(adapter)
+    chosen = forward_models(adapter, sport, exp_root, pid, baselines)
+    res["models"] = len(chosen)
+    seen = 0
+    for name, m in chosen:
+        try:
+            produce = adapter["forecast_upcoming"]
+            with _deadline(timeout_s):
+                recs = list(produce(conn, now, name, **_sealed_kwargs(produce)) or [])
+        except Exception as exc:                                  # one model never stops the rest
+            res["errors"].append(f"{name}: {type(exc).__name__}: {exc}")
+            continue
+        seen += len(recs)
+        r = ar.forward_record(None, sport=sport, protocol_id=pid, model=name, role=m["role"], model_version=m["version"],
+                              data_version=adapter["data_version"], forecasted_at=now, records=recs)
+        res["inserted"] += r["inserted"]
+        res["already_recorded"] += r["already_recorded"]
+        res["rejected"] += len(r["rejected"])
+        res["errors"] += [f"{name}: rejected {x['game_id']} {x['market']}: {x['reason']}" for x in r["rejected"][:3]]
+    if res["inserted"] or seen:
+        res["outcome"] = "evaluated"
+    elif res["errors"]:
+        res["outcome"] = "failed"
+
+
+def _settle(sport: str, conn, row: dict) -> Optional[str]:
+    """Realised a|b|mid|push|void from the official store (read-only), or None while the result is not final/available.
+    `row` has game_id, market, line and (to void a moved start) start_at."""
+    from .. import markets
+    market, line = row["market"], row["line"]
+    if sport == "soccer":
+        return _settle_soccer(conn, row)
+    g = conn.execute("SELECT status, home_score, away_score, tipoff_at FROM games WHERE game_id = ?", (row["game_id"],)).fetchone()
+    if g is None:
+        return None
+    try:
+        s = markets.settle(market, line, status=g["status"], home=g["home_score"], away=g["away_score"],
+                           tipoff_at=g["tipoff_at"], forecast_tipoff_at=row.get("start_at"))
+    except KeyError:
+        return None
+    if s in ("pending", "unscorable"):
+        return None
+    if s == "mid" and market not in THREE_WAY:
+        return "push"
+    return s
+
+
+def _settle_soccer(conn, row: dict) -> Optional[str]:
+    """90-minute result / goals / corners. A match decided after 90 minutes has no 90-minute score in the store: void."""
+    from .. import soccer_markets_eval as sme
+    m = conn.execute("SELECT status, decided_in, home_score, away_score, kickoff_at FROM soccer_matches WHERE match_id = ?", (row["game_id"],)).fetchone()
+    if m is None:
+        return None
+    if m["status"] in ("postponed", "canceled", "abandoned"):
+        return "void"
+    if m["status"] != "final":
+        return None
+    if (row.get("start_at") and m["kickoff_at"] != row["start_at"]) or m["decided_in"] != "regulation" \
+            or m["home_score"] is None or m["away_score"] is None:
+        return "void"
+    market, h, a = row["market"], m["home_score"], m["away_score"]
+    if market.startswith("corners"):
+        c = conn.execute("SELECT home_corners, away_corners FROM soccer_match_stats WHERE match_id = ? ORDER BY revision DESC LIMIT 1", (row["game_id"],)).fetchone()
+        if c is None:
+            return None                                          # corner counts may still arrive
+        if c[0] == 0 and c[1] == 0:
+            return "void"                                        # a both-zero count is "not delivered" (adapter amendment 2)
+        h, a = c[0], c[1]
+    if market in ("result_1x2", "double_chance_1x", "double_chance_x2", "double_chance_12", "draw_no_bet_home"):
+        label = 0 if h > a else (1 if h == a else 2)
+        recs = sme.one_x_two_records(row["game_id"], 0, row["start_at"] or "", row["start_at"] or "", (1 / 3, 1 / 3, 1 / 3), label)
+        return next(r["outcome"] for r in recs if r["market"] == market)
+    return sme.settle_count(market, row["line"], h, a)
+
+
+def _generic_settle(sport: str, data_dir: Path):
+    """settle(conn, records) in the core's shape, from `_settle`; start times come from the stored forecasts."""
+    import sqlite3
+
+    def settle(conn, records):
+        starts = {}
+        f = sqlite3.connect(f"{(Path(data_dir) / 'research' / 'forward-candidates.sqlite').resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            starts = {g: st for g, st in f.execute("SELECT game_id, start_at FROM rf_forecasts WHERE sport = ? ORDER BY forecasted_at", (sport,))}
+        finally:
+            f.close()
+        out = []
+        for r in records:
+            y = _settle(sport, conn, {**r, "start_at": starts.get(r["game_id"])})
+            if y:
+                out.append({"game_id": r["game_id"], "market": r["market"], "line": r["line"], "outcome": y})
+        return out
+    return settle
+
+
+def forward_grade(data_dir: Path, *, now: Optional[str] = None, sports=FORWARD_SPORTS, adapters: Optional[dict] = None,
+                  timeout_s: float = FORWARD_CALL_TIMEOUT_S) -> dict:
+    """{sport: {"outcome", "graded", "waiting", "errors"}} through `autoresearch.forward_grade`, official results read-only."""
+    from .. import autoresearch as ar
+    now = now or utc_now()
+    out = {}
+    for sport in sports:
+        res = out[sport] = {"outcome": "no_candidates", "graded": 0, "waiting": 0, "errors": []}
+        try:
+            adapter, conn = _adapter(sport, adapters), _official(data_dir, sport)
+            if conn is None or adapter is None:
+                res["outcome"] = "skipped" if conn is None else "refused"
+                res["errors"].append("no store" if conn is None else "no adapter")
+            else:
+                try:
+                    use = {**adapter, "settle": adapter.get("settle") or _generic_settle(sport, data_dir)}
+                    with _deadline(timeout_s):
+                        r = ar.forward_grade(None, use, conn, now)
+                    res["graded"], res["waiting"] = r.get("graded", 0), r.get("ungraded_started", 0)
+                    res["outcome"] = "evaluated" if res["graded"] else "no_candidates"
+                    if r.get("status") != "ok":
+                        res["outcome"] = "failed"
+                        res["errors"].append(r.get("reason", "grading unavailable"))
+                finally:
+                    conn.close()
+        except Exception as exc:
+            res["outcome"] = "failed"
+            res["errors"].append(f"{type(exc).__name__}: {exc}")
+        _note(data_dir, "grade", sport, res["outcome"], f"graded={res['graded']} waiting={res['waiting']} {'; '.join(res['errors'])}", now)
+    return out
+
+
+def forward_main(argv: Optional[list] = None) -> int:
+    """`python -m app.learning_run --light --name forward-record ... -- python -m app.candidates.live record|grade`.
+    One line per sport: `forward-<kind>: sport=<s> outcome=<o> ...`; exit 1 if any sport failed, else 0."""
+    import argparse
+    ap = argparse.ArgumentParser(prog="python -m app.candidates.live")
+    ap.add_argument("kind", choices=("record", "grade"))
+    ap.add_argument("--sport", action="append", choices=FORWARD_SPORTS)
+    ap.add_argument("--call-timeout", type=float, default=FORWARD_CALL_TIMEOUT_S)
+    ap.add_argument("--now", help="UTC time (tests and rehearsals only)")
+    ap.add_argument("--baselines", action="store_true", help="record: also forecast the baselines (when they can)")
+    a = ap.parse_args(argv)
+    kw = dict(now=a.now, sports=tuple(a.sport or FORWARD_SPORTS), timeout_s=a.call_timeout)
+    res = forward_record(config.data_dir(), baselines=a.baselines, **kw) if a.kind == "record" else forward_grade(config.data_dir(), **kw)
+    for sport, r in res.items():
+        extra = " ".join(f"{k}={v}" for k, v in r.items() if k not in ("outcome", "errors"))
+        print(f"forward-{a.kind}: sport={sport} outcome={r['outcome']} {extra} {'; '.join(r['errors'])}".rstrip())
+    return 1 if any(r["outcome"] == "failed" for r in res.values()) else 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(forward_main())
