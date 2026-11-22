@@ -479,9 +479,9 @@ def test_forward_store_is_append_only_and_rejects_hindsight(tmp_path):
     assert again["inserted"] == 0 and again["already_recorded"] == 1
     conn = ar.forward_connect(path)
     with pytest.raises(sqlite3.DatabaseError, match="append-only"):
-        conn.execute("UPDATE forward_forecasts SET p_a = 0.9")
+        conn.execute("UPDATE rf_forecasts SET p_a = 0.9")
     with pytest.raises(sqlite3.DatabaseError, match="append-only"):
-        conn.execute("DELETE FROM forward_forecasts")
+        conn.execute("DELETE FROM rf_forecasts")
 
 
 def test_forward_grading_reads_the_official_store_read_only(tmp_path):
@@ -513,7 +513,7 @@ def _fill_forward(path, n, edge, sport="nba", seed=11):
     conn = ar.forward_connect(path)
     with conn:
         for i, r in enumerate(s["inc"]):
-            conn.execute("INSERT INTO forward_grades (sport, game_id, market, line_key, outcome, point_actual, graded_at) "
+            conn.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, point_actual, graded_at) "
                          "VALUES (?,?,?,?,?,?,?)", (sport, r["game_id"], "winner", "", r["outcome"], None, _now_str()))
     conn.close()
 
@@ -661,3 +661,26 @@ def test_uniform_baseline_for_a_line_market_keeps_the_incumbents_small_push_mass
         "spread": {"kind": "line", "settlement": "x"}, "winner": {"kind": "binary", "settlement": "y"}})
     ev = ar.evaluate_records(a, {"inc": recs, "cand_other": [rec(0, outcome="a")]})
     assert "cand_other" not in ev["markets"]["spread"]["comparisons"]
+
+
+def test_snapshot_cutoff_drops_records_after_last_final_and_the_wrapper_state_is_read(exp, monkeypatch, tmp_path):
+    (tmp_path / "snapshot" / "IDENTITY.json").write_text(json.dumps({"sports": {"nba": {"last_final": _t(300)}}}))
+    s = synthetic(n=400, seed=14, edge=0.8)
+    inc = [r | {"start_at": _t(1000, 12), "forecast_cutoff": _t(1000)} if i % 10 == 0 else r for i, r in enumerate(s["inc"])]
+    a = fixture_adapter({"inc": inc})
+    r = ar.run_sport_v3("nba", exp, adapter_fn=_adapters(nba=a))
+    assert ar.snapshot_cutoff("nba") == _t(300) and ar.snapshot_cutoff("nhl") is None
+    assert r["data_cutoff"]["last_final"] == _t(300) and r["data_cutoff"]["records_after_cutoff_dropped_now"] > 0
+    assert r["evaluation"]["winner"]["n"] == 400 - r["data_cutoff"]["records_after_cutoff_dropped_now"]
+    tsv = tmp_path / "daily-state.tsv"
+    tsv.write_text("sport\tlast_attempt_utc\tlast_outcome\tlast_success_utc\tlast_reason\nsoccer\t2026-11-22T10:00:00Z\trefused\t\tno adapter\n")
+    from app import research_status
+    assert research_status.daily_state(tsv) == [{"sport": "soccer", "last_attempt_utc": "2026-11-22T10:00:00Z",
+                                                 "last_outcome": "refused", "last_success_utc": "", "last_reason": "no adapter"}]
+
+
+def test_cli_daily_for_other_sports_prints_one_sport_outcome_line_each(exp, monkeypatch, capsys):
+    monkeypatch.setattr(ar, "get_adapter", lambda sport: None)
+    rc = ar.main(["daily", "--exp-root", str(exp), "--sport", "soccer", "--sport", "nfl"])
+    out = capsys.readouterr().out
+    assert rc == 0 and "sport-outcome: soccer refused no research adapter" in out and "sport-outcome: nfl refused" in out

@@ -148,6 +148,17 @@ V3_NOTE = ("Protocol v3 evaluates research candidates for NBA, NHL, NFL, Soccer 
            "store. Nothing here changes a live model, forecast or card; a promotion recommendation is advice, never an action.")
 
 
+def daily_state(path: Optional[Path] = None) -> Optional[list]:
+    """The wrapper's per-sport status file (sport, last_attempt_utc, last_outcome, last_success_utc, last_reason), read only."""
+    p = path or Path(os.environ.get("NBA_AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports") / "daily-state.tsv"
+    try:
+        lines = p.read_text(errors="replace").splitlines()
+    except OSError:
+        return None
+    keys = ("sport", "last_attempt_utc", "last_outcome", "last_success_utc", "last_reason")
+    return [dict(zip(keys, ln.split("\t"))) for ln in lines if ln.strip() and not ln.startswith(("sport\t", "#"))]
+
+
 def v3_status(root: Path) -> Optional[dict]:
     """Latest state per sport (state.json of the newest protocol directory) and the latest daily5 report. Reads files only."""
     latest = {}
@@ -167,5 +178,5 @@ def v3_status(root: Path) -> Optional[dict]:
         sports[s]["models"] = {n: {"role": m.get("role"), "version": m.get("version")} for n, m in (st.get("models") or {}).items()}
         sports[s]["markets"] = {m: {"kind": v.get("kind"), "settlement": v.get("settlement"), "line_basis": v.get("line_basis")}
                                 for m, v in (st.get("markets") or {}).items()}
-    return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports,
+    return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports, "wrapper_state": daily_state(),
             "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport")}}

@@ -1918,6 +1918,19 @@ def _last_success(exp_root: Path, sport: str) -> Optional[str]:
     return best
 
 
+def snapshot_cutoff(sport: str) -> Optional[str]:
+    """`last_final` of this sport from the snapshot's IDENTITY.json (the snapshot holds future scheduled rows): nothing that
+    starts after it is evaluated. None when the data directory has no identity file."""
+    p = config.data_dir() / "IDENTITY.json"
+    try:
+        ident = json.loads(p.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    node = (ident.get("sports") or ident).get(sport) or {}
+    v = node.get("last_final") if isinstance(node, dict) else None
+    return _iso(v) if v else None
+
+
 def _write_state(root: Path, state: dict) -> None:
     tmp = root / "state.json.tmp"
     tmp.write_text(json.dumps(state, indent=1, sort_keys=True, default=str))
@@ -1991,7 +2004,8 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
         problems = adapter["validate_data"](conn)
         if problems:
             raise Refused(f"adapter data validation failed: {problems if isinstance(problems, str) else list(problems)[:3]}")
-    ran = 0
+    ran = dropped = 0
+    cutoff = snapshot_cutoff(sport)
     stopped = None
     try:
         for n in order:
@@ -2007,6 +2021,10 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
                 if recs is None:                                  # bounded walk not finished: resumes next run
                     stopped = "time budget reached (partial progress stored)"
                     break
+                if cutoff:
+                    kept_recs = [r for r in recs if _iso(r["start_at"]) <= cutoff]
+                    dropped += len(recs) - len(kept_recs)
+                    recs = kept_recs
                 recs = validate_records(adapter, recs, seasons)
             except AdapterInvalid as exc:
                 _jsonl_add(log, {"event": "item_failed", "key": k, "model": n, "at": _now(), "error": str(exc)[:400]})
@@ -2036,6 +2054,7 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
     pending = [n for n in remaining if n not in failed]
     cands = [n for n, m in models.items() if m["role"] == "candidate"]
     status["candidates"] = cands
+    status["data_cutoff"] = {"last_final": cutoff, "records_after_cutoff_dropped_now": dropped}
     status["queue"] = {"total": len(order), "done": len(order) - len(remaining), "remaining": len(pending), "failed": failed,
                        "ran_now": ran, "next_item": pending[0] if pending else None}
     status["blockers"] += [f"{n}: scoring failed {fails[keys[n]]} times (see items.jsonl)" for n in failed]
@@ -2053,6 +2072,7 @@ def _run_queue(status: dict, adapter: dict, root: Path, pid: str, sport: str, t0
     status["evaluated_markets"] = ev["evaluated_markets"]
     status["evaluation"] = _brief(ev)
     status["kept"] = ev["kept"]
+    status["forward_candidates"] = sorted({k.rsplit(":", 1)[0] for k in ev["kept"]})   # for the Ops driver to register forward
     scored_c = [n for n in cands if keys[n] in done]
     if not cands:
         status |= {"outcome": "no_candidates", "reason": "the adapter lists no candidate model: nothing was searched (reference "
@@ -2188,7 +2208,7 @@ def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty
 # --- Forward test store (separate file; candidate forecasts are never official forecasts) -----------------------------------
 FORWARD_FILE = "forward-candidates.sqlite"
 FORWARD_SCHEMA = """
-CREATE TABLE IF NOT EXISTS forward_forecasts (
+CREATE TABLE IF NOT EXISTS rf_forecasts (
   id INTEGER PRIMARY KEY, sport TEXT NOT NULL, protocol_id TEXT NOT NULL, model TEXT NOT NULL, role TEXT NOT NULL
     CHECK (role IN ('incumbent','baseline','candidate')), model_version TEXT NOT NULL, data_version TEXT NOT NULL,
   game_id TEXT NOT NULL, season INTEGER, market TEXT NOT NULL, line REAL, line_key TEXT NOT NULL,
@@ -2197,25 +2217,25 @@ CREATE TABLE IF NOT EXISTS forward_forecasts (
   CHECK (forecasted_at < start_at), CHECK (forecast_cutoff <= forecasted_at),
   CHECK (p_a >= 0 AND p_b >= 0 AND p_a <= 1 AND p_b <= 1),
   UNIQUE (protocol_id, model, model_version, game_id, market, line_key, forecasted_at));
-CREATE TABLE IF NOT EXISTS forward_grades (
+CREATE TABLE IF NOT EXISTS rf_grades (
   id INTEGER PRIMARY KEY, sport TEXT NOT NULL, game_id TEXT NOT NULL, market TEXT NOT NULL, line_key TEXT NOT NULL,
   outcome TEXT NOT NULL CHECK (outcome IN ('a','b','mid','push','void')), point_actual TEXT, graded_at TEXT NOT NULL,
   UNIQUE (sport, game_id, market, line_key));
-CREATE TABLE IF NOT EXISTS forward_looks (
+CREATE TABLE IF NOT EXISTS rf_looks (
   id INTEGER PRIMARY KEY, protocol_id TEXT NOT NULL, sport TEXT NOT NULL, candidate TEXT NOT NULL, market TEXT NOT NULL,
   look_at TEXT NOT NULL, n_matched INTEGER NOT NULL, status TEXT NOT NULL, confirmatory INTEGER NOT NULL);
-CREATE TRIGGER IF NOT EXISTS forward_forecasts_no_update BEFORE UPDATE ON forward_forecasts
-  BEGIN SELECT RAISE(ABORT, 'forward_forecasts is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS forward_forecasts_no_delete BEFORE DELETE ON forward_forecasts
-  BEGIN SELECT RAISE(ABORT, 'forward_forecasts is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS forward_grades_no_update BEFORE UPDATE ON forward_grades
-  BEGIN SELECT RAISE(ABORT, 'forward_grades is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS forward_grades_no_delete BEFORE DELETE ON forward_grades
-  BEGIN SELECT RAISE(ABORT, 'forward_grades is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS forward_looks_no_update BEFORE UPDATE ON forward_looks
-  BEGIN SELECT RAISE(ABORT, 'forward_looks is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS forward_looks_no_delete BEFORE DELETE ON forward_looks
-  BEGIN SELECT RAISE(ABORT, 'forward_looks is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS rf_forecasts_no_update BEFORE UPDATE ON rf_forecasts
+  BEGIN SELECT RAISE(ABORT, 'rf_forecasts is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS rf_forecasts_no_delete BEFORE DELETE ON rf_forecasts
+  BEGIN SELECT RAISE(ABORT, 'rf_forecasts is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS rf_grades_no_update BEFORE UPDATE ON rf_grades
+  BEGIN SELECT RAISE(ABORT, 'rf_grades is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS rf_grades_no_delete BEFORE DELETE ON rf_grades
+  BEGIN SELECT RAISE(ABORT, 'rf_grades is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS rf_looks_no_update BEFORE UPDATE ON rf_looks
+  BEGIN SELECT RAISE(ABORT, 'rf_looks is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS rf_looks_no_delete BEFORE DELETE ON rf_looks
+  BEGIN SELECT RAISE(ABORT, 'rf_looks is append-only'); END;
 """
 
 
@@ -2259,7 +2279,7 @@ def forward_record(path: Optional[Path], *, sport: str, protocol_id: str, model:
                     raise AdapterInvalid(f"information cutoff {cut} is after the forecast time {forecasted_at}")
                 p = r["probs"]
                 cur = conn.execute(
-                    "INSERT OR IGNORE INTO forward_forecasts (sport, protocol_id, model, role, model_version, data_version, "
+                    "INSERT OR IGNORE INTO rf_forecasts (sport, protocol_id, model, role, model_version, data_version, "
                     "game_id, season, market, line, line_key, start_at, forecast_cutoff, forecasted_at, p_a, p_mid, p_b, quote, "
                     "recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (sport, protocol_id, model, role, model_version, data_version, r["game_id"], r.get("season"), r["market"],
@@ -2285,7 +2305,7 @@ def forward_grade(path: Optional[Path], adapter: dict, official, now: Optional[s
     conn = forward_connect(path)
     try:
         rows = conn.execute(
-            "SELECT DISTINCT f.game_id, f.market, f.line, f.line_key FROM forward_forecasts f LEFT JOIN forward_grades g "
+            "SELECT DISTINCT f.game_id, f.market, f.line, f.line_key FROM rf_forecasts f LEFT JOIN rf_grades g "
             "ON g.sport=f.sport AND g.game_id=f.game_id AND g.market=f.market AND g.line_key=f.line_key "
             "WHERE f.sport=? AND g.id IS NULL AND f.start_at < ?", (adapter["sport"], now)).fetchall()
         recs = [{"game_id": r["game_id"], "market": r["market"], "line": r["line"]} for r in rows]
@@ -2293,7 +2313,7 @@ def forward_grade(path: Optional[Path], adapter: dict, official, now: Optional[s
         for g in adapter["settle"](official, recs):
             if g.get("outcome") not in ("a", "b", "mid", "push", "void"):
                 continue
-            cur = conn.execute("INSERT OR IGNORE INTO forward_grades (sport, game_id, market, line_key, outcome, point_actual, "
+            cur = conn.execute("INSERT OR IGNORE INTO rf_grades (sport, game_id, market, line_key, outcome, point_actual, "
                                "graded_at) VALUES (?,?,?,?,?,?,?)",
                                (adapter["sport"], g["game_id"], g["market"], _lk(g.get("line")), g["outcome"],
                                 json.dumps(g.get("point_actual")) if g.get("point_actual") is not None else None, _now()))
@@ -2309,7 +2329,7 @@ def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str]
     before the start (every model by the same rule), joined to its grade."""
     conn = forward_connect(path)
     try:
-        q = ("SELECT f.*, g.outcome, g.point_actual FROM forward_forecasts f LEFT JOIN forward_grades g ON g.sport=f.sport AND "
+        q = ("SELECT f.*, g.outcome, g.point_actual FROM rf_forecasts f LEFT JOIN rf_grades g ON g.sport=f.sport AND "
              "g.game_id=f.game_id AND g.market=f.market AND g.line_key=f.line_key WHERE f.sport=?"
              + (" AND f.protocol_id=?" if protocol_id else "") + " ORDER BY f.forecasted_at, f.id")
         rows = conn.execute(q, (sport, protocol_id) if protocol_id else (sport,)).fetchall()
@@ -2407,7 +2427,7 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
     conn = forward_connect(path)
     try:
         prior = {}
-        for r in conn.execute("SELECT candidate, market, n_matched FROM forward_looks WHERE sport=? AND protocol_id=?",
+        for r in conn.execute("SELECT candidate, market, n_matched FROM rf_looks WHERE sport=? AND protocol_id=?",
                               (adapter["sport"], protocol_id or "")):
             if r["n_matched"] >= min_forward(adapter["sport"]):
                 prior[(r["candidate"], r["market"])] = True
@@ -2416,7 +2436,7 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
             for c, cv in rec["candidates"].items():
                 for m, mv in cv["markets"].items():
                     n = mv["criteria"]["min_settled_forward"]["n"]
-                    conn.execute("INSERT INTO forward_looks (protocol_id, sport, candidate, market, look_at, n_matched, status, "
+                    conn.execute("INSERT INTO rf_looks (protocol_id, sport, candidate, market, look_at, n_matched, status, "
                                  "confirmatory) VALUES (?,?,?,?,?,?,?,?)", (protocol_id or "", adapter["sport"], c, m, _now(), n,
                                                                             mv["status"], int(mv["confirmatory_look"])))
             conn.commit()
@@ -2489,8 +2509,8 @@ def main(argv=None) -> int:
     for name in ("prepare", "trial", "status", "daily", "holdout", "agent", "stop"):
         s = sub.add_parser(name)
         s.add_argument("--exp-root", type=Path, required=True)
-        s.add_argument("--workspace", type=Path, required=True)
-        s.add_argument("--sport", choices=sorted(sports.SPORTS), action="append")
+        s.add_argument("--workspace", type=Path, required=(name != "daily"))
+        s.add_argument("--sport", choices=sorted(FIVE_SPORTS), action="append")
         s.add_argument("--description", default="")
         s.add_argument("--retry", action="store_true")
         s.add_argument("--timeout", type=int, default=BUDGETS["trial_timeout_s"])
@@ -2504,6 +2524,14 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     chosen = a.sport or ["nba", "nhl"]
     try:
+        if a.cmd == "daily" and a.sport and set(a.sport) - {"nba", "nhl"}:
+            # NFL, NCAAB, Soccer (and any sport named with them) run through protocol v3; one `sport-outcome:` line per sport
+            r = daily_v3(a.sport, a.exp_root, a.max_trials if a.max_trials != BUDGETS["max_trials"] else BUDGET_V3["max_items_per_sport"],
+                         a.max_minutes * 60 if a.max_minutes != BUDGETS["max_minutes"] else BUDGET_V3["max_seconds_per_sport"])
+            for sp, v in r["sports"].items():
+                print(f"sport-outcome: {sp} {v['outcome']} {v['reason'] or ''}".rstrip())
+            print(json.dumps({"outcomes": r["outcomes"], "report_file": r["report_file"]}))
+            return 1 if "failed" in r["outcomes"].values() else 0
         if a.cmd == "prepare":
             for s in chosen:
                 m = prepare(s, a.exp_root, a.workspace)
@@ -2516,6 +2544,10 @@ def main(argv=None) -> int:
             print(json.dumps({s: status(a.exp_root, s) for s in chosen}, indent=1))
         elif a.cmd == "daily":
             r = daily(chosen, a.exp_root, a.workspace, a.max_trials, a.max_minutes, a.timeout)
+            for sp in chosen:
+                print(f"sport-outcome: {sp} " + ("refused " + r["refused"][sp] if sp in r.get("refused", {}) else
+                      "evaluated" if any(t["sport"] == sp and t["status"] in ("keep", "discard") for t in r["trials"]) else
+                      "no_candidates" if not any(t["sport"] == sp for t in r["trials"]) else "failed"))
             print(json.dumps({k: r[k] for k in ("outcome", "stopped", "trials", "report_file", "sports")}, indent=1, default=str))
         elif a.cmd == "agent":
             from . import research_agent as ra

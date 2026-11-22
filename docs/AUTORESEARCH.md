@@ -259,9 +259,9 @@ before anything is computed. An earlier use of the sport's holdout under any pro
 independent). The result is a report; nothing is promoted.
 
 ### Forward test (prospective)
-A separate SQLite file, `<data dir>/research/forward-candidates.sqlite`, created by this code: `forward_forecasts` (append-only,
+A separate SQLite file, `<data dir>/research/forward-candidates.sqlite`, created by this code: `rf_forecasts` (append-only,
 triggers refuse UPDATE/DELETE; checks: forecast time before the game start, information cutoff at or before the forecast time, no
-outcome), `forward_grades`, `forward_looks`. Incumbent, baseline and candidate forecasts are recorded by the same rule and graded
+outcome), `rf_grades`, `rf_looks` (prefix `rf_`: the Ops forward recorder in `candidates/live.py` keeps its own `forward_*` tables in the same file; these hold the evaluator's full records, model/data versions and looks, and the two must be reconciled: see HANDOFF). Incumbent, baseline and candidate forecasts are recorded by the same rule and graded
 by the same rule (the last forecast made before the start). Grading reads the official store read-only (`PRAGMA query_only`) and
 writes only this file. Records carry model version, data version, forecast time, input cutoff and protocol id. NBA/NHL forward
 forecasts of registry candidates are read from the official `candidate_forecasts` table (written by the existing recorder, read-only here).
@@ -284,6 +284,8 @@ all others are labelled exploratory. A candidate version that changes during the
 ### Negative results
 "No candidate kept", "no candidates", failed items and refused sports are recorded (`attempts.jsonl`, `items.jsonl`, `state.json`)
 and shown; none is reported as a successful search.
+
+`IDENTITY.json` of the snapshot: the sport's `last_final` is the evaluation cutoff (records starting after it are dropped and counted in `data_cutoff`). `python -m app.autoresearch daily --sport nfl|ncaab|soccer` runs v3 and prints `sport-outcome: <sport> <outcome> <reason>` per sport; kept candidates are listed in `state.json` as `forward_candidates` for the Ops driver to register with `candidates.live.forward_register` (this module must not import the live-forecast code; a test guards that). The wrapper's `daily-state.tsv` is shown under `v3.wrapper_state`.
 
 ### Not done in v3 (see HANDOFF)
 Score MAE/RMSE for NBA/NHL (the study tables hold probabilities only); sportsbook comparison and returns for NBA/NHL line
