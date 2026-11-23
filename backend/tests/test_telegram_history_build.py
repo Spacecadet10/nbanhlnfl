@@ -149,6 +149,16 @@ def test_earlier_cards_of_the_game_are_kept_as_versions_and_say_whether_they_dif
         (1, "CLE win", "51.0", True), (2, "OKC win", "54.0", False)]
 
 
+def test_an_earlier_card_with_the_same_pick_but_another_printed_line_note_is_not_called_the_same(tmp_path):
+    """Nov 23: NY @ TOR team points - same pick and percentage, 'implied from spread and total' moved 106.5 -> 107."""
+    make(tmp_path, games=[GAME2])
+    kw = dict(key="home team", sel="CLE under 107.5", pct=50.4)
+    last = {**row(**kw, line_source="Model line · implied from spread and total 107"), "message_id": 2, "sent_at_local": "2026-11-02T17:30:00"}
+    early = {**row(**kw, line_source="Model line · implied from spread and total 106.5"), "message_id": 1}
+    v = bth.build({"per_game_rows": [last], "all_card_rows": [early, last]}, tmp_path)["rows"][0]["earlier_versions"][0]
+    assert (v["differs"], v["note_differs"]) == (False, True)              # the prediction is the same, the printed note is not
+
+
 def test_a_card_sent_at_or_after_the_start_is_never_a_prediction_and_is_listed(tmp_path):
     make(tmp_path, games=[GAME2, ("espn:2", "2026-11-02T23:00:00Z", "final", 100, 90)])
     ok = {**row(), "message_id": 1}

@@ -821,12 +821,14 @@ export interface CoverageReport {
 
 /** /api/research/autoresearch: the sports autoresearch experiment directory (research only; never a forecast source). */
 export interface AutoresearchTrial {
+  audit?: string | null;
   trial_id: string; commit: string; status: string; cached_from?: string | null; description?: string | null;
   reason?: string | null; finished_at?: string | null; agent_run?: string | null;
   resources?: { wall_s?: number; max_rss_gb?: number; timed_out?: boolean } | null;
   markets: Record<string, { decision: string; incumbent?: string; forecast?: number; cohort?: number; delta?: number | null; ci95?: number[] | null }>;
 }
 export interface AutoresearchSport {
+  invalidated?: number;
   protocol_id: string; registered_at?: string; scored_seasons?: number[]; holdout_seasons?: number[];
   cohort?: Record<string, number>; dataset_version?: string;
   bar: Record<string, { member: string; log_loss?: number | null }>;
@@ -846,6 +848,7 @@ export interface AutoresearchV3Market { status: string; reason?: string; settlem
   baselines?: Record<string, number | null>; vs_book?: string | null;
   candidates?: Record<string, { decision: string; reason: string; validation_delta?: number | null; validation_ci95?: [number, number] | null }> }
 export interface AutoresearchV3Sport {
+  audit?: string | null;
   protocol_id?: string | null; at?: string; outcome: AutoresearchOutcome; reason?: string | null;
   last_attempt?: { at: string; outcome: AutoresearchOutcome; reason?: string | null } | null; last_success_at?: string | null;
   candidates: string[]; candidate_count: number; evaluated_markets: string[]; blockers: string[]; kept?: string[]; needs_human_review?: string[]; suspect?: string[]; blocked_models?: Record<string, string>;
@@ -868,6 +871,7 @@ export interface AutoresearchForward {
   last_record?: { at: string; outcome: string; detail: string }; last_grade?: { at: string; outcome: string; detail: string };
 }
 export interface AutoresearchStatus {
+  audit?: { error: string | null; entries: { at: string; status: 'invalid' | 'unverified' | 'verified'; reason: string; protocol_id: string; sport: string; trial_id: string | null; by?: string | null }[] };
   v3?: AutoresearchV3 | null;
   mode: 'real' | 'demo'; configured: boolean; note: string; reason?: string; experiment_dir?: string; stopped?: string | null;
   active_run?: { run_id: string; branch?: string; started_at?: string; deadline?: number; max_trials?: number; driver_alive: boolean } | null;
@@ -1274,7 +1278,7 @@ export interface TgSummary {
   recovered: (TgTally & { recovered_only: number; priced: number; unpriced: number }) | null;
   overlap: { same: number; earlier_live_version: number; different: number; grade_conflicts: number };
 }
-export interface TgEarlierCard { message_id: number; sent_at_local: string; pick: string; percentage: string; card_line_text: string | null; differs: boolean }
+export interface TgEarlierCard { message_id: number; sent_at_local: string; pick: string; percentage: string; card_line_text: string | null; differs: boolean; note_differs?: boolean }
 export interface TgLive {
   game_id: string; market: string; market_title?: string; percentage: string; side: string; home_line: number | null; line_source: string; grade: string;
   start_at: string; game_date: string; forecast_id: number; generated_at: string; model_version: string; pick: string; matchup: string;

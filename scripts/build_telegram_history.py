@@ -272,7 +272,8 @@ def build(record, data_dir):
                      'price': None, 'earlier_versions': [
                          {'message_id': e['message_id'], 'sent_at_local': e['sent_at_local'], 'pick': e['selection'],
                           'percentage': f"{e['percent']:.1f}", 'card_line_text': e['line_source'] or None,
-                          'differs': (e['selection'], e['percent']) != (r['selection'], r['percent'])}
+                          'differs': (e['selection'], e['percent']) != (r['selection'], r['percent']),
+                          'note_differs': (e['line_source'] or None) != (r['line_source'] or None)}
                          for e in sorted(earlier.get(ident, []), key=lambda e: e['sent_at_local'])],
                      'matchup': r['matchup'], 'final_score': r['final_score'] or store_score, 'message_id': r['message_id'], 'start_at': tip,
                      'sent_at_local': r.get('sent_at_local')})

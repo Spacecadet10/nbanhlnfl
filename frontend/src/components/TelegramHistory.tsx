@@ -10,7 +10,7 @@ import { useApi } from '../api/useApi';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
 import { useCarriedSearch } from './Selection';
 import { AsyncView, Empty } from './States';
-import { addTallies, earlierText, gradeLabel, lineText, mergeByStart, overlapText, recordText, unavailableText } from './recoveredHistory';
+import { addTallies, earlierText, gradeLabel, lineText, mergeByStart, overlapText, recordText, unavailableText, versionText } from './recoveredHistory';
 
 const sportName = (s: string) => (s === 'soccer' ? 'Soccer' : s.toUpperCase());
 const gradeClass = (g: string) => (g === 'win' ? 'ok' : g === 'loss' ? 'bad' : 'muted');
@@ -40,7 +40,7 @@ function CardRecord({ row }: { row: TgRow }) {
     Sent {sentText(row.sent_at_local)} · message {row.message_id}
     <span className={`small recovered-line ${row.overlap.status === 'different' || row.overlap.status === 'earlier_live_version' ? 'warn' : 'muted'}`}>{overlapText(row)}</span>
     {earlier && <details className="small"><summary>{earlier}</summary>
-      <ul>{row.earlier_versions.map((v) => <li key={v.message_id}>{sentText(v.sent_at_local)}: {v.pick} {v.percentage}%{v.differs ? ' (different)' : ' (same)'} · message {v.message_id}</li>)}</ul>
+      <ul>{row.earlier_versions.map((v) => <li key={v.message_id}>{sentText(v.sent_at_local)}: {v.pick} {v.percentage}% ({versionText(v)}) · message {v.message_id}</li>)}</ul>
     </details>}
   </>;
 }

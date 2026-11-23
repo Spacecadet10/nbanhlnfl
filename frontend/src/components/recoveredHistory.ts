@@ -51,10 +51,16 @@ export function mergeByStart<L, R extends { start_at: string }>(live: L[], start
 /** The line note as the card printed it ("Bookmaker line at forecast · sportsbook 49.6% · underpriced"), or null. */
 export const lineText = (r: Pick<TgRow, 'card_line_text'>): string | null => r.card_line_text;
 
-export function earlierText(cards: Pick<TgEarlierCard, 'differs'>[] | null | undefined): string | null {
+export function earlierText(cards: Pick<TgEarlierCard, 'differs' | 'note_differs'>[] | null | undefined): string | null {
   if (!cards || cards.length === 0) return null;
   const n = cards.filter((c) => c.differs).length;
-  return `${cards.length} earlier card${cards.length === 1 ? '' : 's'}, ${n ? `${n} different` : 'same prediction'}`;
+  const notes = cards.filter((c) => !c.differs && c.note_differs).length;
+  return `${cards.length} earlier card${cards.length === 1 ? '' : 's'}, ${n ? `${n} different` : 'same prediction'}${notes ? `, ${notes} with another line note` : ''}`;
+}
+
+/** How one earlier card compares with the card of record: a changed printed line note is never called the same. */
+export function versionText(v: Pick<TgEarlierCard, 'differs' | 'note_differs' | 'card_line_text'>): string {
+  return v.differs ? 'different' : v.note_differs ? `same pick and percentage, other line note: ${v.card_line_text ?? 'none'}` : 'same';
 }
 
 export function unavailableText(reason: string | null, sport: string): string {

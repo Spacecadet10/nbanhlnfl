@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { addTallies, earlierText, gradeLabel, lineText, mergeByStart, overlapText, recordText, unavailableText } from './recoveredHistory.ts';
+import { addTallies, earlierText, gradeLabel, lineText, mergeByStart, overlapText, recordText, unavailableText, versionText } from './recoveredHistory.ts';
 
 const live = { forecast_id: 7, pick: 'CLE win', percentage: '57.0', grade: 'win' };
 
@@ -51,6 +51,11 @@ test('the line and the line source are the card\'s own words; earlier cards say 
   assert.equal(earlierText([{ differs: false }, { differs: false }]), '2 earlier cards, same prediction');
   assert.equal(earlierText([{ differs: true }, { differs: false }]), '2 earlier cards, 1 different');
   assert.equal(earlierText([{ differs: true }]), '1 earlier card, 1 different');
+  assert.equal(earlierText([{ differs: false, note_differs: true }, { differs: false }]), '2 earlier cards, same prediction, 1 with another line note');
+  assert.equal(versionText({ differs: false, note_differs: true, card_line_text: 'Model line · implied from spread and total 106.5' }),
+    'same pick and percentage, other line note: Model line · implied from spread and total 106.5');
+  assert.equal(versionText({ differs: true, note_differs: true, card_line_text: 'x' }), 'different');
+  assert.equal(versionText({ differs: false }), 'same');
 });
 
 test('a sport without recovered rows says so', () => {

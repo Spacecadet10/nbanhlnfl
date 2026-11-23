@@ -67,3 +67,12 @@ test('Autoresearch v3: no_candidates is never a success, reference-line keeps ne
   assert.match(src, /never tracked forward automatically/);
   assert.doesNotMatch(src, /no_candidates: '(Evaluated|Success)/);
 });
+
+test('the research page shows the audit: reasons, invalid trials, unverified sports, and an unusable audit file', () => {
+  const src = readFileSync(join(import.meta.dirname, 'Autoresearch.tsx'), 'utf8');
+  assert.match(src, /d\.audit\.error/);
+  assert.match(src, /d\.audit\.entries\.map/);
+  assert.match(src, /t\.audit/);
+  assert.match(src, /s\.audit/);
+  assert.match(src, /never used/);
+});

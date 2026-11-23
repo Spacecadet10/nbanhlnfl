@@ -25,6 +25,12 @@ function AutoresearchBody({ d }: { d: AutoresearchStatus }) {
   return <>
     <p className="notice">{d.note}</p>
     {d.stopped && <p role="alert">Research is stopped: {d.stopped}. No trial or agent run starts until a person clears it.</p>}
+    {d.audit?.error && <p role="alert">The audit file is unusable, so no research record may be used: {d.audit.error}</p>}
+    {d.audit && d.audit.entries.length > 0 && <details className="card" open><summary><strong>Research audit</strong> · {d.audit.entries.length} {d.audit.entries.length === 1 ? 'entry' : 'entries'} (append-only)</summary>
+      <p className="small muted">An invalid record stays stored but is never used: not as the model to beat, not as a reused result, not in a holdout or forward test. An unverified one waits for a recomputation under the intended code.</p>
+      <div className="table-wrap"><table className="table"><thead><tr><th>When</th><th>Status</th><th>Record</th><th>Why</th></tr></thead><tbody>
+        {d.audit.entries.map((e, i) => <tr key={i}><td>{dateTime(e.at)}</td><td>{e.status}</td><td>{SPORT_NAME[e.sport] ?? e.sport} <code>{e.protocol_id}</code>{e.trial_id ? <> trial <code>{e.trial_id}</code></> : ' (every record)'}</td><td>{e.reason}</td></tr>)}
+      </tbody></table></div></details>}
     <p>{run ? <>Agent run <code>{run.run_id}</code> {run.driver_alive ? 'is running' : 'has no live driver (trials refused until a person clears it)'} · started {run.started_at ? dateTime(run.started_at) : '—'} · deadline {run.deadline ? dateTime(new Date(run.deadline * 1000).toISOString()) : '—'} · at most {run.max_trials} trials</> : 'No agent run in progress.'}</p>
     <h3>Agent runs</h3>
     {(d.agent_runs ?? []).length === 0 ? <p>No agent run recorded yet.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Run</th><th>Started / ended</th><th>Budget</th><th>Ended because</th><th>Outcome</th><th>Trials</th><th>Cost</th></tr></thead><tbody>
@@ -47,7 +53,7 @@ function V3Research({ v }: { v: AutoresearchV3 }) {
     {v.wrapper_state && v.wrapper_state.length > 0 && <p className="small muted">Scheduled wrapper: {v.wrapper_state.map(w => `${SPORT_NAME[w.sport] ?? w.sport} ${w.last_outcome} at ${w.last_attempt_utc}`).join(' · ')}</p>}
     {v.last_daily && <p>Last daily run: {v.last_daily.finished_at ? dateTime(v.last_daily.finished_at) : '—'} · {Object.entries(v.last_daily.outcomes ?? {}).map(([s, o]) => `${SPORT_NAME[s] ?? s}: ${OUTCOME[o] ?? o}`).join(' · ')}</p>}
     <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Last attempt</th><th>Last successful evaluation</th><th>Candidates</th><th>Evaluated markets</th><th>Blockers</th><th>Next run</th></tr></thead><tbody>
-      {Object.entries(v.sports).map(([sport, s]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
+      {Object.entries(v.sports).map(([sport, s]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}{s.audit ? <div className="small" role="alert">{s.audit}</div> : null}</th>
         <td>{s.last_attempt ? <>{OUTCOME[s.last_attempt.outcome] ?? s.last_attempt.outcome}<br /><span className="small muted">{dateTime(s.last_attempt.at)}{s.last_attempt.reason ? ` · ${s.last_attempt.reason}` : ''}</span></> : '—'}</td>
         <td>{s.last_success_at ? dateTime(s.last_success_at) : 'never'}</td>
         <td>{s.candidate_count}{s.queue ? <span className="small muted"> · queue {s.queue.done}/{s.queue.total}{s.queue.remaining ? `, ${s.queue.remaining} waiting` : ''}</span> : null}</td>
@@ -100,7 +106,7 @@ function SportResearch({ sport, s }: { sport: string; s: AutoresearchSport }) {
     <h3>Recent trials</h3>
     {s.recent.length === 0 ? <p>No trial yet.</p> : <div className="table-wrap"><table className="table"><thead><tr><th>Trial / proposal</th><th>Result</th><th>Per market: decision, log-loss Δ vs incumbent [95% interval]</th><th>Resources</th></tr></thead><tbody>
       {s.recent.map(t => <tr key={t.trial_id}><td><code>{t.commit}</code> {t.description || '—'}<br /><span className="small muted">{t.finished_at ? dateTime(t.finished_at) : ''}{t.agent_run ? ` · agent run ${t.agent_run}` : ' · manual'}</span></td>
-        <td>{DECISION[t.status] ?? t.status}{t.cached_from ? ` (same as ${t.cached_from})` : ''}{t.reason && t.status !== 'keep' && t.status !== 'discard' ? <><br /><span className="small">{t.reason}</span></> : null}</td>
+        <td>{t.audit ? <div role="alert">{t.audit}</div> : null}{DECISION[t.status] ?? t.status}{t.cached_from ? ` (same as ${t.cached_from})` : ''}{t.reason && t.status !== 'keep' && t.status !== 'discard' ? <><br /><span className="small">{t.reason}</span></> : null}</td>
         <td>{Object.keys(t.markets).length === 0 ? '—' : Object.entries(t.markets).map(([m, x]) => <div key={m}>{MARKET[m] ?? m}: {DECISION[x.decision] ?? x.decision}, {signed(x.delta)}{x.ci95 ? ` [${signed(x.ci95[0])}, ${signed(x.ci95[1])}]` : ''}{x.forecast != null && x.cohort != null && x.forecast < x.cohort ? ` · only ${x.forecast}/${x.cohort} games` : ''}</div>)}</td>
         <td>{t.resources ? `${t.resources.wall_s ?? '—'} s · ${t.resources.max_rss_gb ?? '—'} GB${t.resources.timed_out ? ' · timed out' : ''}` : '—'}</td></tr>)}
     </tbody></table></div>}
