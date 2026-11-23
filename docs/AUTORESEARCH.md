@@ -407,6 +407,32 @@ and shown; none is reported as a successful search.
 Score MAE/RMSE for NBA/NHL (the study tables hold probabilities only); sportsbook comparison and returns for NBA/NHL line
 markets (no historical bookmaker lines) and for every reference-line market; the scheduler lives in `scripts/autoresearch_daily.sh`.
 
+## Pinned runner and audit (2026-11-23)
+
+**What happened.** At 06:00 on Nov 23 the scheduled evaluation loaded the live checkout (dd11fb6, app identity `63922174bc2f4f8b`)
+instead of the pinned one (23df530, `fac8c6988092dff4`): `prepare.py` sets `PYTHONPATH` to the pin, but `python -m` puts the current
+directory first, and the job starts in delivery/backend. NBA/NHL v3 refused (their study cache is keyed by the app identity); v2 ran one
+trial each under unintended protocol ids (`aa1be0f64744`, `9cb21e25c613`; the NHL one was marked "keep"); the wrapper recorded both sports
+as "evaluated". NCAAB, NFL and soccer v3 ran on the unintended code too (their protocol id does not hash app files).
+
+**Runner.** `scripts/research_runner.py` is the only scheduled entry (`autoresearch_daily.sh`, and the agent job through
+`AUTORESEARCH_PYTHON`). It lives outside the fingerprinted app and outside the registered workspace files, so the running studies keep their
+ids and caches: `prepare.py` (hash-registered in the protocols) is unchanged. It verifies `~/autoresearch-sports/PIN.json` (checkout commit,
+clean tree, app files, interpreter, every installed package, snapshot identity and store, `prepare.py`/`program.md`, study ids seen by a
+fresh process), starts `prepare.py` with the pinned backend as working directory and without the caller's PYTHON*/NBA_*/AUTORESEARCH_*
+variables, and logs each run with its label in `runner-runs.jsonl`. Anything different refuses (exit 2). `research_runner.py verify` shows
+what would run. **Do not start `prepare.py` directly**: from another directory it would load another app. A new pin is a deliberate act: move
+PIN.json aside with a recorded reason, then `write-pin --reason`; old studies and caches stay as they are and are never renamed or copied.
+
+**Audit.** `<experiments>/audit.jsonl` (append-only, chained; `audit.head` holds its length and last sha) says which protocols or trials are
+`invalid` (never usable again), `unverified` (not usable until a later `verified` of the same scope). Enforced by code: model to beat,
+returned or copied results, the daily queue, holdouts (v2 and v3), v3 runs, forward tracking, the status page; the runner enforces it for
+the pinned evaluator, which predates it (a blocked protocol, or any blocked trial of the active protocol, refuses the sport). A missing,
+edited, shortened or unreadable audit refuses. `VOID.txt` files are notes only. Originals are never edited.
+
+**Outcome.** The wrapper reads `v3=` itself: v2 speaks only when v3 had no candidates, because the pinned evaluator's combined word let a v2
+success hide a v3 refusal.
+
 ## Limits
 - The sandbox uses macOS `sandbox-exec`, which is deprecated by Apple but functional on this machine (macOS 26.6). The candidate may fork (loky workers), but only this Python can be executed; no launchd job, app launch or Apple event can be started (a program started outside the sandbox would not inherit it).
 - Data, protocol and evaluator are protected by hashes and by the sandbox on the candidate. The agent's own shell runs inside the agent sandbox (`agent_profile`), which denies the snapshot, the frozen dataset and the trial log; the candidate runs in the stricter candidate sandbox. Neither is protection against a deliberately adversarial agent, which would need a separate OS user.
