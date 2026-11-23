@@ -2953,9 +2953,10 @@ def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None,
 FORWARD_PAIRING = {
     "as_of_minutes": 60,          # only forecasts made at or before start - 60 min are scored
     "max_gap_minutes": 10,        # a candidate and the current model are paired only from runs at most 10 min apart ...
-    "max_candidate_later_minutes": 5,   # ... and the candidate run at most 5 min AFTER the current model's (the same recording
-                                        # cycle: the research cohort writes candidates minutes after the primary, from the same
-                                        # line and quote); a pair with the candidate later is counted and reported
+    "max_candidate_later_minutes": 0,   # ... and the candidate run never AFTER the current model's (amended 2026-11-23 before
+                                        # the cut, on a structural finding: candidate features use data up to the candidate's
+                                        # own run time and its cohort link is to the research cohort, not to the primary, so a
+                                        # later candidate run could know more; any edge now favours the current model)
     "same_line": True,            # ... at the same line (and the market's fixed side a/b)
     "max_unpaired_share": 0.10,   # a promotion criterion: at most 10% of the current model's games unpaired (timing/line)
     "version": "the latest model_version of each model only (an earlier definition is never mixed into its series)",
@@ -3077,7 +3078,7 @@ def forward_pairs(rows: list, cand: str, inc: str, market: str, late: Optional[s
     return {"cand": c_recs, "inc": i_recs, "games": len(ci), "paired_games": len(gaps), "missing": missing,
             "unpaired": unpaired, "as_of_late": as_of_late, "max_gap_minutes": max((abs(g) for g in gaps), default=None),
             "candidate_later_pairs": sum(1 for g in gaps if g > 1 / 60),
-            "max_candidate_later_minutes": max((g for g in gaps if g > 0), default=0.0)}
+            "max_candidate_later_minutes": max((g for g in gaps if g > 0), default=None)}
 
 
 def min_forward(sport: str) -> int:
@@ -3189,7 +3190,9 @@ def _forward_stage(path, adapter: dict, protocol_id, *, since=None, until=None) 
             dec = decide_candidate(pr["cand"], pr["inc"], kind)
             scored = [r for r in pr["inc"] if _outcome_idx(r, kind) is not None]
             cohort = pr["games"]
-            dec |= {"forecast": len(scored), "pairing": FORWARD_PAIRING, "bar": e["incumbent"], "games": cohort,
+            named = (fw.get("bar") or {}).get(market)
+            dec |= {"forecast": len(scored), "pairing": FORWARD_PAIRING, "bar": e["incumbent"],
+                    "bar_fallback": bool(named) and named != e["incumbent"], "games": cohort,
                     "paired_games": pr["paired_games"], "missing_games": len(pr["missing"]),
                     "as_of_late_games": len(pr["as_of_late"]), "unpaired_games": len(pr["unpaired"]),
                     "unpaired_share": ((len(pr["unpaired"]) + len(pr["as_of_late"])) / cohort) if cohort else 0.0,
@@ -3199,6 +3202,14 @@ def _forward_stage(path, adapter: dict, protocol_id, *, since=None, until=None) 
             cmp_["vs_incumbent"] = {"forward": dec}
             if cmp_.get("decision") != "suspect_invalid":
                 cmp_["decision"], cmp_["reason"] = dec["decision"], dec.get("reason")
+    # Certainty is judged on EVERY stored row of the candidate's current definition (before the cut and after the instant too):
+    # a model that ever stated certainty stays barred until a person diagnoses it.
+    every = _forward_rows(path, sport, protocol_id, as_of=False)[0]
+    for market, e in ev["markets"].items():
+        for n, met in (e.get("models") or {}).items():
+            if (fw["models"].get(n) or {}).get("role") == "candidate":
+                met["degenerate_probabilities"] = sum(1 for r in every if r["model"] == n and r["market"] == market
+                                                      and degenerate(_forward_rec(r)))
     return ev
 
 

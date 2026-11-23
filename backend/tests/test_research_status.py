@@ -1345,18 +1345,19 @@ def test_one_model_name_from_two_ledgers_keeps_both_market_families(tmp_path):
     assert sorted(r["market"] for r in by["goals_poisson"]) == ["total", "winner"]
 
 
-def test_a_candidate_run_more_than_five_minutes_after_the_current_models_never_pairs(tmp_path):
+def test_a_candidate_run_after_the_current_models_never_pairs(tmp_path):
     p = tmp_path / "later.sqlite"
     _put(p, "inc", "incumbent", _t(5, 9), 150.5, 0.5)
     _put(p, "cand", "candidate", _t(5, 9 + 8 / 60), 150.5, 0.6)               # 8 min AFTER: not allowed
     pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
     assert pr["paired_games"] == 0 and pr["unpaired"] == ["g1"]
-    _put(p, "cand", "candidate", _t(5, 9 + 3 / 60), 150.5, 0.6)               # 3 min after (same cycle): allowed, reported
+    _put(p, "cand", "candidate", _t(5, 9 + 1 / 60), 150.5, 0.6)               # even 1 min after: never paired (could know more)
     pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
-    assert pr["paired_games"] == 1 and pr["candidate_later_pairs"] == 1 and pr["max_candidate_later_minutes"] == pytest.approx(3.0)
-    _put(p, "cand", "candidate", _t(5, 9 - 6 / 60), 150.5, 0.6)               # 6 min before is preferred over 3 min after
+    assert pr["paired_games"] == 0 and ar.FORWARD_PAIRING["max_candidate_later_minutes"] == 0
+    _put(p, "cand", "candidate", _t(5, 9 - 6 / 60), 150.5, 0.6)               # 6 min before: paired
     pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
-    assert pr["candidate_later_pairs"] == 0 and pr["cand"][0]["forecast_at"] == _t(5, 9 - 6 / 60)
+    assert pr["paired_games"] == 1 and pr["candidate_later_pairs"] == 0 and pr["max_candidate_later_minutes"] is None
+    assert pr["cand"][0]["forecast_at"] == _t(5, 9 - 6 / 60)
 
 
 def test_a_candidate_that_forecast_only_after_the_instant_is_labelled_as_of_late_not_missing(tmp_path):
@@ -1398,3 +1399,25 @@ def test_with_the_real_cut_pre_cut_games_never_reach_calibration_the_bar_or_the_
     assert pre["models"]["cand"]["calibration"] != w["models"]["cand"]["calibration"]
     crit = res["recommendation"]["candidates"]["cand"]["markets"]["winner"]["criteria"]
     assert crit["min_settled_forward"]["n"] == 100
+
+
+def test_certainty_before_the_cut_still_bars_the_candidate(tmp_path, monkeypatch):
+    monkeypatch.setitem(ar.FORWARD_PAIRING, "prospective_from", _t(100))
+    p = tmp_path / "bar.sqlite"
+    s = synthetic(n=200, seed=23, edge=0.5)
+    for i, (ri, rc) in enumerate(zip(s["inc"], s["cand"])):
+        start, at = _t(i, 12), _t(i, 8)
+        _put(p, "inc", "incumbent", at, None, ri["probs"]["a"], gid=ri["game_id"], start=start, market="winner", sport="nba")
+        _put(p, "cand", "candidate", at, None, 1.0 if i == 3 else rc["probs"]["a"], gid=ri["game_id"], start=start,
+             market="winner", sport="nba")                                     # one certainty forecast, before the cut
+    c = ar.forward_connect(p)
+    with c:
+        for r in s["inc"]:
+            c.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, graded_at) VALUES (?,?,?,?,?,?)",
+                      ("nba", r["game_id"], "winner", "", r["outcome"], "x"))
+    c.close()
+    res = ar.forward_evaluate(p, fixture_adapter({"inc": []}), "p", record_look=False)
+    m = res["recommendation"]["candidates"]["cand"]["markets"]["winner"]
+    assert m["status"] == "suspect_invalid" and m["criteria"]["valid_probabilities"]["degenerate"] == 1
+    fw = res["evaluation"]["markets"]["winner"]["comparisons"]["cand"]["vs_incumbent"]["forward"]
+    assert fw["bar_fallback"] is True and fw["bar"] == "inc"     # the named NBA bar (elo) has no rows here: the fallback is shown
