@@ -1,3 +1,35 @@
+## Research pin repair + audit + research-6 — branch pin-repair 16de9b8, RELEASED to delivery (2026-11-23 ~15:50Z) — Claude Opus 5.5 (lead)
+- What broke (verified): 2026-11-23 06:00 the research run loaded the LIVE checkout (dd11fb6, app 63922174) not the pin (23df530, fac8c698):
+  prepare.py sets PYTHONPATH, `python -m` puts the cwd (delivery/backend) first. NBA/NHL v3 refused (cache keyed by the app), v2 ran one trial
+  each under unintended ids (NBA aa1be0f64744 discard, NHL 9cb21e25c613 KEEP reg3), the state file said "evaluated"; NCAAB/NFL/soccer v3
+  ran on live code unnoticed. The 2026-11-22 history release triggered it; HANDOFF of that release did not name the risk.
+- Repair: scripts/research_runner.py (outside the fingerprinted app; prepare.py is hash-registered in running protocols and is UNCHANGED),
+  ~/autoresearch-sports/PIN.json (records the existing pin; nothing re-pinned, no cache or fingerprint rebuilt/renamed), refuse_unpinned in
+  every study command, app/research_audit.py (append-only, chained, fail-closed; enforced in baseline selection, reuse, daily queue,
+  holdouts, v3 runs, forward tracking, promotion, status). Wrapper reads v3= itself; rc 0 without an outcome line = failed.
+- Audit written (12 entries; 68 original files byte-identical before/after): invalid = both 06:00 v2 protocols + both trials by id + the
+  two VOID protocols of Nov 18; NCAAB/NFL/soccer 06:00 = unverified, then verified by recomputation with the pinned code (NCAAB 3 items +
+  evaluation, NFL 6 items + evaluation, soccer 2 items identical; soccer unfinished item 297,755 records equal after the evaluator's own
+  push->mid rename). Live check: usable NHL records 0, reg3 model to beat = goals_draw, forward candidates none.
+- State: nba/nhl rows of daily-state.tsv corrected evaluated -> refused (original in evidence/before). Agents installed: autoresearch-daily
+  (06:00 + same-day retries 11:10/13:10), autoresearch-agent (AUTORESEARCH_PYTHON = runner; gate sha unchanged). api-delivery plist:
+  NBA_AUTORESEARCH_DIR added; web proxies only /api/research/autoresearch to delivery, so the audit reasons are visible.
+- RECOVERY (labelled "recovery of 2026-11-23 06:00", through the wrapper and all guards): NOT RUN YET at this commit. Guard refused: adaptive
+  trainer held the heavy lock, then games are on until late. evidence/recovery.sh retries every 15 min until 05:40; result in
+  evidence/recovery.log, runner-runs.jsonl (label) and the next HANDOFF entry. manual agent script now refuses unless AUTORESEARCH_PYTHON = runner.
+- Also: earlier Telegram cards whose printed line note differs are no longer called "same" (2 rows; file rebuilt, otherwise identical).
+- Review: independent Opus REQUEST CHANGES (2 high, 11 medium, 8 low) -> all fixed test-first -> re-review APPROVE of c1080b6. Not re-reviewed:
+  ae93dc2 (the reviewer's own LOW items), ee88710/16de9b8 (one proxy line, one plist template). research-6 up to 6e86d2c reviewed SHIP elsewhere.
+- Tests: full suite at c1080b6, 167 files, 3,310 = 3,301 passed + 1 skipped + 8 test_deep_study (torch/keras; all 10 of that file pass in the
+  nba-predictor-deep env). ae93dc2: 270 passed on the affected files; launchd tests 234-327 passed; frontend 73; typecheck; build.
+- Mistake: at ~15:46Z I installed the repo's STALE api-delivery template (retired data folder); delivery API answered 503 for under 2 minutes;
+  restored from the saved plist, stray folder removed, that template now equals the installed file. Telegram runs continued; nothing written.
+- Found: delivery git index.lock, empty, from 01:48, no holder; moved to evidence (checkout clean, fsck ok). Cause unknown.
+- OPEN: 20 other scripts/launchd templates still point at nba-predictor-sprint1 (do not install them without a diff); audit tolerates one valid
+  chained line beyond the head (crash rule); NHL v2 has no protocol on the 5-sport snapshot yet (first recovery run registers it: ba9372fa1e0f).
+- ROLLBACK: research: put evidence/before plists back; keep audit.jsonl and PIN.json (older code ignores them). App: checkout dd11fb6 + build +
+  pin + kickstart, but then also boot out autoresearch-daily (dd11fb6 has the cwd bug). Evidence: ~/nba-predictor-research-data/pin-repair-2026-11-23/.
+
 ## Recovered Telegram predictions in Performance and Prediction History — branch recovered-history 4224965, RELEASED to delivery (2026-11-23 ~04:50Z) — Claude Opus 5.5 (lead)
 - Owner: the Nov 2-16 original predictions (Desktop JSON, sha256 ae9cfd15..., same file as docs/telegram_record.json) must be in
   the historical views, not only in card summaries. New GET /api/telegram-history (NBA/NHL/NCAAB), /api/nfl/telegram-history,
