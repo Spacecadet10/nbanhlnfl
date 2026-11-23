@@ -153,6 +153,11 @@ def status(recent: int = 12) -> dict:
     stop = agent / "STOP"
     daily = sorted((root / "reports").glob("daily-*.json"))
     last_daily = _read(daily[-1]) if daily else None
+    if last_daily:                 # a sweep of blocked studies is never shown as a result
+        bad = [f"{s}: {research_audit.why(e)}" for s, v in (last_daily.get("sports") or {}).items()
+               if (e := research_audit.verdict(entries, (v or {}).get("protocol_id") or "", s))]
+        if audit_error or bad:
+            last_daily = last_daily | {"outcome": "not usable: " + (audit_error or "; ".join(bad))}
     return {"configured": True, "note": NOTE,
             "stopped": stop.read_text().strip() if stop.is_file() else None,
             "active_run": None if not active else {
@@ -259,6 +264,11 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
     return out
 
 
+def _combined(v3: Optional[str], v2: Optional[str], stated: Optional[str]) -> Optional[str]:
+    """autoresearch.combine_outcomes, for reports written before it: v2 speaks only when v3 had no candidates."""
+    return stated if not v3 else v3 if v3 != "no_candidates" else (v2 or v3)
+
+
 def v3_status(root: Path) -> Optional[dict]:
     """Latest state per sport (state.json of the newest protocol directory) and the latest daily5 report. Reads files only."""
     latest = {}
@@ -277,10 +287,14 @@ def v3_status(root: Path) -> Optional[dict]:
     for s, st in sorted(latest.items()):
         e = research_audit.verdict(entries, st.get("protocol_id") or "", s)
         audit = f"the audit file is unusable: {audit_error}" if audit_error else research_audit.why(e) if e else None
+        st = st | ({k: None for k in ("kept", "needs_human_review", "evaluation", "forward_candidates")} if audit else {})
         sports[s] = {k: st.get(k) for k in keep} | {"audit": audit} | {"candidate_count": len(st.get("candidates") or [])}
         sports[s]["models"] = {n: {"role": m.get("role"), "version": m.get("version")} for n, m in (st.get("models") or {}).items()}
         sports[s]["markets"] = {m: {"kind": v.get("kind"), "settlement": v.get("settlement"), "line_basis": v.get("line_basis")}
                                 for m, v in (st.get("markets") or {}).items()}
+    if last and isinstance(last.get("combined"), dict):     # an older evaluator let a v2 success stand for a v3 refusal
+        last = last | {"combined": {s: c | {"outcome": _combined((c.get("v3") or {}).get("outcome"), (c.get("v2") or {}).get("outcome"),
+                                                                 c.get("outcome"))} for s, c in last["combined"].items()}}
     return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports, "wrapper_state": daily_state(),
             "forward": forward_summary(),
             "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport", "combined", "v2")}}

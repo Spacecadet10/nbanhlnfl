@@ -425,18 +425,22 @@ def _paths(exp_root: Path, sport: str) -> tuple[str, Path, dict]:
 
 
 # --- Audit (app/research_audit.py): invalid or unverified records are never used; they stay where they are ----------------------
+class AuditBlocked(Refused):
+    """Refused by the audit file (blocked records, or an unusable file)."""
+
+
 def audit_entries(exp_root: Path) -> list:
     """The audit entries; an unreadable or broken audit file refuses (it never means "nothing is invalid")."""
     try:
         return research_audit.load(exp_root)
     except research_audit.AuditError as exc:
-        raise Refused(f"the research audit file is unusable, so nothing may be selected: {exc}") from exc
+        raise AuditBlocked(f"the research audit file is unusable, so nothing may be selected: {exc}") from exc
 
 
 def refuse_blocked(exp_root: Path, pid: str, sport: str) -> None:
     e = research_audit.verdict(audit_entries(exp_root), pid, sport)
     if e:
-        raise Refused(f"{sport} records of {pid} may not be used: {research_audit.why(e)}")
+        raise AuditBlocked(f"{sport} records of {pid} may not be used: {research_audit.why(e)}")
 
 
 def _valid_records(root: Path) -> list:
@@ -1153,12 +1157,13 @@ def daily(sports_: list, exp_root: Path, workspace: Path, max_trials: int, max_m
 
 def status(exp_root: Path, sport: str) -> dict:
     pid, root, meta = _meta(exp_root, sport)
-    recs = [r for r in _records(root) if r["event"] == "finished"]
+    recs = [r for r in _valid_records(root) if r["event"] == "finished"]
     counts = {}
     for r in recs:
         k = r["status"] + (" (cached)" if r.get("cached_from") else "")
         counts[k] = counts.get(k, 0) + 1
-    return {"protocol_id": pid, "experiment_dir": str(root), "trials": len(recs), "by_status": counts,
+    blocked = sum(r["event"] == "finished" for r in _records(root)) - len(recs)
+    return {"protocol_id": pid, "experiment_dir": str(root), "trials": len(recs), "by_status": counts, "invalidated": blocked,
             "incumbents": {m: c["label"] for m, c in incumbents(root, sport, meta).items()},
             "holdout": [h["event"] for h in _holdout_log(root)],
             "promotion": "none (research only; manual §6 on the forward record)"}
@@ -1888,7 +1893,7 @@ def _study_tables(conn, sport: str, period: str) -> dict:
         st = pickle.loads(path.read_bytes())
     elif path is not None and not STUDY_CACHE["build"]:
         raise Refused(f"the {sport} study tables for this snapshot are not cached ({path.name}): build them once outside the "
-                      "scheduled step with `python -m app.autoresearch v3 prepare-cache --sport " + sport + "`")
+                      "scheduled step with `scripts/research_runner.py prepare-cache --sport " + sport + "`")
     else:
         st = _study_build(conn, sport, period)
         if path is not None:
@@ -2258,7 +2263,7 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
         with Lock(root):
             _run_queue(status, adapter, root, pid, sport, t0, max_items, max_seconds)
     except Refused as exc:
-        status |= {"outcome": "refused", "reason": str(exc)}
+        status |= {"outcome": "refused", "reason": str(exc), **({"audit_blocked": True} if isinstance(exc, AuditBlocked) else {})}
         status["blockers"].append(f"refused: {exc}")
     except Exception as exc:                                  # a bug or a broken adapter: recorded, never hidden
         status |= {"outcome": "failed", "reason": f"{type(exc).__name__}: {exc}"[:500]}
@@ -2267,6 +2272,9 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
     status["last_success_at"] = at if status["outcome"] == "evaluated" else _last_success(exp_root, sport)
     if status["outcome"] == "failed" and status["reason"] is None:
         status["reason"] = "unknown"
+    if status.get("audit_blocked"):               # nothing is written into, or instead of, a blocked study
+        status["last_attempt"] = {"at": at, "outcome": status["outcome"], "reason": status["reason"]}
+        return status
     if root is None:
         root = exp_root / "v3" / "unregistered" / sport
         root.mkdir(parents=True, exist_ok=True)
@@ -2825,7 +2833,11 @@ def record(data_dir: Path, now: str, sport: str, candidates: Optional[list] = No
         conn = adapter["connect"]() if adapter.get("connect") else official_ro(data_dir, sport)
         if conn is None and not adapter.get("connect"):
             return res | {"outcome": "skipped", "forward_status": "no_store", "errors": ["no store"]}
-        picked = set(candidates) if candidates is not None else set(registered_candidates(exp_root, sport) if exp_root else [])
+        try:
+            picked = set(candidates) if candidates is not None else set(registered_candidates(exp_root, sport) if exp_root else [])
+        except Refused as exc:            # an unusable audit: no research candidate is tracked; the current models still are
+            picked = set()
+            res["errors"].append(str(exc))
         wanted = {"incumbent"} | ({"baseline"} if baselines else set())
         chosen = [(n, m) for n, m in adapter["models"].items() if m.get("role") in wanted or n in picked]
         pool = {n: m for n, m in (adapter.get("forward_models") or {}).items()
@@ -3129,7 +3141,7 @@ def min_forward(sport: str) -> int:
     return PROMOTION["min_settled_forward"].get(sport, PROMOTION["min_settled_forward"]["default"])
 
 
-def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] = None) -> dict:
+def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] = None, blocked: Optional[dict] = None) -> dict:
     """The recommendation object: per candidate and market, each pre-registered criterion as passed / failed / not_evaluable.
     It never promotes: a person decides, on the forward record, under MODEL_SELECTION §6."""
     prior_looks = prior_looks or {}
@@ -3152,6 +3164,9 @@ def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] =
             n = vi.get("n", fw.get("forecast", 0))
             crit = {"min_settled_forward": {"status": "passed" if n >= need else "failed", "n": n, "need": need},
                     "full_coverage": {"status": "passed" if fw["coverage"] == 1.0 else "failed", "coverage": fw["coverage"]}}
+            no = (blocked or {}).get(c) or (blocked or {}).get("*")
+            if no:                          # selected by an invalid or unverified study: never recommended
+                crit["audit"] = {"status": "failed", "reason": no}
             if "unpaired_share" in fw:      # forward pairs (FORWARD_PAIRING): timing/line mismatches are counted, not hidden
                 crit["pairing"] = {"status": "passed" if fw["unpaired_share"] <= FORWARD_PAIRING["max_unpaired_share"] else "failed",
                                    "unpaired_games": fw["unpaired_games"], "games": fw["games"],
@@ -3262,7 +3277,33 @@ def _forward_stage(path, adapter: dict, protocol_id, *, since=None, until=None) 
     return ev
 
 
-def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[str] = None, record_look: bool = True) -> dict:
+def default_exp_root() -> Optional[Path]:
+    p = Path.home() / "autoresearch-sports" / "experiments"
+    return p if p.is_dir() else None
+
+
+def blocked_candidates(exp_root: Optional[Path], sport: str) -> dict:
+    """{candidate: why}: candidates whose research selection is blocked by the audit (and that no valid state selects). An unusable
+    audit blocks every candidate ('*')."""
+    if exp_root is None:
+        return {}
+    try:
+        entries, valid, out = audit_entries(Path(exp_root)), set(registered_candidates(exp_root, sport)), {}
+    except Refused as exc:
+        return {"*": str(exc)}
+    for p in (Path(exp_root) / "v3").glob(f"*/{sport}/state.json"):
+        e = research_audit.verdict(entries, p.parents[1].name, sport)
+        if e:
+            try:
+                st = json.loads(p.read_text())
+            except (OSError, ValueError):
+                continue
+            out.update({c: research_audit.why(e) for c in st.get("forward_candidates") or [] if c not in valid})
+    return out
+
+
+def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[str] = None, record_look: bool = True,
+                     exp_root: Optional[Path] = None) -> dict:
     """Evaluates the stored forward forecasts with the same evaluator (stage `forward`) and builds the promotion
     recommendation. Each call is a look: logged; only the first look at a market's minimum count is confirmatory.
     Only games starting at or after FORWARD_PAIRING["prospective_from"] feed the recommendation (metrics, calibration,
@@ -3284,7 +3325,7 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
                               (adapter["sport"], protocol_id or "")):
             if r["n_matched"] >= min_forward(adapter["sport"]):
                 prior[(r["candidate"], r["market"])] = True
-        rec = promotion_recommendation(adapter["sport"], ev, prior)
+        rec = promotion_recommendation(adapter["sport"], ev, prior, blocked_candidates(exp_root, adapter["sport"]))
         if record_look:
             for c, cv in rec["candidates"].items():
                 for m, mv in cv["markets"].items():
@@ -3315,6 +3356,8 @@ def main_v3(argv: list) -> int:
     a = p.parse_args(argv)
     chosen = a.sport or list(FIVE_SPORTS)
     try:
+        if a.cmd in ("daily", "holdout", "prepare-cache"):      # forward-* read the live store with live code by design
+            refuse_unpinned(a.exp_root)
         if a.cmd == "daily":
             r = daily_v3(chosen, a.exp_root, a.max_items, a.max_seconds)
             print(json.dumps({"outcomes": r["outcomes"], "report_file": r["report_file"],
@@ -3331,7 +3374,7 @@ def main_v3(argv: list) -> int:
             pid = v3_protocol_id(adapter)
             uri = f"file:{config.db_path(chosen[0])}?mode=ro"          # official store: read-only, only ever queried
             if a.cmd == "forward-eval":
-                r = forward_evaluate(None, adapter, pid)
+                r = forward_evaluate(None, adapter, pid, exp_root=a.exp_root or default_exp_root())
                 print(json.dumps(r["recommendation"], indent=1, default=str))
             elif a.cmd == "forward-grade":
                 oc = sqlite3.connect(uri, uri=True)
@@ -3410,14 +3453,25 @@ def _daily_cli(a) -> int:
 
 
 # --- CLI -------------------------------------------------------------------------------------------------------------
+def refuse_unpinned(exp_root: Optional[Path]) -> None:
+    """Study commands on an experiment root that has a pin (PIN.json beside it) run only from the pinned checkout, whatever started
+    them: `python -m` puts the current directory before PYTHONPATH, so a plain `prepare.py` or `python -m` can load another app
+    (Nov 23 2026). The scheduled way is scripts/research_runner.py."""
+    pin = Path(exp_root).resolve().parent / "PIN.json" if exp_root else None
+    if pin is None or not pin.exists():
+        return
+    try:
+        want = Path(json.loads(pin.read_text())["app"]["backend"]).resolve()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise Refused(f"{pin} is unreadable ({type(exc).__name__}): nothing may run on these studies") from exc
+    if want != APP_DIR.resolve().parent:
+        raise Refused(f"this process loaded the app from {APP_DIR.resolve().parent}, not the pinned checkout {want}; use "
+                      "scripts/research_runner.py")
+
+
 def main(argv=None) -> int:
     if argv is None:
         argv = sys.argv[1:]
-    pinned = os.environ.get("AUTORESEARCH_APP")       # the pinned checkout's backend, set by the workspace's prepare.py
-    if pinned and Path(pinned).resolve() != APP_DIR.resolve().parent:
-        print(f"REFUSED: this process loaded the app from {APP_DIR.resolve().parent}, not the pinned checkout {pinned} "
-              "(`python -m` puts the current directory before PYTHONPATH)", file=sys.stderr)
-        return 2
     if argv and argv[0] == "v3":
         return main_v3(list(argv[1:]))
     p = argparse.ArgumentParser(prog="python -m app.autoresearch", description=__doc__.split("\n")[0])
@@ -3440,6 +3494,8 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     chosen = a.sport or ["nba", "nhl"]
     try:
+        if a.cmd != "stop":                       # the kill switch works from anywhere
+            refuse_unpinned(a.exp_root)
         if a.cmd == "daily":
             return _daily_cli(a)
         if a.cmd == "prepare":

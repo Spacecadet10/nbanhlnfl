@@ -82,6 +82,8 @@ def lab(trees, tmp_path):
     git(home / "workspace", "init", "-q")
     git(home / "workspace", "add", "-A")
     git(home / "workspace", "commit", "-qm", "ws")
+    (home / "experiments" / "another-protocol" / "nhl").mkdir(parents=True)
+    ra.append(home / "experiments", status="invalid", protocol_id="another-protocol", sport="nhl", reason="other study")
     out = {"home": home, "snap": snap, "pinned": trees / "pinned", "live": trees / "live", "prepare": home / "workspace" / "prepare.py"}
     r = run(out, "write-pin", "--reason", "test")
     assert r.returncode == 0, r.stderr
@@ -93,7 +95,7 @@ def lab(trees, tmp_path):
 
 def run(lab, *argv, cwd="/", **env):
     return subprocess.run([sys.executable, "-I", str(RUNNER), *map(str, argv)], cwd=cwd, capture_output=True, text=True, timeout=300,
-                          env=dict(os.environ, AUTORESEARCH_HOME=str(lab["home"]), **env))
+                          env=dict(os.environ, HOME=str(lab["home"].parent)) | env)
 
 
 def daily(lab, cwd="/", **env):
@@ -158,12 +160,12 @@ def test_the_environment_given_to_the_study_drops_python_and_app_variables(monke
     rr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rr)
     for k in ("PYTHONHOME", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONSAFEPATH", "VIRTUAL_ENV", "DYLD_INSERT_LIBRARIES", "NBA_DATA_DIR",
-              "AUTORESEARCH_APP", "__PYVENV_LAUNCHER__", "CONDA_PREFIX"):
+              "AUTORESEARCH_APP", "__PYVENV_LAUNCHER__", "CONDA_PREFIX", "KERAS_BACKEND", "TF_CONFIG", "OPENBLAS_NUM_THREADS", "TZ", "GIT_DIR"):
         monkeypatch.setenv(k, "/evil")
     monkeypatch.setenv("AUTORESEARCH_BROKER", "/sock")
     env = rr.clean_env({})
-    assert env["PYTHONNOUSERSITE"] == "1" and env["AUTORESEARCH_BROKER"] == "/sock" and env["HOME"] == os.environ["HOME"]
-    assert not [k for k, v in env.items() if v == "/evil"]
+    assert env["PYTHONNOUSERSITE"] == "1" and env["HOME"] == os.environ["HOME"]
+    assert not [k for k, v in env.items() if v == "/evil"] and "AUTORESEARCH_BROKER" not in env
 
 
 @pytest.mark.parametrize("drift,why", [
@@ -220,6 +222,11 @@ def test_the_run_is_logged_with_its_label_outcome_and_identity(lab):
     assert ev[1]["files"] == json.loads((lab["home"] / "PIN.json").read_text())["app"]["files"] and ev[1]["rc"] == 0
 
 
+def records(exp, pid, trial=None):
+    (exp / pid / "nba").mkdir(parents=True, exist_ok=True)
+    (exp / pid / "nba" / "trials.jsonl").write_text(json.dumps({"trial_id": trial}) + "\n")
+
+
 def v2_pid(lab):
     return json.loads((lab["home"] / "PIN.json").read_text())["protocols"]["nba"]["v2"]
 
@@ -227,8 +234,8 @@ def v2_pid(lab):
 @pytest.mark.parametrize("trial", [None, "20261123T110757Z-ab15fe2f"])
 def test_a_blocked_protocol_or_an_invalid_trial_of_it_stops_the_pinned_study(lab, trial):
     exp = lab["home"] / "experiments"
-    ra.append(exp, status="invalid", protocol_id="another-protocol", sport="nhl", reason="other study")
-    assert daily(lab)[0].returncode == 0                                             # an unrelated entry does not stop it
+    assert daily(lab)[0].returncode == 0                                             # an unrelated entry (in `lab`) does not stop it
+    records(exp, v2_pid(lab), trial)
     ra.append(exp, status="invalid", protocol_id=v2_pid(lab), sport="nba", reason="unintended code", trial_id=trial)
     r, got = daily(lab)
     assert r.returncode == 2 and got is None and "unintended code" in r.stderr
@@ -236,6 +243,7 @@ def test_a_blocked_protocol_or_an_invalid_trial_of_it_stops_the_pinned_study(lab
 
 def test_unverified_stops_the_sport_until_verified_and_a_damaged_audit_stops_everything(lab):
     exp = lab["home"] / "experiments"
+    records(exp, v2_pid(lab))
     ra.append(exp, status="unverified", protocol_id=v2_pid(lab), sport="nba", reason="made by live code")
     assert daily(lab)[0].returncode == 2
     ra.append(exp, status="verified", protocol_id=v2_pid(lab), sport="nba", reason="recomputed: identical")
@@ -245,16 +253,125 @@ def test_unverified_stops_the_sport_until_verified_and_a_damaged_audit_stops_eve
     assert r.returncode == 2 and "audit file is unusable" in r.stderr
 
 
-def test_an_audit_file_emptied_after_the_pin_was_written_is_noticed(lab):
+def test_an_audit_file_deleted_after_the_pin_was_written_is_noticed_and_a_pin_needs_an_audit(lab):
     exp, pinfile = lab["home"] / "experiments", lab["home"] / "PIN.json"
-    e = ra.append(exp, status="invalid", protocol_id="another-protocol", sport="nhl", reason="other study")
-    pinfile.chmod(0o644)
-    pinfile.write_text(json.dumps(json.loads(pinfile.read_text()) | {"audit_head": ra.load(exp)[0]["sha"]}))
-    assert daily(lab)[0].returncode == 0 and e
+    assert json.loads(pinfile.read_text())["audit_head"] == ra.load(exp)[0]["sha"]
     (exp / ra.FILE).unlink()
     (exp / ra.HEAD).unlink()
+    assert daily(lab)[0].returncode == 2
+    pinfile.unlink()
+    r = run(lab, "write-pin", "--reason", "no audit")
+    assert r.returncode == 2 and "write the audit first" in r.stderr and not pinfile.exists()
+
+
+@pytest.mark.parametrize("args", [["daily", "--sport=nba"], ["daily", "--spo", "nba"], ["daily", "--sport", "nba", "--sport=nfl"], ["daily", "--sport"],
+                                  ["daily", "--sport", "cricket"], ["frobnicate"], []])
+def test_an_argument_the_runner_would_not_check_is_refused(lab, args):
+    r = run(lab, lab["prepare"], *args)
+    assert r.returncode == 2 and "LOADED" not in r.stdout, (r.stdout, r.stderr)
+
+
+def test_another_prepare_a_broker_and_a_sport_the_pin_does_not_hold_are_refused(lab, tmp_path):
+    other = tmp_path / "prepare.py"
+    other.write_text(lab["prepare"].read_text())
+    assert run(lab, other, "daily", "--sport", "nba").returncode == 2
+    assert run(lab, other, "stop").returncode == 2
+    r, got = daily(lab, AUTORESEARCH_BROKER="/tmp/x.sock")
+    assert r.returncode == 2 and got is None and "AUTORESEARCH_BROKER" in r.stderr
+    assert "the pin holds no nhl store" in run(lab, lab["prepare"], "daily", "--sport", "nhl").stderr
+
+
+def test_another_home_in_the_environment_changes_nothing(lab, tmp_path):
+    (tmp_path / "evil" / "experiments").mkdir(parents=True)
+    r, got = daily(lab, AUTORESEARCH_HOME=str(tmp_path / "evil"), NBA_AUTORESEARCH_HOME=str(tmp_path / "evil"))
+    assert r.returncode == 0 and got["app"] == str(lab["pinned"] / "backend") and not list((tmp_path / "evil" / "experiments").iterdir())
+
+
+def test_the_kill_switch_works_without_a_pin(lab):
+    (lab["home"] / "PIN.json").unlink()
+    assert run(lab, lab["prepare"], "stop").returncode == 0
+
+
+def test_a_check_that_cannot_be_made_is_a_logged_refusal(lab):
+    (lab["snap"]).chmod(0o755)
+    (lab["snap"] / "IDENTITY.json").chmod(0o644)
+    (lab["snap"] / "IDENTITY.json").unlink()
+    r, got = daily(lab)
+    assert r.returncode == 2 and got is None and "sport-outcome: nba refused" in r.stdout
+    assert json.loads((lab["home"] / "runner-runs.jsonl").read_text().splitlines()[-1])["event"] == "refused"
+
+
+def test_an_ignored_file_in_the_pinned_checkout_is_refused(lab):
+    (lab["pinned"] / ".git" / "info" / "exclude").write_text("sitecustomize.py\n")
+    (lab["pinned"] / "backend" / "sitecustomize.py").write_text("raise SystemExit('ran')\n")
+    try:
+        r, got = daily(lab)
+        assert r.returncode == 2 and got is None and "ignored files" in r.stderr
+    finally:
+        (lab["pinned"] / "backend" / "sitecustomize.py").unlink()
+        (lab["pinned"] / ".git" / "info" / "exclude").write_text("")
+
+
+@pytest.mark.parametrize("during", ["audit", "store"])
+def test_a_change_during_the_run_makes_it_refused(lab, during):
+    hook = (f"open({str(lab['home'] / 'experiments' / ra.FILE)!r}, 'a').write('{{oops')" if during == "audit" else
+            f"import os; os.chmod({str(lab['snap'] / 'nba.sqlite')!r}, 0o644); open({str(lab['snap'] / 'nba.sqlite')!r}, 'w').write('x')")
+    pinfile = lab["home"] / "PIN.json"
+    lab["prepare"].write_text(lab["prepare"].read_text().replace("import os\n", "import os\nimport sys\n" + f"if 'daily' in sys.argv: exec({hook!r})\n", 1))
+    pinfile.chmod(0o644)
+    pin = json.loads(pinfile.read_text())
+    pin["workspace"]["prepare_sha256"] = hashlib.sha256(lab["prepare"].read_bytes()).hexdigest()
+    pinfile.write_text(json.dumps(pin))
     r, _ = daily(lab)
-    assert r.returncode == 2 and "no longer holds" in r.stderr
+    assert r.returncode == 2 and "changed while it ran" in r.stderr
+    assert r.stdout.strip().splitlines()[-1].startswith("sport-outcome: nba refused v3=refused")
+
+
+def test_output_that_is_not_utf8_and_a_killed_runner_leave_no_study_running(lab):
+    import signal
+    import time
+    marker = lab["home"] / "child.pid"
+    lab["prepare"].write_text(lab["prepare"].read_text().replace("os.execve(", f"open({str(marker)!r}, 'w').write(str(os.getpid()))\n"
+                              "sys.stdout.buffer.write(b'\\xff bad byte\\n'); sys.stdout.flush()\n"
+                              "if 'sleep' in sys.argv:\n    import time; time.sleep(60)\nos.execve(", 1))
+    pinfile = lab["home"] / "PIN.json"
+    pinfile.chmod(0o644)
+    pin = json.loads(pinfile.read_text())
+    pin["workspace"]["prepare_sha256"] = hashlib.sha256(lab["prepare"].read_bytes()).hexdigest()
+    pinfile.write_text(json.dumps(pin))
+    r, got = daily(lab)
+    assert r.returncode == 0 and got, r.stderr
+    marker.unlink()
+    p = subprocess.Popen([sys.executable, "-I", str(RUNNER), str(lab["prepare"]), "daily", "--sport", "nba", "sleep"], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, env=dict(os.environ, HOME=str(lab["home"].parent)), start_new_session=True)
+    for _ in range(300):
+        if marker.exists() and marker.read_text():
+            break
+        time.sleep(0.1)
+    child = int(marker.read_text())
+    p.send_signal(signal.SIGTERM)
+    p.wait(30)
+    time.sleep(0.3)
+    with pytest.raises(ProcessLookupError):
+        os.kill(child, 0)
+
+
+def test_the_study_inherits_the_supervisors_lock(lab, tmp_path):
+    import fcntl
+    lock = tmp_path / "heavy.lock"
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR)
+    os.set_inheritable(fd, True)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    lab["prepare"].write_text(lab["prepare"].read_text().replace("os.execve(", f"print('FD', os.fstat({fd}).st_ino == os.stat({str(lock)!r}).st_ino, flush=True)\nos.execve(", 1))
+    pinfile = lab["home"] / "PIN.json"
+    pinfile.chmod(0o644)
+    pin = json.loads(pinfile.read_text())
+    pin["workspace"]["prepare_sha256"] = hashlib.sha256(lab["prepare"].read_bytes()).hexdigest()
+    pinfile.write_text(json.dumps(pin))
+    r = subprocess.run([sys.executable, "-I", str(RUNNER), str(lab["prepare"]), "daily", "--sport", "nba"], capture_output=True, text=True,
+                       env=dict(os.environ, HOME=str(lab["home"].parent)), pass_fds=(fd,), timeout=300)
+    os.close(fd)
+    assert "FD True" in r.stdout, r.stdout + r.stderr
 
 
 def test_nothing_in_the_pinned_checkout_or_snapshot_is_written(lab):

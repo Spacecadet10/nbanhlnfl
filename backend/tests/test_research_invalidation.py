@@ -69,8 +69,7 @@ def test_a_blocked_protocol_refuses_every_use_with_the_reason(env, status):
 
 
 def test_a_damaged_audit_file_refuses_instead_of_meaning_no_invalidations(env):
-    ar.run_trial("nba", env["exp"], env["ws"])
-    block(env, trial="some-other-trial")
+    block(env, trial=ar.run_trial("nba", env["exp"], env["ws"])["trial_id"])
     (env["exp"] / ra.FILE).write_text("{oops\n")
     for use in (lambda: ar.run_trial("nba", env["exp"], env["ws"]), lambda: ar.holdout("nba", env["exp"], env["ws"], ask=lambda p: True),
                 lambda: ar.incumbents(env["root"], "nba", env["meta"])):
@@ -118,6 +117,60 @@ def test_an_older_valid_protocol_is_not_replaced_by_a_newer_blocked_one_and_a_da
         ar.registered_candidates(exp, "nba")
 
 
+def test_a_v3_refusal_by_the_audit_writes_no_state_that_hides_an_older_valid_study(exp):
+    st, fn = kept_v3(exp)
+    ra.append(exp, status="invalid", protocol_id=st["protocol_id"], sport="nba", reason=WHY)
+    assert ar.run_sport_v3("nba", exp, adapter_fn=fn)["outcome"] == "refused"
+    assert not (exp / "v3" / "unregistered").exists()
+    assert json.loads((exp / "v3" / st["protocol_id"] / "nba" / "state.json").read_text())["outcome"] == "evaluated"     # untouched
+
+
+def test_forward_recording_of_the_current_models_goes_on_when_the_audit_is_unusable(exp, monkeypatch):
+    st, _ = kept_v3(exp)
+    ra.append(exp, status="unverified", protocol_id=st["protocol_id"], sport="nba", reason=WHY)
+    (exp / ra.FILE).write_text("{oops\n")
+    asked = []
+    ad = {"sport": "nba", "data_version": "d", "models": {"inc": {"role": "incumbent", "version": "1"}, "cand": {"role": "candidate", "version": "1"}},
+          "forecast_upcoming": lambda conn, now, name: asked.append(name) or [], "connect": lambda: None}
+    monkeypatch.setattr(ar, "normalise_adapter", lambda a: a)
+    monkeypatch.setattr(ar, "v3_protocol_id", lambda a, d=None: "pid")
+    r = ar.record(exp.parent, "2026-11-25T00:00:00Z", "nba", adapters={"nba": ad}, exp_root=exp)
+    assert asked == ["inc"] and r["candidates"] == [] and any("audit" in e for e in r["errors"])
+
+
+def test_a_candidate_selected_by_a_blocked_study_is_never_recommended(exp):
+    st, _ = kept_v3(exp)
+    assert ar.blocked_candidates(exp, "nba") == {}
+    ra.append(exp, status="unverified", protocol_id=st["protocol_id"], sport="nba", reason=WHY)
+    assert set(ar.blocked_candidates(exp, "nba")) == set(st["forward_candidates"])
+    ev = {"candidates": ["cand"], "markets": {"winner": {"status": "evaluated", "incumbent": "inc", "models": {
+        "inc": {"calibration": {"ece": 0.05}}, "cand": {"calibration": {"ece": 0.01}, "vs_book": {"status": "none"}}}, "comparisons": {
+        "cand": {"vs_incumbent": {"forward": {"coverage": 1.0, "vs_incumbent": {"n": 9999, "ci95": [-0.02, -0.01], "mean": -0.01,
+                                                                               "candidate_accuracy": 0.7, "reference_accuracy": 0.6}}}}}}}}
+    assert ar.promotion_recommendation("nba", ev)["candidates"]["cand"]["status"] == "recommend_for_review"
+    r = ar.promotion_recommendation("nba", ev, None, ar.blocked_candidates(exp, "nba"))["candidates"]["cand"]
+    assert r["status"] == "not_recommended" and "audit" in r["markets"]["winner"]["failed"]
+    (exp / ra.FILE).write_text("{oops\n")
+    r = ar.promotion_recommendation("nba", ev, None, ar.blocked_candidates(exp, "nba"))["candidates"]["cand"]
+    assert r["status"] == "not_recommended"
+
+
+def test_a_daily_queue_scores_a_commit_again_whose_only_result_is_invalid(env):
+    r = ar.daily(["nba"], env["exp"], env["ws"], max_trials=1, max_minutes=30, timeout_s=300)
+    first = r["trials"][0]["trial_id"]
+    block(env, trial=first)
+    again = ar.daily(["nba"], env["exp"], env["ws"], max_trials=1, max_minutes=30, timeout_s=300)
+    assert [t["trial_id"] for t in again["trials"]] != [first] and len(again["trials"]) == 1
+    assert again["sports"]["nba"]["invalidated"] == 1 and again["sports"]["nba"]["trials"] == 1
+
+
+def test_a_blocked_study_is_not_a_last_success_or_a_completed_evaluation(exp):
+    st, _ = kept_v3(exp)
+    assert ar._last_success(exp, "nba") and ar.research_completed(exp, "nba")
+    ra.append(exp, status="unverified", protocol_id=st["protocol_id"], sport="nba", reason=WHY)
+    assert ar._last_success(exp, "nba") is None and ar.research_completed(exp, "nba") is False
+
+
 # --- the status page -------------------------------------------------------------------------------------------------------
 def test_the_status_page_shows_the_invalidation_and_never_the_invalid_keep_as_the_model_to_beat(client, monkeypatch, tmp_path):
     exp = tmp_path / "exp"
@@ -140,6 +193,26 @@ def test_the_status_page_shows_the_invalidation_and_never_the_invalid_keep_as_th
     (exp / ra.FILE).write_text("{oops\n")
     b = client.get("/api/research/autoresearch").json()
     assert b["audit"]["error"] and b["sports"] == {}                                   # nothing is presented as usable
+
+
+def test_the_last_sweep_and_the_combined_outcome_never_show_the_invalid_keep_or_hide_a_refusal(client, monkeypatch, tmp_path):
+    exp = tmp_path / "exp"
+    monkeypatch.setenv("NBA_AUTORESEARCH_DIR", str(exp))
+    _w(exp / "p-bad" / "nhl" / "protocol.json", {"sport": "nhl", "protocol_id": "p-bad", "registered_at": "2026-11-23T11:07:53Z"})
+    _w(exp / "reports" / "daily-2026-11-23T110755Z.json", {"started_at": "2026-11-23T11:07:55Z", "finished_at": "2026-11-23T11:08:33Z",
+       "outcome": "kept vs incumbent (exploratory, not a promotion): nhl:reg3", "sports": {"nhl": {"protocol_id": "p-bad"}}})
+    _w(exp / "reports" / "daily5-2026-11-23T110414Z-1.json", {"started_at": "x", "outcomes": {"nhl": "refused"}, "combined": {
+       "nhl": {"outcome": "evaluated", "v3": {"outcome": "refused"}, "v2": {"outcome": "evaluated"}}}})
+    _w(exp / "v3" / "pid" / "nhl" / "state.json", {"sport": "nhl", "at": "2026-11-23T11:04:14Z", "outcome": "evaluated", "protocol_id": "pid",
+                                                   "kept": ["c:winner"], "forward_candidates": ["c"], "evaluation": {"winner": {"status": "evaluated"}}})
+    b = client.get("/api/research/autoresearch").json()
+    assert "nhl:reg3" in b["last_daily"]["outcome"] and b["v3"]["last_daily"]["combined"]["nhl"]["outcome"] == "refused"
+    ra.append(exp, status="invalid", protocol_id="p-bad", sport="nhl", reason=WHY)
+    b = client.get("/api/research/autoresearch").json()
+    assert "reg3" not in b["last_daily"]["outcome"] and WHY in b["last_daily"]["outcome"]
+    ra.append(exp, status="unverified", protocol_id="pid", sport="nhl", reason=WHY)
+    v = client.get("/api/research/autoresearch").json()["v3"]["sports"]["nhl"]
+    assert v["kept"] is None and v["forward_candidates"] is None and v["evaluation"] is None and v["audit"]
 
 
 def test_the_v3_status_marks_an_unverified_sport(tmp_path):

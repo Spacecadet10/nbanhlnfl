@@ -14,7 +14,7 @@
 # next day; sports run in order of their last success (never first), so a refused sport goes first next time.
 # Every sport prints one line `autoresearch-daily: sport=<s> outcome=<o> rc=<n> wall_s=<n> reason=<...>` with outcome one of
 # evaluated | no_candidates | refused | failed | skipped. prepare.py may state its own outcome with a line
-# `sport-outcome: <sport> <combined> v3=.. [v2=..]` (its real format; field 3 is used); otherwise rc 0 is `evaluated`.
+# `sport-outcome: <sport> <combined> v3=.. [v2=..]`; without that line nothing counts as evaluated (rc 0 alone is `failed`).
 # last_success is set ONLY by `evaluated`; `no_candidates` is kept as last_outcome and is not counted as scored.
 # State (read by the status page, columns 1-5 by position): $AUTORESEARCH_HOME/daily-state.tsv, one row per sport:
 #   sport <TAB> last_attempt_utc <TAB> last_outcome <TAB> last_success_utc <TAB> last_reason <TAB> attempts_today (<local date>:<n>)
@@ -32,15 +32,20 @@ if [ ! -f "$SWITCH" ]; then
 fi
 PREPARE="${AUTORESEARCH_PREPARE:-$HOME_AR/workspace/prepare.py}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-# The study runs through the pinned runner (code, interpreter, packages and snapshot of PIN.json, whatever this checkout is).
-# AUTORESEARCH_PYTHON (tests only) replaces it and is refused for the real research home.
+# The study runs through the pinned runner (code, interpreter, packages and snapshot of PIN.json, whatever this checkout is), always for
+# ~/autoresearch-sports. Another home or python is for tests only: neither may reach the real home or its prepare.py.
+REAL="$HOME/autoresearch-sports"
 RUN=("${LEARNING_PYTHON:-python3}" -I "$HERE/research_runner.py")
-if [ -n "${AUTORESEARCH_PYTHON:-}" ]; then
-  if [ "$HOME_AR" = "$HOME/autoresearch-sports" ]; then
-    echo "refused: AUTORESEARCH_PYTHON would bypass the pinned runner"
+if [ "$HOME_AR" -ef "$REAL" ] || [ "$PREPARE" -ef "$REAL/workspace/prepare.py" ]; then
+  if [ -n "${AUTORESEARCH_PYTHON:-}" ] || ! [ "$HOME_AR" -ef "$REAL" ] || ! [ "$PREPARE" -ef "$REAL/workspace/prepare.py" ]; then
+    echo "refused: AUTORESEARCH_PYTHON, AUTORESEARCH_HOME or AUTORESEARCH_PREPARE would bypass the pinned runner"
     exit 78
   fi
+elif [ -n "${AUTORESEARCH_PYTHON:-}" ]; then
   RUN=("$AUTORESEARCH_PYTHON")
+else
+  echo "refused: $HOME_AR is not the research home the pinned runner serves"
+  exit 78
 fi
 BACKEND="${LEARNING_BACKEND:-$(cd "$(dirname "$0")/.." && pwd)/backend}"
 cd "$BACKEND" || exit 78
@@ -112,7 +117,7 @@ for s in $ORDER; do
     case "$outcome" in evaluated|no_candidates|refused|failed|skipped) ;; *) outcome="" ;; esac
     if [ -z "$outcome" ]; then
       case "$rc" in
-        0) if grep -q '"trials": 0' "$tmp"; then outcome=no_candidates; else outcome=evaluated; fi ;;
+        0) outcome=failed; reason="no sport-outcome line (rc 0 alone is not a result)" ;;
         75) outcome=refused ;;
         78) outcome=skipped; reason="prepare.py refused to run this sport" ;;
         121|122|123) outcome=failed; reason="guard killed the run (rc $rc: wall-clock or memory limit)" ;;

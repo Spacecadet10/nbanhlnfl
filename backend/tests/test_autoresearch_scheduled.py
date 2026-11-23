@@ -27,7 +27,8 @@ def home(tmp_path):
     (h / "experiments" / "agent").mkdir(parents=True)
     (h / "workspace").mkdir()
     fake = h / "workspace" / "prepare.py"
-    fake.write_text("import json, sys, os\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n")
+    fake.write_text("import json, sys, os\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                    "if 'daily' in sys.argv: print('sport-outcome: ' + sys.argv[sys.argv.index('--sport') + 1] + ' evaluated v3=evaluated')\n")
     return h
 
 
@@ -80,7 +81,7 @@ def test_a_failed_refused_or_skipped_sport_does_not_stop_the_others_and_is_repor
         "s = sys.argv[sys.argv.index('--sport') + 1]\n"
         "if s == 'nhl': sys.exit(3)\n"
         "if s == 'nfl': print('sport-outcome: nfl no_candidates v3=no_candidates (nothing kept)')\n"
-        "if s == 'ncaab': print('sport-outcome: ncaab evaluated v3=evaluated')\n")
+        "if s in ('nba', 'ncaab'): print('sport-outcome: ' + s + ' evaluated v3=evaluated')\n")
     data = tmp_path / "data"
     data.mkdir()
     import sqlite3
@@ -122,7 +123,8 @@ def test_the_sport_that_has_gone_longest_without_a_success_runs_first_and_other_
 def test_the_total_wall_cap_skips_the_sports_that_no_longer_fit(tmp_path, home):
     on(home)
     (home / "workspace" / "prepare.py").write_text(
-        "import json, sys, os, time\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\ntime.sleep(2)\n")
+        "import json, sys, os, time\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\ntime.sleep(2)\n"
+        "print('sport-outcome: ' + sys.argv[sys.argv.index('--sport') + 1] + ' evaluated v3=evaluated')\n")
     os.environ.update(AUTORESEARCH_TOTAL_SECONDS="8", AUTORESEARCH_MIN_START_SECONDS="5")
     try:
         r, calls = run(DAILY, home, tmp_path)
@@ -209,6 +211,31 @@ def test_the_wrapper_uses_the_pinned_runner_and_refuses_a_python_override_for_th
                                                                              "LEARNING_PYTHON": sys.executable}
     r = subprocess.run(["/bin/bash", str(DAILY)], env=env, capture_output=True, text=True, timeout=60)
     assert r.returncode == 78 and "AUTORESEARCH_PYTHON" in r.stdout
+
+
+@pytest.mark.parametrize("how", ["trailing slash", "symlink", "other home, real prepare"])
+def test_no_spelling_of_the_real_home_lets_another_python_in(tmp_path, how):
+    real = tmp_path / "autoresearch-sports"
+    (real / "workspace").mkdir(parents=True)
+    (real / "workspace" / "prepare.py").write_text("print('RAN')\n")
+    other = tmp_path / "other"
+    (other / "workspace").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(real)
+    for h in (real, other):
+        (h / "SCHEDULE_DAILY_ENABLED").write_text("")
+    env = dict(os.environ, HOME=str(tmp_path), AUTORESEARCH_PYTHON=sys.executable, LEARNING_PYTHON=sys.executable,
+               AUTORESEARCH_HOME={"trailing slash": f"{real}/", "symlink": str(tmp_path / "link")}.get(how, str(other)))
+    if how == "other home, real prepare":
+        env["AUTORESEARCH_PREPARE"] = str(real / "workspace" / "prepare.py")
+    r = subprocess.run(["/bin/bash", str(DAILY)], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 78 and "RAN" not in r.stdout, r.stdout
+
+
+def test_rc_0_without_a_sport_outcome_line_is_not_a_result(home, tmp_path, monkeypatch):
+    (home / "workspace" / "prepare.py").write_text("print('nothing said')\n")
+    daily(home, tmp_path, monkeypatch, "nba")
+    row = state(home)["nba"]
+    assert row[2] == "failed" and row[3] == "" and "no sport-outcome line" in row[4]
 
 
 def test_the_agent_template_goes_through_the_pinned_runner():

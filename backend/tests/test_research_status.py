@@ -728,21 +728,36 @@ def test_cli_daily_prints_one_sport_outcome_line_per_sport_and_nba_nhl_also_run_
         assert {ar.combine_outcomes(v3, v2) for v2 in (None, "evaluated", "no_candidates", "failed", "refused")} == {v3}
 
 
-def test_the_evaluator_refuses_to_run_from_another_checkout_than_the_pinned_one(tmp_path):
+@pytest.mark.parametrize("argv", [["status"], ["daily"], ["trial"], ["prepare"], ["holdout"], ["agent"], ["v3", "daily"], ["v3", "holdout"],
+                                  ["v3", "prepare-cache"]])
+def test_a_study_command_refuses_to_run_from_another_checkout_than_the_pinned_one(tmp_path, argv, capsys, monkeypatch):
     """Nov 23 06:00: `python -m` puts the current directory before PYTHONPATH, so the wrapper's directory (delivery) was run
-    instead of the pinned checkout. The pin is now checked by the process itself."""
-    import subprocess
-    import sys
-    backend = Path(ar.__file__).resolve().parents[1]
-    other = tmp_path / "pinned" / "backend"
-    other.mkdir(parents=True)
-    env = dict(os.environ, NBA_DATA_DIR=str(tmp_path), PYTHONPATH=str(other), PYTHONDONTWRITEBYTECODE="1")
-    argv = [sys.executable, "-m", "app.autoresearch", "status", "--exp-root", str(tmp_path / "exp"), "--workspace", str(tmp_path),
-            "--sport", "nba"]
-    r = subprocess.run(argv, cwd=backend, env=env | {"AUTORESEARCH_APP": str(other)}, capture_output=True, text=True)
-    assert r.returncode == 2 and "REFUSED" in r.stderr and "pinned" in r.stderr and str(backend) in r.stderr, r.stderr[-400:]
-    r = subprocess.run(argv, cwd=backend, env=env | {"AUTORESEARCH_APP": str(backend)}, capture_output=True, text=True)
-    assert "pinned" not in r.stderr, r.stderr[-400:]
+    instead of the pinned checkout. Every study command checks the pin beside its experiment root, however it was started."""
+    for name in ("status", "run_trial", "prepare", "holdout", "_daily_cli", "daily_v3", "holdout_v3", "prepare_cache"):
+        monkeypatch.setattr(ar, name, lambda *a, **k: pytest.fail("ran"))
+    exp = tmp_path / "experiments"
+    exp.mkdir()
+    full = [*argv, "--exp-root", str(exp), "--sport", "nba"] + ([] if argv[0] == "v3" else ["--workspace", str(tmp_path)])
+    for pin in ({"app": {"backend": str(tmp_path / "pinned" / "backend")}}, {"app": {}}, "{broken"):
+        (tmp_path / "PIN.json").write_text(pin if isinstance(pin, str) else json.dumps(pin))
+        assert ar.main(full) == 2
+        assert "pinned checkout" in (err := capsys.readouterr().err) or "unreadable" in err
+
+
+def test_the_pinned_checkout_itself_the_kill_switch_and_the_forward_commands_are_not_refused(tmp_path, monkeypatch):
+    exp = tmp_path / "experiments"
+    exp.mkdir()
+    pin = tmp_path / "PIN.json"
+    pin.write_text(json.dumps({"app": {"backend": str(Path(ar.__file__).resolve().parents[1])}}))
+    ar.refuse_unpinned(exp)                                              # the pinned code
+    pin.write_text(json.dumps({"app": {"backend": str(tmp_path)}}))
+    from app import research_agent
+    monkeypatch.setattr(research_agent, "stop", lambda *a: {"stopped": True})
+    assert ar.main(["stop", "--exp-root", str(exp), "--workspace", str(tmp_path)]) == 0
+    monkeypatch.setattr(ar, "get_adapter", lambda s: None)
+    assert ar.main(["v3", "forward-eval", "--exp-root", str(exp), "--sport", "nba"]) == 2      # reached its own check (no adapter)
+    ar.refuse_unpinned(None)
+    ar.refuse_unpinned(tmp_path / "elsewhere" / "experiments")           # a root without a pin
 
 
 

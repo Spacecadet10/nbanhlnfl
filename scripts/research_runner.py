@@ -5,15 +5,18 @@ Why (Nov 23 2026, 06:00): prepare.py sets PYTHONPATH to the pinned checkout, but
 PYTHONPATH, and the scheduled job starts in the live checkout. A history/UI release therefore changed the code, and the study
 identity, under a running study. prepare.py is itself a registered, hash-protected file of the existing protocols, so it stays as it
 is; this runner, outside the fingerprinted app, makes its environment right from any directory and refuses otherwise:
-- working directory = the pinned checkout's backend; every PYTHON*, VIRTUAL_ENV, DYLD_*/LD_*, NBA_* and AUTORESEARCH_* variable of
-  the caller is dropped (AUTORESEARCH_BROKER is kept: the agent's evaluator socket); no user site-packages;
+- working directory = the pinned checkout's backend; only the variables in ALLOW are passed on; no user site-packages; a set
+  AUTORESEARCH_BROKER refuses (it would send the request to another process);
 - before anything runs, PIN.json is verified: checkout commit and clean tree, app file hash, interpreter, installed packages,
   snapshot identity and store hash, prepare.py/program.md hashes, and that a fresh process really loads the pinned code;
 - records blocked in the audit file (app/research_audit.py) refuse the sport: a blocked protocol, an unverified run, or a single
-  invalid trial of the active protocol when the pinned evaluator cannot leave it out itself (`enforces_audit` in PIN.json).
+  invalid trial of the active protocol when the pinned evaluator cannot leave it out itself (`enforces_audit` in PIN.json);
+- after the run everything is verified again: a change during the run makes the outcome `refused`.
+The research home is always ~/autoresearch-sports (prepare.py writes there whatever a caller's AUTORESEARCH_HOME says).
 
 Use:  research_runner.py <workspace>/prepare.py <prepare.py arguments>      (a drop-in for `python prepare.py ...`)
       research_runner.py verify [--sport S]                                 prints what would run, runs nothing
+      research_runner.py prepare-cache --sport S                            builds the pinned study tables once (nba, nhl)
       research_runner.py write-pin --reason R                               records PIN.json from prepare.py's constants; never overwrites
 Label: AUTORESEARCH_RUN_LABEL=<text> is stored with the run in runner-runs.jsonl (e.g. a recovery attempt).
 Exit 2 = refused; `daily` then also prints `sport-outcome: <sport> refused v3=refused (<why>)`.
@@ -23,16 +26,20 @@ import importlib.util
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-HOME_AR = Path(os.environ.get("AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports")
+HOME_AR = Path.home() / "autoresearch-sports"
 PIN = HOME_AR / "PIN.json"
-DROP = ("PYTHON", "VIRTUAL_ENV", "DYLD_", "LD_", "NBA_", "AUTORESEARCH_", "CONDA", "__PYVENV")
-KEEP = ("AUTORESEARCH_BROKER",)
+EXP = HOME_AR / "experiments"
+ALLOW = ("HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "OMP_NUM_THREADS",
+         "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "__CF_USER_TEXT_ENCODING")   # = research_agent.AGENT_ENV + 2
+FIVE = ("nba", "nhl", "ncaab", "nfl", "soccer")
+COMMANDS = ("daily", "trial", "status", "prepare", "holdout", "agent", "stop")
 V2_SPORTS = ("nba", "nhl")
 
 PROBE = r"""
@@ -101,7 +108,7 @@ def constants(prepare):
 
 
 def clean_env(pin):
-    env = {k: v for k, v in os.environ.items() if k in KEEP or not k.startswith(DROP)}
+    env = {k: os.environ[k] for k in ALLOW if k in os.environ}
     env.update(PYTHONNOUSERSITE="1", PYTHONDONTWRITEBYTECODE="1")
     return env
 
@@ -148,6 +155,10 @@ def verify(pin, sports, prepare):
         raise Refuse("the pinned checkout is not at %s" % a["commit"][:12])
     if git(top, "status", "--porcelain").strip():
         raise Refuse("the pinned checkout has uncommitted changes")
+    ignored = [x[3:] for x in git(top, "status", "--porcelain", "--ignored").splitlines() if x.startswith("!! ")]
+    ignored = [x for x in ignored if "__pycache__" not in x and not x.split("/")[0].startswith(".omc") and "/.omc" not in x]
+    if ignored:
+        raise Refuse("the pinned checkout holds ignored files: %s" % ", ".join(ignored[:3]))
     if app_files(a["backend"]) != a["files"]:
         raise Refuse("the pinned app's files differ from the recorded identity %s" % a["files"])
     snap = Path(pin["snapshot"]["path"])
@@ -155,7 +166,9 @@ def verify(pin, sports, prepare):
         raise Refuse("the snapshot's IDENTITY.json differs from the pin")
     for s in sports:
         want, store = pin["snapshot"].get("stores", {}).get(s), snap / ("%s.sqlite" % s)
-        if want and (not store.is_file() or sha(store) != want):
+        if not want:
+            raise Refuse("the pin holds no %s store" % s)
+        if not store.is_file() or sha(store) != want:
             raise Refuse("the %s snapshot store differs from the pin" % s)
     p = probe(pin, sports)
     if Path(p["app"]).resolve() != Path(a["backend"]).resolve():
@@ -166,6 +179,8 @@ def verify(pin, sports, prepare):
         raise Refuse("the interpreter's packages differ from the pin")
     for s in sports:
         want = pin.get("protocols", {}).get(s, {})
+        if "v3" not in want or (s in V2_SPORTS and "v2" not in want):
+            raise Refuse("the pin holds no %s study identity" % s)
         for k, v in want.items():
             if p["protocols"][s].get(k) != v:
                 raise Refuse("the %s %s study identity is %s, the pin says %s" % (
@@ -184,11 +199,13 @@ def audit_module():
 def check_audit(pin, sports, p):
     ra = audit_module()
     try:
-        entries = ra.load(HOME_AR / "experiments")
+        entries = ra.load(EXP)
     except ra.AuditError as exc:
         raise Refuse("the audit file is unusable: %s" % exc)
     head = pin.get("audit_head")
-    if head and head not in [e["sha"] for e in entries]:
+    if not head:
+        raise Refuse("the pin names no audit entry")
+    if head not in [e["sha"] for e in entries]:
         raise Refuse("the audit file no longer holds the entry the pin was written with")
     for s in sports:
         ids = p["protocols"][s]
@@ -218,8 +235,14 @@ def log(rec):
 
 
 def sports_of(argv):
+    """The sports of `--sport S` arguments; any other spelling argparse would accept is refused, so nothing unverified can run."""
+    for x in argv:
+        if x.startswith("--s") and x != "--sport":
+            raise Refuse("write --sport <sport> in full, got %s" % x)
     out = [argv[i + 1] for i, x in enumerate(argv[:-1]) if x == "--sport"]
-    return out or ["nba", "nhl", "ncaab", "nfl", "soccer"]
+    if any(x not in FIVE for x in out) or argv[-1:] == ["--sport"]:
+        raise Refuse("unknown sport in %s" % argv)
+    return out or list(FIVE)
 
 
 def write_pin(argv):
@@ -240,12 +263,47 @@ def write_pin(argv):
     p = probe(pin, list(stores))
     if p["files"] != pin["app"]["files"]:
         raise Refuse("the probe loaded %s" % p["app"])
-    entries = audit_module().load(HOME_AR / "experiments")
-    pin.update(libraries=p["libraries"], packages=p["packages"], audit_head=entries[-1]["sha"] if entries else None,
+    bad = {s: x for s, x in p["protocols"].items() if "v3" not in x or (s in V2_SPORTS and "v2" not in x)}
+    if bad:
+        raise Refuse("study identities could not be read: %s" % bad)
+    entries = audit_module().load(EXP)
+    if not entries:
+        raise Refuse("write the audit first: the pin names its newest entry, so that deleting the audit is noticed")
+    pin.update(libraries=p["libraries"], packages=p["packages"], audit_head=entries[-1]["sha"],
                protocols={s: {k: v for k, v in x.items() if k in ("v2", "v3")} for s, x in p["protocols"].items()})
     PIN.write_text(json.dumps(pin, indent=1, sort_keys=True) + "\n")
     PIN.chmod(0o444)
     print(json.dumps(pin, indent=1, sort_keys=True))
+
+
+def run_child(cmd, pin, capture):
+    """Runs the study in this process group with the inherited lock descriptors (app.learning_run supervises both); never leaves it
+    running when this process ends early. Returns (rc, its sport-outcome lines)."""
+    proc = subprocess.Popen(cmd, cwd=pin["app"]["backend"], env=clean_env(pin), close_fds=False,
+                            stdout=subprocess.PIPE if capture else None)
+
+    def end(signum, frame):
+        raise SystemExit(128 + signum)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, end)
+    outcomes = []
+    try:
+        if capture:
+            for raw in proc.stdout:
+                line = raw.decode("utf-8", "replace")
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                if line.startswith("sport-outcome: "):
+                    outcomes.append(line.strip())
+        return proc.wait(), outcomes
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
 
 
 def main(argv):
@@ -253,45 +311,54 @@ def main(argv):
         write_pin(argv[1:])
         return 0
     if not argv:
-        raise Refuse("usage: research_runner.py <prepare.py> <arguments> | verify [--sport S] | write-pin --reason R")
-    only_verify = argv[0] == "verify"
-    prepare = str(HOME_AR / "workspace" / "prepare.py") if only_verify else argv[0]
-    args = argv[1:]
-    sports = sports_of(args)
-    label = os.environ.get("AUTORESEARCH_RUN_LABEL") or ("scheduled" if args[:1] == ["daily"] else "manual")
-    pin = load_pin()
+        raise Refuse("usage: research_runner.py <prepare.py> <arguments> | verify | prepare-cache --sport S | write-pin --reason R")
+    own = argv[0] in ("verify", "prepare-cache")
+    ws = HOME_AR / "workspace" / "prepare.py"
+    prepare, args = (str(ws), argv[1:]) if own else (argv[0], argv[1:])
+    if Path(prepare).resolve() != ws.resolve():
+        raise Refuse("%s is not the workspace's prepare.py" % prepare)
     if args[:1] == ["stop"]:                # the kill switch works whatever else is wrong
-        return subprocess.run([pin["python"], "-I", prepare, *args], cwd=pin["app"]["backend"], env=clean_env(pin)).returncode
-    base = {"label": label, "args": args, "sports": sports, "cwd": os.getcwd(), "pid": os.getpid()}
+        return subprocess.run([sys.executable, "-I", prepare, *args], cwd=constants(prepare)["BACKEND"], env=clean_env(None)).returncode
+    if not own and args[:1] and args[0] not in COMMANDS or not own and not args:
+        raise Refuse("unknown command %s" % args[:1])
+    if os.environ.get("AUTORESEARCH_BROKER"):
+        raise Refuse("AUTORESEARCH_BROKER is set: the request would go to another process")
+    label = os.environ.get("AUTORESEARCH_RUN_LABEL") or ("scheduled" if args[:1] == ["daily"] else "manual")
+    base = {"label": label, "args": argv if own else args, "cwd": os.getcwd(), "pid": os.getpid()}
     try:
+        sports = base["sports"] = sports_of(args)
+        if args[:1] == ["agent"] and "--sport" not in args:
+            sports = base["sports"] = list(V2_SPORTS)
+        pin = load_pin()
         p = verify(pin, sports, prepare)
         check_audit(pin, sports, p)
     except Refuse as exc:
         log({**base, "event": "refused", "at": now(), "reason": str(exc)})
         raise
+    except Exception as exc:                # nothing ran: a check that cannot be made is a refusal
+        log({**base, "event": "refused", "at": now(), "reason": "%s: %s" % (type(exc).__name__, exc)})
+        raise Refuse("%s: %s" % (type(exc).__name__, exc))
     ident = {"app": p["app"], "files": p["files"], "commit": pin["app"]["commit"], "packages": p["packages"][:16],
              "snapshot": pin["snapshot"]["path"], "protocols": p["protocols"], "label": label}
-    if only_verify:
+    if argv[0] == "verify":
         print(json.dumps(ident, indent=1, sort_keys=True))
         return 0
     print("research-runner: label=%s app=%s commit=%s files=%s" % (label, p["app"], pin["app"]["commit"][:12], p["files"]), flush=True)
     log({**base, "event": "start", "at": now(), **ident})
-    proc = subprocess.Popen([pin["python"], "-I", prepare, *args], cwd=pin["app"]["backend"], env=clean_env(pin),
-                            stdout=subprocess.PIPE if args[:1] == ["daily"] else None, text=True)
-    outcomes = []
-    if proc.stdout is not None:
-        for line in proc.stdout:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-            if line.startswith("sport-outcome: "):
-                outcomes.append(line.strip())
-    rc = proc.wait()
-    changed = None
-    if app_files(pin["app"]["backend"]) != pin["app"]["files"]:
-        changed = "the pinned app's files changed while it ran"
-    log({**base, "event": "end", "at": now(), "rc": rc, "outcomes": outcomes, **({"problem": changed} if changed else {}), **ident})
-    if changed:
-        raise Refuse(changed)
+    if own:
+        env = child_env(pin)
+        rc, outcomes = subprocess.run([pin["python"], "-m", "app.autoresearch", "v3", "prepare-cache", "--exp-root", str(EXP), *args],
+                                      cwd=pin["app"]["backend"], env=env, close_fds=False).returncode, []
+    else:
+        rc, outcomes = run_child([pin["python"], "-I", prepare, *args], pin, args[0] == "daily")
+    problem = None
+    try:
+        check_audit(pin, sports, verify(pin, sports, prepare))
+    except Exception as exc:
+        problem = "changed while it ran: %s" % exc
+    log({**base, "event": "end", "at": now(), "rc": rc, "outcomes": outcomes, **({"problem": problem} if problem else {}), **ident})
+    if problem:
+        raise Refuse(problem)
     return rc
 
 
@@ -302,6 +369,7 @@ if __name__ == "__main__":
         print("research-runner: REFUSED: %s" % exc, file=sys.stderr)
         if sys.argv[2:3] == ["daily"]:
             why = str(exc).replace("(", "[").replace(")", "]").replace("\n", " ")
-            for s in sports_of(sys.argv[2:]):
+            named = [sys.argv[i + 1] for i, x in enumerate(sys.argv[:-1]) if x == "--sport" and sys.argv[i + 1] in FIVE]
+            for s in named or FIVE:
                 print("sport-outcome: %s refused v3=refused (runner: %s)" % (s, why))
         sys.exit(2)

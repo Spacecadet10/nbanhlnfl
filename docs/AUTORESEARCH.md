@@ -178,14 +178,16 @@ refused too (the research workspace has neither). Paths quoted into the agent's 
 
 ## Commands
 ```
-cd ~/autoresearch-sports/workspace
-python3 prepare.py prepare --sport nba --sport nhl      # once per protocol (NBA ~2.8 min, NHL ~1.5 min)
-python3 prepare.py trial --sport nba > run.log 2>&1      # one trial on the committed train.py
-python3 prepare.py status
-python3 prepare.py daily --sport nba --sport nhl --max-trials 4 --max-minutes 120 --timeout 1800
-python3 prepare.py holdout --sport nhl                   # human only, at a terminal; one-shot
-python3 prepare.py agent --sport nba --sport nhl --max-trials 3 --max-minutes 30 --max-usd 3   # one bounded agent run
-python3 prepare.py stop --reason "..."                   # kill switch; `stop --clear` to allow runs again
+R="python3 -I ~/nba-predictor-delivery/scripts/research_runner.py"      # never start prepare.py directly (see "Pinned runner and audit")
+P=~/autoresearch-sports/workspace/prepare.py
+$R verify                                                # what would run; runs nothing
+$R $P prepare --sport nba --sport nhl      # once per protocol (NBA ~2.8 min, NHL ~1.5 min)
+$R $P trial --sport nba > run.log 2>&1      # one trial on the committed train.py
+$R $P status
+$R $P daily --sport nba --sport nhl --max-trials 4 --max-minutes 120 --timeout 1800
+$R $P holdout --sport nhl                   # human only, at a terminal; one-shot
+$R $P agent --sport nba --sport nhl --max-trials 3 --max-minutes 30 --max-usd 3   # one bounded agent run
+$R $P stop --reason "..."                   # kill switch; `stop --clear` to allow runs again
 ```
 - `daily` evaluates, oldest first and within the budget, the commits between the protocol base and the workspace HEAD that have no record yet.
 - It reads git objects only and never checks anything out.
@@ -202,8 +204,8 @@ cache or holdout use is carried over. It is the consumer of one **adapter** per 
 
 Hard limits: research only. Nothing writes an official store, forecast table, record or card; nothing promotes or changes a
 live model; no paid AI path is used (the v3 runner never starts an agent); no Telegram. Run:
-`python -m app.autoresearch v3 daily --exp-root <dir outside repo and live data> [--sport nba ...]` (NBA_DATA_DIR = a snapshot
-copy). Other subcommands: `holdout`, `forward-record`, `forward-grade`, `forward-eval`.
+`scripts/research_runner.py <workspace>/prepare.py daily [--sport nba ...]` on the pinned study; on a scratch root without a pin,
+`python -m app.autoresearch v3 daily --exp-root <dir outside repo and live data> [--sport nba ...]` (NBA_DATA_DIR = a snapshot copy). Other subcommands: `holdout`, `forward-record`, `forward-grade`, `forward-eval`.
 
 ### Adapter contract (producers: NBA/NHL `autoresearch.nba_nhl_adapter`; NCAAB `ncaab_cards`; NFL `nfl_challengers`; Soccer `soccer_challengers` (nfl_eval, ncaab_eval and soccer_markets_eval
 are byte-pinned/sealed and carry no research code; research imports in `ncaab_cards` are lazy so importing it for the cards stays cheap); the single location mapping is `autoresearch.ADAPTER_FUNCTIONS`; each exposes `research_adapter()`)
@@ -264,8 +266,8 @@ evaluated markets, blockers (including every `unsupported` market and its reason
 - `daily --sport <s>` (the CLI the wrapper calls) always runs v3; for nba/nhl it then runs the v2 workspace queue. The line is
   `sport-outcome: <sport> <combined> v3=<o> [v2=<o>]`; combined = v3's own outcome; v2 only speaks when v3 had nothing to
   search, so it never hides a v3 refusal, failure or unfinished queue (2026-11-23; before, "evaluated if either evaluated" hid the
-  NBA/NHL v3 refusals of Nov 23 06:00). The daily5 report carries `combined` and `v2`. With `AUTORESEARCH_APP` set to the pinned
-  backend, the evaluator refuses (exit 2) when it was loaded from any other checkout.
+  NBA/NHL v3 refusals of Nov 23 06:00). The daily5 report carries `combined` and `v2`. Study commands refuse (exit 2) when a
+  PIN.json beside the experiment root names another checkout than the loaded one.
 - Forward API for the scheduled driver (the driver imports this module, never the reverse): `autoresearch.record(data_dir, now, sport,
   candidates=None)` and `autoresearch.grade(data_dir, now, sport)`; both return `{"outcome": evaluated|no_candidates|skipped|failed, ...}`.
   `record` stores incumbents and baselines too (the pairing reference) and only the named candidates.
@@ -282,8 +284,8 @@ evaluated markets, blockers (including every `unsupported` market and its reason
   listed in `needs_human_review`, shown with its `reference_line_note` / `by_line_source` / caveats, and is never added to
   `forward_candidates`. A line no compared model owns (Soccer's standard lines, a bookmaker line) keeps the normal rule.
 - **NBA/NHL study tables** are cached on disk per snapshot and app hash (`<exp root>/v3/study-cache`). The scheduled step never builds
-  them: with the cache missing the sport is `refused` ("run `v3 prepare-cache`"); `python -m app.autoresearch v3 prepare-cache
-  --exp-root <dir> --sport nba --sport nhl` builds them once (5 to 25 minutes), after which each item scores in seconds.
+  them: with the cache missing the sport is `refused`; `scripts/research_runner.py prepare-cache --sport nba --sport nhl` (pinned code only)
+  builds them once (5 to 25 minutes), after which each item scores in seconds.
 - Smaller: a writable snapshot is refused; `valid_quote` needs the draw price for a three-way market; the uniform baseline's push
   mass uses only earlier forecasts; `forward_record` rejects a game that started before the recording time and a forecast later than
   it; `no_candidates` is not a success (`last_success_at` counts `evaluated` only); NFL and NCAAB holdouts report
@@ -426,7 +428,8 @@ PIN.json aside with a recorded reason, then `write-pin --reason`; old studies an
 
 **Audit.** `<experiments>/audit.jsonl` (append-only, chained; `audit.head` holds its length and last sha) says which protocols or trials are
 `invalid` (never usable again), `unverified` (not usable until a later `verified` of the same scope). Enforced by code: model to beat,
-returned or copied results, the daily queue, holdouts (v2 and v3), v3 runs, forward tracking, the status page; the runner enforces it for
+returned or copied results, the daily queue, holdouts (v2 and v3), v3 runs, forward tracking, promotion recommendations, the status page
+(forward recording of the current models goes on when the audit is unusable; no research candidate is tracked then); the runner enforces it for
 the pinned evaluator, which predates it (a blocked protocol, or any blocked trial of the active protocol, refuses the sport). A missing,
 edited, shortened or unreadable audit refuses. `VOID.txt` files are notes only. Originals are never edited.
 
