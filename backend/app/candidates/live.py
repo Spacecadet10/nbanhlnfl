@@ -316,6 +316,7 @@ def core_lines(conn, game_ids, now: str, quotes_until: Optional[str] = None, rej
     the cohort it was made against (a new cohort gives a new candidate row). Used when the caller passes no lines."""
     out = {}
     for gid in game_ids:
+        newest_rejected: dict = {}         # market -> reason when the game's newest cohort of that market was not usable
         for r in conn.execute("SELECT cohort_id, market, line, line_source, bookmaker, information_at FROM research_cohorts WHERE game_id=? "
                               "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' "
                               "AND tipoff_at = (SELECT tipoff_at FROM games WHERE game_id=?) ORDER BY generated_at, cohort_id",
@@ -335,12 +336,15 @@ def core_lines(conn, game_ids, now: str, quotes_until: Optional[str] = None, rej
                     ok = bool(r["information_at"]) and _parse(r["information_at"]) <= _parse(quotes_until) + SAME_CYCLE
                     why = "no-quote cohort not of the information time's cycle"
                 if not ok:
-                    if rejected is not None:
-                        rejected[r["market"]] = rejected.get(r["market"], 0) + 1
-                        rejected.setdefault("reasons", {})[r["market"]] = why
+                    newest_rejected[r["market"]] = why
                     continue                   # (an earlier cohort of this game may still qualify: latest qualifying wins)
+                newest_rejected.pop(r["market"], None)
             out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}" if r["line"] is not None
                                        else "none", "ref": f"research_cohorts:{r['cohort_id']}"}
+        if rejected is not None:            # counted once per game and market: its newest cohort was not usable at the cutoff
+            for m, why in newest_rejected.items():
+                rejected[m] = rejected.get(m, 0) + 1
+                rejected.setdefault("reasons", {})[m] = why
     return out
 
 

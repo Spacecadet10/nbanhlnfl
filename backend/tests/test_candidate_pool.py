@@ -459,7 +459,10 @@ def test_a_line_whose_quote_was_retrieved_after_the_information_time_is_never_us
     assert frozen[("g", "total")]["line"] == 6.5 and frozen[("g", "total")]["ref"] == "research_cohorts:1"
     rej = {}
     assert pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:30:00Z", rejected=rej) == {}
-    assert rej["total"] == 2 and "after the information time" in rej["reasons"]["total"]
+    assert rej["total"] == 1 and "after the information time" in rej["reasons"]["total"]       # once per game and market
+    rej = {}
+    pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:50:00Z", rejected=rej)
+    assert rej == {"total": 1, "reasons": {"total": "cohort quote retrieved after the information time"}}   # newest rejected
     # the live shape of a cohort without a quote: bookmaker is the TEXT 'null' (model-line team totals, NHL 3-way)
     c.executemany("INSERT INTO research_cohorts VALUES (?,?,?,?,?,?,?,?,?,?)", [
         (3, "g", "team_total_home", 3.5, "model", "null", "d", "2026-10-12T21:53:00Z", "2026-10-12T23:00:00Z", "2026-10-12T21:53:00Z"),
