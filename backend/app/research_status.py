@@ -159,6 +159,64 @@ def daily_state(path: Optional[Path] = None) -> Optional[list]:
     return [dict(zip(keys, ln.split("\t"))) for ln in lines if ln.strip() and not ln.startswith(("sport\t", "#"))]
 
 
+FORWARD_LABELS = {
+    "candidates_recording": "candidates recording (forecasts made before the start, paired with the current model)",
+    "candidates_waiting": "candidates tracked; no forecast yet for a game still ahead",
+    "no_candidate_passed": "no candidate passed research: only the current model is recorded, as the comparison baseline",
+    "candidate_recording_unsupported": "candidate recording is not supported for this sport (no forward adapter)",
+    "failed": "the last recording run failed",
+    "not_run": "the forward recorder has not run for this sport"}
+
+
+def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
+    """Per sport, from the research forward store (read-only, never created here): the last recorder/grader runs and their
+    stated forward_status, candidate vs current-model forecast counts, graded games, and paired graded items (a candidate and
+    the current model forecast the same game, market and line before the start). None when the store does not exist."""
+    import sqlite3
+    if path is None:
+        from . import config
+        path = config.data_dir() / "research" / "forward-candidates.sqlite"
+    if not Path(path).is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error:
+        return None
+    conn.row_factory = sqlite3.Row
+    out: dict = {}
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "rf_runs" in tables:
+            for r in conn.execute("SELECT kind, sport, at, outcome, detail FROM rf_runs ORDER BY id"):
+                out.setdefault(r["sport"], {})[f"last_{r['kind']}"] = {"at": r["at"], "outcome": r["outcome"], "detail": r["detail"]}
+        if "rf_forecasts" in tables:
+            for r in conn.execute("SELECT sport, role, COUNT(*) n, COUNT(DISTINCT model) models, COUNT(DISTINCT game_id) games "
+                                  "FROM rf_forecasts GROUP BY sport, role"):
+                out.setdefault(r["sport"], {})[f"{r['role']}_forecasts"] = {"rows": r["n"], "models": r["models"], "games": r["games"]}
+            if "rf_grades" in tables:
+                for r in conn.execute("SELECT sport, COUNT(DISTINCT game_id) g FROM rf_grades GROUP BY sport"):
+                    out.setdefault(r["sport"], {})["graded_games"] = r["g"]
+                for r in conn.execute(
+                        "SELECT c.sport, COUNT(DISTINCT c.game_id || '|' || c.market || '|' || c.line_key) n FROM rf_forecasts c "
+                        "JOIN rf_forecasts i ON i.sport = c.sport AND i.game_id = c.game_id AND i.market = c.market "
+                        "AND i.line_key = c.line_key AND i.role = 'incumbent' JOIN rf_grades g ON g.sport = c.sport "
+                        "AND g.game_id = c.game_id AND g.market = c.market AND g.line_key = c.line_key "
+                        "WHERE c.role = 'candidate' GROUP BY c.sport"):
+                    out.setdefault(r["sport"], {})["paired_graded_items"] = r["n"]
+    except sqlite3.Error as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    finally:
+        conn.close()
+    for s, v in out.items():
+        detail = (v.get("last_record") or {}).get("detail") or ""
+        stated = next((w.split("=", 1)[1] for w in detail.split() if w.startswith("forward_status=")), None)
+        if stated is None:          # a run before 2026-11-23 did not state it: derived from what is stored
+            stated = ("not_run" if "last_record" not in v else
+                      "candidates_recording" if v.get("candidate_forecasts") else "no_candidate_passed")
+        v["status"], v["label"] = stated, FORWARD_LABELS.get(stated, stated)
+    return out
+
+
 def v3_status(root: Path) -> Optional[dict]:
     """Latest state per sport (state.json of the newest protocol directory) and the latest daily5 report. Reads files only."""
     latest = {}
@@ -179,4 +237,5 @@ def v3_status(root: Path) -> Optional[dict]:
         sports[s]["markets"] = {m: {"kind": v.get("kind"), "settlement": v.get("settlement"), "line_basis": v.get("line_basis")}
                                 for m, v in (st.get("markets") or {}).items()}
     return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports, "wrapper_state": daily_state(),
+            "forward": forward_summary(),
             "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport", "combined", "v2")}}

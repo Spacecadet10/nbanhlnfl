@@ -1902,23 +1902,71 @@ def _study_walk(sport: str, adapter_periods: dict):
     return walk
 
 
-def _study_upcoming(sport: str):
+def _ledger_line_source(value) -> Optional[str]:
+    """Official ledgers name a line `market` (a bookmaker quote) or `model` (the primary model's own line, also written as
+    `core_cohort:market` / `core_cohort:model` for candidates); `none`/NULL for winner and three-way markets."""
+    v = (value or "").lower()
+    if "market" in v:
+        return "bookmaker"
+    if "model" in v:
+        return "reference_model"          # graded at a model's own line: a beat there goes to human review
+    return None
+
+
+def _study_upcoming(sport: str, members: Optional[dict] = None):
+    """Forward forecasts for NBA/NHL from the official store's append-only pregame ledgers (read-only; written inside the
+    two-hour window by the existing recorders, never by research), so candidate and current-model rows come from the same runs:
+    - registry candidates: `candidate_forecasts` (the candidate pool, research-cand:<name>:<definition>);
+    - current-model winner members: `predictions` rows of the agreement cohort (research-v2:<name>:<digest>, two-hour policy);
+    - current-model line members: `market_forecasts` rows of the research cohort (research-v3:<name>:...), and the primary
+      line model's own near-tipoff rows (<name>-...-policy=near_tipoff).
+    Only games that have not started; every row was generated before its start (the ledgers' triggers and the query)."""
+    members = members or {"winner": [], "lines": []}
+    known = NBA_NHL_MARKETS[sport]
+
+    def rec(f, market, probs, line=None, line_source=None):
+        out = {"game_id": f["game_id"], "season": f["season"], "start_at": _iso(f["tipoff_at"]),
+               "forecast_cutoff": _iso(f["generated_at"]), "forecast_at": _iso(f["generated_at"]),
+               "market": market, "line": line, "probs": probs, "outcome": None}
+        if line_source:
+            out["line_source"] = line_source
+        return out
+
+    def vec(f, market):
+        kind = known[market][0]
+        return {"a": f["p_a"], "b": f["p_b"]} if kind != "three_way" else {"a": f["p_a"], "mid": f["p_mid"], "b": f["p_b"]}
+
     def forecast_upcoming(conn, now, model_name):
-        """Forward forecasts of a registry candidate: its recorded pregame rows in the official store's candidate-forecast ledger
-        (read-only here; written by the existing candidate recorder, never by research)."""
         from .candidates import registry
-        names = {s.name for s in registry.for_sport(sport)}
-        if model_name not in names:
-            return []
-        from . import candidates_view
-        rows = candidates_view.upcoming(conn, model_name, now)
         out = []
-        for f in rows:
-            kind = NBA_NHL_MARKETS[sport].get(f["market"], ("binary",))[0]
-            probs = {"a": f["p_a"], "b": f["p_b"]} if kind == "binary" else {"a": f["p_a"], "mid": f["p_mid"], "b": f["p_b"]}
-            out.append({"game_id": f["game_id"], "season": f["season"], "start_at": _iso(f["tipoff_at"]),
-                        "forecast_cutoff": _iso(f["generated_at"]), "forecast_at": _iso(f["generated_at"]),
-                        "market": f["market"], "line": f["line"], "probs": probs, "outcome": None})
+        if model_name in {s.name for s in registry.for_sport(sport)}:
+            from . import candidates_view
+            for f in candidates_view.upcoming(conn, model_name, now):
+                if f["market"] in known:
+                    out.append(rec(f, f["market"], vec(f, f["market"]), f["line"],
+                                   _ledger_line_source(f["line_source"]) if known[f["market"]][0] == "line" else None))
+            return out
+        if model_name in members["winner"]:
+            from .agreement import FEATURE_VERSION
+            prefix = f"research-v2:{model_name}:"
+            for f in conn.execute(
+                    "SELECT p.game_id, p.generated_at, p.home_win_prob, g.tipoff_at, g.season FROM predictions p "
+                    "JOIN games g USING (game_id) WHERE p.run_type = 'live' AND p.feature_version = ? "
+                    "AND substr(p.model_version, 1, ?) = ? AND g.tipoff_at > ? AND p.generated_at < g.tipoff_at "
+                    "ORDER BY p.generated_at", (FEATURE_VERSION, len(prefix), prefix, now)):
+                q = float(f["home_win_prob"])
+                out.append(rec(f, "winner", {"a": q, "b": 1.0 - q}))
+        if model_name in members["lines"]:
+            research, primary = f"research-v3:{model_name}:", f"{model_name}-"
+            for f in conn.execute(
+                    "SELECT f.game_id, f.market, f.line, f.line_source, f.generated_at, f.p_a, f.p_mid, f.p_b, g.tipoff_at, "
+                    "g.season FROM market_forecasts f JOIN games g USING (game_id) WHERE f.run_type = 'live' "
+                    "AND f.policy = 'near_tipoff' AND (substr(f.model_version, 1, ?) = ? OR substr(f.model_version, 1, ?) = ?) "
+                    "AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at ORDER BY f.generated_at",
+                    (len(research), research, len(primary), primary, now)):
+                if f["market"] in known and f["market"] != "winner":
+                    out.append(rec(f, f["market"], vec(f, f["market"]), f["line"],
+                                   _ledger_line_source(f["line_source"]) if known[f["market"]][0] == "line" else None))
         return out
     return forecast_upcoming
 
@@ -1961,14 +2009,27 @@ def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
                        "lines": ["goals_poisson", "goals_draw", "goals_glm"]}}[sport]
     models = {n: {"role": "incumbent", "description": f"existing {sport.upper()} member", "version": "app@" + app_identity()["files"]}
               for n in dict.fromkeys(members["winner"] + members["lines"])}
+    forward_models, blocked = {}, {}
     for spec in registry.for_sport(sport):
         from .candidates import deep
         from .candidates.features import FEATURE_SETS
-        if deep.is_deep(spec) or not registry.available(spec) or (candidates is not None and spec.name not in candidates) \
+        entry = {"role": "candidate", "description": f"registry candidate {spec.family}/{spec.features}",
+                 "version": registry.definition(spec)}
+        if deep.is_deep(spec) and not deep.libraries_present(spec):
+            pkg = deep.LIBRARY_PACKAGE[deep.FAMILIES[spec.family]]
+            blocked[spec.name] = (f"dependency-blocked: {pkg}=={deep.PINNED[pkg]} is not installed, so neither the research walk "
+                                  "nor the candidate pool can fit or forecast it")
+            continue
+        # Forward: every candidate the pool records (its own pregame ledger), incl. goalie-feature ones, which use the starter
+        # only as known before the start. Historical research excludes those (rows learn the starter after the start).
+        forward_models[spec.name] = entry | {"source": "candidate pool (candidate_forecasts)"}
+        if deep.is_deep(spec):
+            blocked[spec.name] = "historical research does not walk neural candidates (forward pool only)"
+            continue
+        if not registry.available(spec) or (candidates is not None and spec.name not in candidates) \
                 or set(FEATURE_SETS[spec.features]) & set(FORBIDDEN_FEATURES):      # postgame goalie inputs: excluded
             continue
-        models[spec.name] = {"role": "candidate", "description": f"registry candidate {spec.family}/{spec.features}",
-                             "version": registry.definition(spec)}
+        models[spec.name] = entry
     walk = _study_walk(sport, periods)
 
     def study_adapter_walk(conn, seasons, model_name):
@@ -1983,8 +2044,10 @@ def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
                             "goalie-dependent NHL features": "historical rows know the starter only after the start"},
             "periods": periods, "periods_note": "seasons 2022-2024 were already searched under protocol v2: not pristine; the "
             "holdout was used by earlier studies (combination_research.STORED_NOTE)", "notes": NBA_NHL_NOTES,
-            "models": models, "walk": study_adapter_walk, "forecast_upcoming": _study_upcoming(sport),
-            "settle": _study_settle(sport)}
+            "models": models, "walk": study_adapter_walk, "forecast_upcoming": _study_upcoming(sport, members),
+            "settle": _study_settle(sport),
+            # forward test only (never walked historically): the candidate pool's models, recorded from its own ledger
+            "forward_models": forward_models, "blocked_models": blocked}
 
 
 # The one place that names where each sport's adapter lives ("module:function"; the NFL and NCAAB adapters are NOT in the
@@ -2137,6 +2200,8 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
                    "unsupported": adapter["unsupported"], "models": {n: {k: m.get(k) for k in ("role", "version", "description")}
                                                                   for n, m in adapter["models"].items()}}
         status["blockers"] += [f"{m}: {why}" for m, why in adapter["unsupported"].items()]
+        status["blocked_models"] = dict(adapter.get("blocked_models") or {})
+        status["blockers"] += [f"{n}: {why}" for n, why in status["blocked_models"].items()]
         STUDY_CACHE["dir"] = exp_root / "v3" / "study-cache"
         STUDY_CACHE["build"] = build_cache
         with Lock(root):
@@ -2505,6 +2570,11 @@ def forward_connect(path: Optional[Path] = None):
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.executescript(FORWARD_SCHEMA)
+    # Added 2026-11-23: where a line came from (bookmaker | reference_model; NULL = not stated / no line). Existing rows keep
+    # NULL; adding a column never rewrites them (the append-only triggers block UPDATE/DELETE only).
+    if "line_source" not in {r[1] for r in conn.execute("PRAGMA table_info(rf_forecasts)")}:
+        conn.execute("ALTER TABLE rf_forecasts ADD COLUMN line_source TEXT")
+        conn.commit()
     return conn
 
 
@@ -2537,10 +2607,10 @@ def forward_record(path: Optional[Path], *, sport: str, protocol_id: str, model:
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO rf_forecasts (sport, protocol_id, model, role, model_version, data_version, "
                     "game_id, season, market, line, line_key, start_at, forecast_cutoff, forecasted_at, p_a, p_mid, p_b, quote, "
-                    "recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "recorded_at, line_source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (sport, protocol_id, model, role, model_version, data_version, r["game_id"], r.get("season"), r["market"],
                      r.get("line"), _lk(r.get("line")), start, cut, forecasted_at, p["a"], p.get("mid"), p["b"],
-                     json.dumps(r["quote"]) if r.get("quote") else None, _now()))
+                     json.dumps(r["quote"]) if r.get("quote") else None, _now(), r.get("line_source")))
                 ins += cur.rowcount
                 dup += 1 - cur.rowcount
             except (AdapterInvalid, KeyError, TypeError, ValueError) as exc:
@@ -2656,20 +2726,32 @@ def record(data_dir: Path, now: str, sport: str, candidates: Optional[list] = No
     games still ahead, for every incumbent, `candidates` (default: those registered in `exp_root`'s v3 state, else none) and,
     on request, the baselines; appends them to `<data_dir>/research/forward-candidates.sqlite` with the core's look-ahead checks.
     The official store is opened read-only. Returns {"outcome": evaluated | no_candidates | refused (no adapter) | skipped
-    (no store) | failed, "inserted", "already_recorded", "rejected", "models" (count), "errors"}."""
-    res = {"outcome": "no_candidates", "inserted": 0, "already_recorded": 0, "rejected": 0, "models": 0, "errors": []}
+    (no store) | failed, "forward_status", "inserted", "already_recorded", "rejected", "models" (count), "candidates",
+    "candidate_rows", "baseline_rows", "errors"}.
+    `outcome` is `evaluated` only when CANDIDATE forecasts were found; current-model (incumbent) rows alone are the comparison
+    baseline, not a candidate result. `forward_status` says which: candidates_recording | candidates_waiting (candidates are
+    tracked, none has a forecast for a game still ahead) | no_candidate_passed (nothing kept by research and no candidate pool:
+    only the baseline is recorded) | candidate_recording_unsupported (the adapter cannot forecast ahead) | failed.
+    An adapter's `forward_models` (NBA/NHL: the candidate pool, recorded from its own pregame ledger) are always tracked."""
+    res = {"outcome": "no_candidates", "forward_status": "no_candidate_passed", "inserted": 0, "already_recorded": 0,
+           "rejected": 0, "models": 0, "candidates": [], "candidate_rows": 0, "baseline_rows": 0, "errors": []}
     conn = None
     try:
         adapter = (adapters or {}).get(sport) if adapters is not None else get_adapter(sport)
         if adapter is None or not adapter.get("forecast_upcoming"):
-            return res | {"outcome": "refused", "errors": ["no adapter with forecast_upcoming"]}
+            return res | {"outcome": "refused", "forward_status": "candidate_recording_unsupported",
+                          "errors": ["no adapter with forecast_upcoming"]}
         adapter = normalise_adapter(adapter)
         conn = adapter["connect"]() if adapter.get("connect") else official_ro(data_dir, sport)
         if conn is None and not adapter.get("connect"):
-            return res | {"outcome": "skipped", "errors": ["no store"]}
+            return res | {"outcome": "skipped", "forward_status": "failed", "errors": ["no store"]}
         picked = set(candidates) if candidates is not None else set(registered_candidates(exp_root, sport) if exp_root else [])
         wanted = {"incumbent"} | ({"baseline"} if baselines else set())
         chosen = [(n, m) for n, m in adapter["models"].items() if m.get("role") in wanted or n in picked]
+        pool = {n: m for n, m in (adapter.get("forward_models") or {}).items()
+                if candidates is None or n in candidates}
+        chosen += [(n, m) for n, m in pool.items() if n not in dict(chosen)]
+        res["candidates"] = sorted(n for n, m in chosen if m.get("role") == "candidate")
         pid, path = v3_protocol_id(adapter), Path(data_dir) / "research" / FORWARD_FILE
         res["models"] = len(chosen)
         seen = 0
@@ -2682,16 +2764,19 @@ def record(data_dir: Path, now: str, sport: str, candidates: Optional[list] = No
                 res["errors"].append(f"{name}: {type(exc).__name__}: {exc}")
                 continue
             seen += len(recs)
+            res["candidate_rows" if m.get("role") == "candidate" else "baseline_rows"] += len(recs)
             out = forward_record(path, sport=sport, protocol_id=pid, model=name, role=m["role"], model_version=m["version"],
                                  data_version=adapter["data_version"], forecasted_at=now, records=recs, now=now)
             res["inserted"] += out["inserted"]
             res["already_recorded"] += out["already_recorded"]
             res["rejected"] += len(out["rejected"])
             res["errors"] += [f"{name}: rejected {x['game_id']} {x['market']}: {x['reason']}" for x in out["rejected"][:3]]
-        if res["inserted"] or seen:
-            res["outcome"] = "evaluated"
-        elif res["errors"]:
-            res["outcome"] = "failed"
+        if res["candidate_rows"]:
+            res |= {"outcome": "evaluated", "forward_status": "candidates_recording"}
+        elif res["errors"] and not seen:
+            res |= {"outcome": "failed", "forward_status": "failed"}
+        elif res["candidates"]:
+            res["forward_status"] = "candidates_waiting"
     except Exception as exc:
         res |= {"outcome": "failed", "errors": res["errors"] + [f"{type(exc).__name__}: {exc}"]}
     finally:
@@ -2800,8 +2885,10 @@ def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None,
 
 
 def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str] = None) -> tuple:
-    """(by_model records with outcomes, {model: {role, version}}): per model, game, market and line the LAST forecast made
-    before the start (every model by the same rule), joined to its grade."""
+    """(by_model records with outcomes, {model: {role, version}}): per model, game and market only the forecasts of that model's
+    LAST run before the start (every model by the same rule), joined to their grades. A line that moved between runs therefore
+    counts once, at its final value (an earlier run's line is never a second record of the same game); a run that forecasts
+    several fixed lines at once (Soccer's goal and corner ladders) keeps each of them."""
     conn = forward_connect(path)
     try:
         q = ("SELECT f.*, g.outcome, g.point_actual FROM rf_forecasts f LEFT JOIN rf_grades g ON g.sport=f.sport AND "
@@ -2810,19 +2897,25 @@ def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str]
         rows = conn.execute(q, (sport, protocol_id) if protocol_id else (sport,)).fetchall()
     finally:
         conn.close()
-    latest, info = {}, {}
-    for r in rows:
-        latest[(r["model"], r["model_version"], r["game_id"], r["market"], r["line_key"])] = r
+    last_run, info = {}, {}
+    for r in rows:                                       # ordered by forecasted_at: the last run per model/game/market wins
+        last_run[(r["model"], r["game_id"], r["market"])] = r["forecasted_at"]
         info[r["model"]] = {"role": r["role"], "version": r["model_version"], "description": "forward forecasts",
                             "data_version": r["data_version"]}
+    latest = {}
+    for r in rows:
+        if r["forecasted_at"] == last_run[(r["model"], r["game_id"], r["market"])]:
+            latest[(r["model"], r["game_id"], r["market"], r["line_key"])] = r
     by_model: dict = {}
     for (model, *_), r in latest.items():
         probs = {"a": r["p_a"], "b": r["p_b"]} if r["p_mid"] is None else {"a": r["p_a"], "mid": r["p_mid"], "b": r["p_b"]}
         pa = json.loads(r["point_actual"]) if r["point_actual"] else None
-        by_model.setdefault(model, []).append({
-            "game_id": r["game_id"], "season": r["season"] if r["season"] is not None else 0, "start_at": r["start_at"],
-            "forecast_cutoff": r["forecast_cutoff"], "market": r["market"], "line": r["line"], "probs": probs,
-            "outcome": r["outcome"], "point_actual": pa, "quote": json.loads(r["quote"]) if r["quote"] else None})
+        rec = {"game_id": r["game_id"], "season": r["season"] if r["season"] is not None else 0, "start_at": r["start_at"],
+               "forecast_cutoff": r["forecast_cutoff"], "market": r["market"], "line": r["line"], "probs": probs,
+               "outcome": r["outcome"], "point_actual": pa, "quote": json.loads(r["quote"]) if r["quote"] else None}
+        if "line_source" in r.keys() and r["line_source"]:
+            rec["line_source"] = r["line_source"]
+        by_model.setdefault(model, []).append(rec)
     return by_model, info
 
 
@@ -2849,7 +2942,8 @@ def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] =
                 continue
             fw = cmp_["vs_incumbent"]["forward"]
             vi = fw.get("vs_incumbent") or {}
-            n = vi.get("n", 0)
+            # matched settled games: the paired test's n, or (below the test's minimum, where it is not run) the covered cohort
+            n = vi.get("n", fw.get("forecast", 0) if fw.get("coverage") == 1.0 else 0)
             crit = {"min_settled_forward": {"status": "passed" if n >= need else "failed", "n": n, "need": need},
                     "full_coverage": {"status": "passed" if fw["coverage"] == 1.0 else "failed", "coverage": fw["coverage"]}}
             if n >= need and vi:
@@ -2873,17 +2967,26 @@ def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] =
                 for k in ("paired_log_loss", "calibration", "accuracy", "sportsbook"):
                     crit[k] = {"status": "not_evaluable", "reason": f"only {n} of the required {need} settled matched games"}
             failed = [k for k, v in crit.items() if v["status"] == "failed"]
+            ref_line = bool((e.get("line_sources") or {}).get("reference_model"))
+            if ref_line:            # graded at a model's own line, not a bookmaker's: never recommended on its own
+                crit["bookmaker_line"] = {"status": "failed", "reference_model_records": e["line_sources"]["reference_model"],
+                                          "reason": "some matched records are graded at a model's own line (no bookmaker "
+                                                    "line): a beat there is an artefact risk and needs human review"}
             if n < need:
                 status = "insufficient_evidence"
+            elif ref_line and not [k for k in failed if k != "bookmaker_line"]:
+                status = "needs_human_review"
             else:
-                status = "not_recommended" if failed else "recommend_for_review"
+                status = "not_recommended" if [k for k in failed if k != "bookmaker_line"] else "recommend_for_review"
+            failed = [k for k in failed if k != "bookmaker_line"] + (["bookmaker_line"] if ref_line else [])
             per_market[m] = {"status": status, "criteria": crit, "failed": failed,
                              "confirmatory_look": n >= need and not prior_looks.get((c, m)),
                              "look_label": "confirmatory (first look at the minimum count)" if n >= need and not prior_looks.get((c, m))
                              else "exploratory (repeated or early look)"}
         order = [v["status"] for v in per_market.values()]
         out["candidates"][c] = {"status": ("recommend_for_review" if "recommend_for_review" in order and "not_recommended" not in order
-                                           else "not_recommended" if "not_recommended" in order else "insufficient_evidence"),
+                                           else "not_recommended" if "not_recommended" in order
+                                           else "needs_human_review" if "needs_human_review" in order else "insufficient_evidence"),
                                 "markets": per_market}
     return out
 

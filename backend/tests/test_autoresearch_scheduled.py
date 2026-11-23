@@ -145,6 +145,82 @@ def test_every_sport_refused_exits_75(tmp_path, home):
     assert r.returncode == 75 and calls == [] and r.stdout.count("outcome=refused") == 5
 
 
+# ---- same-day retries -------------------------------------------------------------------------------------------------
+LOCAL_TODAY = datetime.now().astimezone().strftime("%Y-%m-%d")
+LOCAL_YESTERDAY = (datetime.now().astimezone() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def seed(home, sport, outcome, reason="-", n=1, day=None, at=None):
+    at = at or stamp(timedelta(minutes=-30))
+    ok = at if outcome == "evaluated" else ""
+    row = f"{sport}\t{at}\t{outcome}\t{ok}\t{reason}\t{day or LOCAL_TODAY}:{n}\n"
+    with open(home / "daily-state.tsv", "a") as f:
+        f.write(row)
+    return row
+
+
+def daily(home, tmp_path, monkeypatch, sports):
+    on(home)
+    monkeypatch.setenv("AUTORESEARCH_SPORTS", sports)
+    return run(DAILY, home, tmp_path)
+
+
+def test_a_sport_refused_earlier_today_is_retried_and_its_counter_increments(home, tmp_path, monkeypatch):
+    seed(home, "nba", "refused", "guard refused (x)", n=1)
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert sport_args(calls) == ["nba"] and r.returncode == 0, r.stdout + r.stderr
+    row = state(home)["nba"]
+    assert row[2] == "evaluated" and row[5] == f"{LOCAL_TODAY}:2" and len(row) == 6
+
+
+def test_a_sport_evaluated_earlier_today_is_done_today_not_run_and_keeps_its_row(home, tmp_path, monkeypatch):
+    row = seed(home, "nba", "evaluated", n=1)
+    r, calls = daily(home, tmp_path, monkeypatch, "nba nhl")
+    assert sport_args(calls) == ["nhl"]
+    assert "sport=nba outcome=done_today reason=evaluated at " + row.split("\t")[1] in r.stdout
+    assert [x for x in (home / "daily-state.tsv").read_text().splitlines(keepends=True) if x.startswith("nba\t")] == [row]
+    assert r.returncode == 0 and "done_today=1" in r.stdout
+
+
+def test_a_sport_that_failed_earlier_today_is_not_retried(home, tmp_path, monkeypatch):
+    row = seed(home, "nhl", "failed", "rc 3", n=1)
+    r, calls = daily(home, tmp_path, monkeypatch, "nhl")
+    assert calls == [] and "sport=nhl outcome=done_today reason=failed" in r.stdout
+    assert (home / "daily-state.tsv").read_text() == row and r.returncode == 0 and "failed=0" in r.stdout
+
+
+def test_the_attempt_cap_of_three_stops_a_fourth_attempt(home, tmp_path, monkeypatch):
+    row = seed(home, "nba", "refused", "guard refused (x)", n=3)
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert calls == [] and 'sport=nba outcome=done_today reason=attempt cap (3) reached today' in r.stdout
+    assert (home / "daily-state.tsv").read_text() == row and r.returncode == 0
+
+
+def test_a_row_from_yesterday_runs_normally_and_the_counter_resets(home, tmp_path, monkeypatch):
+    seed(home, "nba", "evaluated", n=3, day=LOCAL_YESTERDAY, at=stamp(timedelta(days=-2)))
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert sport_args(calls) == ["nba"]
+    assert state(home)["nba"][5] == f"{LOCAL_TODAY}:1"
+
+
+def test_a_wall_cap_skip_earlier_today_is_retried(home, tmp_path, monkeypatch):
+    seed(home, "soccer", "skipped", "total wall cap reached (100s left)", n=1)
+    seed(home, "nfl", "skipped", "prepare.py refused to run this sport", n=1)
+    r, calls = daily(home, tmp_path, monkeypatch, "soccer nfl")
+    assert sport_args(calls) == ["soccer"] and "sport=nfl outcome=done_today reason=skipped" in r.stdout
+    assert state(home)["soccer"][2] == "evaluated" and state(home)["soccer"][5] == f"{LOCAL_TODAY}:2"
+
+
+def test_when_every_sport_is_done_today_the_run_exits_0_without_running_anything(home, tmp_path, monkeypatch):
+    seed(home, "nba", "evaluated")
+    seed(home, "nhl", "no_candidates")
+    seed(home, "nfl", "failed", "rc 3")
+    before = (home / "daily-state.tsv").read_text()
+    r, calls = daily(home, tmp_path, monkeypatch, "nba nhl nfl")
+    assert r.returncode == 0 and calls == [] and r.stdout.count("outcome=done_today") == 3
+    assert "done_today=3" in r.stdout and "refused=0" in r.stdout and (home / "daily-state.tsv").read_text() == before
+
+
 def test_daily_never_names_the_agent_command():
     text = DAILY.read_text()
     assert "prepare.py agent" not in text and '"$PREPARE" agent' not in text and "--max-usd" not in text
@@ -478,7 +554,8 @@ def template(name):
 
 def test_daily_template_schedule_and_wrapper():
     p = template("autoresearch-daily")
-    assert p["StartCalendarInterval"] == {"Hour": 11, "Minute": 0} and p["Nice"] == 15 and p["ProcessType"] == "Background"
+    assert p["StartCalendarInterval"] == [{"Hour": 6, "Minute": 0}, {"Hour": 11, "Minute": 10}, {"Hour": 13, "Minute": 10}]
+    assert p["Nice"] == 15 and p["ProcessType"] == "Background"
     assert p["ProgramArguments"][-1].endswith("scripts/autoresearch_daily.sh")
     assert p["StandardOutPath"].startswith("/Users/andry/Desktop/nbanhlnfl/data/") and p["RunAtLoad"] is False
     assert p["ProgramArguments"] == ["/bin/bash", "/Users/andry/nba-predictor-delivery/scripts/autoresearch_daily.sh"]

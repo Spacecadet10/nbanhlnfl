@@ -859,6 +859,13 @@ export interface AutoresearchV3 {
   protocol: string; note: string; sports: Record<string, AutoresearchV3Sport>;
   last_daily?: { started_at?: string; finished_at?: string; outcomes?: Record<string, AutoresearchOutcome>; combined?: Record<string, { outcome: AutoresearchOutcome; v3: { outcome: string | null; reason?: string | null }; v2: { outcome: string | null; reason?: string | null } }>; v2?: { stopped?: string; note?: string } | null } | null;
   wrapper_state?: { sport: string; last_attempt_utc: string; last_outcome: string; last_success_utc: string; last_reason: string }[] | null;
+  /** Forward test per sport (research store, read-only): status says whether candidates are recorded, waiting, none passed or unsupported. */
+  forward?: Record<string, AutoresearchForward> | null;
+}
+export interface AutoresearchForward {
+  status?: string; label?: string; graded_games?: number; paired_graded_items?: number;
+  candidate_forecasts?: { rows: number; models: number; games: number }; incumbent_forecasts?: { rows: number; models: number; games: number };
+  last_record?: { at: string; outcome: string; detail: string }; last_grade?: { at: string; outcome: string; detail: string };
 }
 export interface AutoresearchStatus {
   v3?: AutoresearchV3 | null;

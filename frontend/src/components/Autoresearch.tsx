@@ -55,6 +55,15 @@ function V3Research({ v }: { v: AutoresearchV3 }) {
         <td>{s.blockers.length ? <ul className="small">{s.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul> : 'none'}</td>
         <td>{s.next_run ?? '—'}{s.data_cutoff?.last_final ? <div className="small muted">data through {dateTime(s.data_cutoff.last_final)}</div> : null}</td></tr>)}
     </tbody></table></div>
+    {v.forward && !('error' in v.forward) && <><h4>Forward test (games still ahead; research store, never official)</h4>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Status</th><th>Candidate forecasts</th><th>Current-model forecasts</th><th>Graded games</th><th>Paired graded (candidate and current model, same game, market and line)</th><th>Last record / grade</th></tr></thead><tbody>
+        {Object.entries(v.forward).map(([sport, f]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
+          <td>{f.label ?? f.status ?? '—'}</td>
+          <td>{f.candidate_forecasts ? `${f.candidate_forecasts.rows} (${f.candidate_forecasts.models} models, ${f.candidate_forecasts.games} games)` : 'none'}</td>
+          <td>{f.incumbent_forecasts ? `${f.incumbent_forecasts.rows} (${f.incumbent_forecasts.models} models, ${f.incumbent_forecasts.games} games)` : 'none'}</td>
+          <td>{f.graded_games ?? 0}</td><td>{f.paired_graded_items ?? 0}</td>
+          <td className="small muted">{f.last_record ? dateTime(f.last_record.at) : '—'} / {f.last_grade ? dateTime(f.last_grade.at) : '—'}</td></tr>)}
+      </tbody></table></div></>}
     {Object.entries(v.sports).filter(([, s]) => s.evaluation).map(([sport, s]) => <V3Detail key={sport} sport={sport} s={s} />)}
   </section>;
 }

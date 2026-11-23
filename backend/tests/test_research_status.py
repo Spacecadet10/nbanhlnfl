@@ -978,3 +978,169 @@ def test_the_adapter_digest_reads_a_live_wal_store_with_mode_ro_not_immutable(tm
         assert "immutable" not in ar._adapter_conn_uri("soccer")
     finally:
         conn.close()
+
+
+# --- 2026-11-23: NBA/NHL forward pool + baselines, honest forward labels, one record per game, reference lines ------------------
+def _ledger_store(path):
+    """A minimal NBA official store with the three pregame ledgers the forward reader uses."""
+    c = sqlite3.connect(path)
+    c.executescript("""
+    CREATE TABLE games (game_id TEXT PRIMARY KEY, season INTEGER, tipoff_at TEXT, status TEXT, home_score INT, away_score INT);
+    CREATE TABLE candidate_forecasts (forecast_id INTEGER PRIMARY KEY, game_id TEXT, candidate TEXT, model_version TEXT, market TEXT,
+      line REAL, line_source TEXT, p_a REAL, p_mid REAL, p_b REAL, tipoff_at TEXT, generated_at TEXT);
+    CREATE TABLE predictions (prediction_id INTEGER PRIMARY KEY, game_id TEXT, run_type TEXT, model_version TEXT, feature_version TEXT,
+      cutoff_at TEXT, generated_at TEXT, home_win_prob REAL);
+    CREATE TABLE market_forecasts (forecast_id INTEGER PRIMARY KEY, game_id TEXT, market TEXT, line REAL, line_source TEXT, policy TEXT,
+      run_type TEXT, model_version TEXT, generated_at TEXT, tipoff_at TEXT, p_a REAL, p_mid REAL, p_b REAL);
+    """)
+    from app.agreement import FEATURE_VERSION
+    T = "2026-11-23T00:00:00Z"
+    c.executemany("INSERT INTO games VALUES (?,?,?,?,?,?)", [("ahead", 2027, T, "scheduled", None, None),
+                                                            ("started", 2027, "2026-11-22T20:00:00Z", "final", 100, 90)])
+    for gid in ("ahead", "started"):
+        tip = T if gid == "ahead" else "2026-11-22T20:00:00Z"
+        gen = "2026-11-22T23:00:00Z" if gid == "ahead" else "2026-11-22T19:00:00Z"
+        c.execute("INSERT INTO candidate_forecasts (game_id, candidate, model_version, market, line, line_source, p_a, p_b, tipoff_at, "
+                  "generated_at) VALUES (?,?,?,?,?,?,?,?,?,?)", (gid, "ridge:nba_base", "research-cand:ridge:nba_base:d", "total",
+                                                                 212.5, "core_cohort:market", 0.6, 0.4, tip, gen))
+        c.execute("INSERT INTO candidate_forecasts (game_id, candidate, model_version, market, line, line_source, p_a, p_b, tipoff_at, "
+                  "generated_at) VALUES (?,?,?,?,?,?,?,?,?,?)", (gid, "ridge:nba_base", "research-cand:ridge:nba_base:d", "winner",
+                                                                 None, "none", 0.55, 0.45, tip, gen))
+        for name in ("logistic", "logistic_v2"):
+            c.execute("INSERT INTO predictions (game_id, run_type, model_version, feature_version, cutoff_at, generated_at, "
+                      "home_win_prob) VALUES (?,?,?,?,?,?,?)", (gid, "live", f"research-v2:{name}:dig", FEATURE_VERSION, tip, gen,
+                                                                0.7 if name == "logistic" else 0.9))
+        for mv, src in (("research-v3:ridge_points:def-window=2h-policy=near_tipoff", "market"),
+                        ("points_normal-carry=0.5-window=2h-policy=near_tipoff", "model")):
+            c.execute("INSERT INTO market_forecasts (game_id, market, line, line_source, policy, run_type, model_version, generated_at, "
+                      "tipoff_at, p_a, p_mid, p_b) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (gid, "total", 212.5, src, "near_tipoff", "live", mv, gen, tip, 0.58, None, 0.42))
+    # a winner row generated AFTER the start must never be read
+    c.execute("INSERT INTO predictions (game_id, run_type, model_version, feature_version, cutoff_at, generated_at, home_win_prob) "
+              "VALUES (?,?,?,?,?,?,?)", ("ahead", "live", "research-v2:logistic:dig", FEATURE_VERSION, T, "2026-11-23T00:05:00Z", 0.1))
+    c.commit()
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def test_nba_forward_reads_pool_candidates_and_current_model_members_from_the_pregame_ledgers(tmp_path):
+    conn = _ledger_store(tmp_path / "nba.sqlite")
+    up = ar._study_upcoming("nba", {"winner": ["logistic"], "lines": ["ridge_points", "points_normal"]})
+    now = "2026-11-22T23:30:00Z"
+    cand = up(conn, now, "ridge:nba_base")
+    assert {(r["game_id"], r["market"]) for r in cand} == {("ahead", "total"), ("ahead", "winner")}     # started game excluded
+    tot = next(r for r in cand if r["market"] == "total")
+    assert tot["line_source"] == "bookmaker" and tot["forecast_at"] == "2026-11-22T23:00:00Z" and tot["outcome"] is None
+    lg = up(conn, now, "logistic")
+    assert [(r["market"], r["probs"]["a"]) for r in lg] == [("winner", 0.7)]       # not logistic_v2, not the post-start row
+    rp = up(conn, now, "ridge_points")
+    assert [(r["market"], r["line"], r["line_source"]) for r in rp] == [("total", 212.5, "bookmaker")]
+    pn = up(conn, now, "points_normal")                                          # the primary's own near-tipoff rows
+    assert [(r["market"], r["line_source"]) for r in pn] == [("total", "reference_model")]
+    assert up(conn, now, "gbt_v1") == []
+
+
+def test_record_tracks_the_pool_and_states_candidates_apart_from_the_current_model(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    ahead = [dict(rec(1), outcome=None, start_at=_t(10, 12), forecast_cutoff=_t(1))]
+    a = fixture_adapter({"inc": []}) | {"forecast_upcoming": lambda conn, now, name: ahead if name in ("inc", "pool") else []}
+    base = ar.record(data, _t(2), "nba", adapters={"nba": a})
+    assert base["outcome"] == "no_candidates" and base["forward_status"] == "no_candidate_passed"
+    assert base["baseline_rows"] == 1 and base["candidate_rows"] == 0 and base["candidates"] == []
+    pool = a | {"forward_models": {"pool": {"role": "candidate", "version": "p1", "description": "pool"},
+                                   "quiet": {"role": "candidate", "version": "q1", "description": "pool"}}}
+    r = ar.record(data, _t(2), "nba", adapters={"nba": pool})
+    assert r["outcome"] == "evaluated" and r["forward_status"] == "candidates_recording"
+    assert r["candidates"] == ["pool", "quiet"] and r["candidate_rows"] == 1 and r["baseline_rows"] == 1
+    waiting = a | {"forecast_upcoming": lambda conn, now, name: ahead if name == "inc" else [],
+                   "forward_models": {"quiet": {"role": "candidate", "version": "q1", "description": "pool"}}}
+    w = ar.record(data, _t(2), "nba", adapters={"nba": waiting})
+    assert w["outcome"] == "no_candidates" and w["forward_status"] == "candidates_waiting"
+    assert ar.record(data, _t(2), "nba", adapters={"nba": fixture_adapter({"inc": []})})["forward_status"] == "candidate_recording_unsupported"
+
+
+def test_a_moved_line_counts_once_and_a_fixed_ladder_keeps_every_line(tmp_path):
+    p = tmp_path / "f.sqlite"
+    mk = lambda line, at: dict(rec(1, market="total", line=line), outcome=None, start_at=_t(5, 12), forecast_cutoff=at, forecast_at=at)  # noqa: E731
+    for at, line in ((_t(1), 212.5), (_t(2), 214.5)):                            # NCAAB/NFL: the line moved between runs
+        ar.forward_record(p, sport="ncaab", protocol_id="p", model="inc", role="incumbent", model_version="v", data_version="d",
+                          forecasted_at=at, records=[mk(line, at)], now=at)
+    ar.forward_record(p, sport="soccer", protocol_id="p", model="inc", role="incumbent", model_version="v", data_version="d",
+                      forecasted_at=_t(1), records=[mk(1.5, _t(1)), mk(2.5, _t(1))], now=_t(1))      # one run, two fixed lines
+    nc, _ = ar.forward_records(p, "ncaab")
+    assert [r["line"] for r in nc["inc"]] == [214.5]
+    sc, _ = ar.forward_records(p, "soccer")
+    assert sorted(r["line"] for r in sc["inc"]) == [1.5, 2.5]
+
+
+def test_forward_results_at_a_models_own_line_need_human_review_never_a_recommendation(tmp_path):
+    p = tmp_path / "ref.sqlite"
+    s = synthetic(n=700, seed=11, edge=0.8)
+    for model, role, recs in (("inc", "incumbent", s["inc"]), ("cand", "candidate", s["cand"])):
+        fw = [dict(r, market="spread", line=0.5, outcome=None, start_at=_t(i, 12), forecast_cutoff=_t(-2), line_source="reference_model")
+              for i, r in enumerate(recs)]
+        ar.forward_record(p, sport="nba", protocol_id="p", model=model, role=role, model_version="v1", data_version="d",
+                          forecasted_at=_t(-1), records=fw)
+    conn = ar.forward_connect(p)
+    with conn:
+        for r in s["inc"]:
+            conn.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, point_actual, graded_at) VALUES "
+                         "(?,?,?,?,?,?,?)", ("nba", r["game_id"], "spread", ar._lk(0.5), r["outcome"], None, _now_str()))
+    conn.close()
+    a = fixture_adapter({"inc": []}, markets={"spread": {"kind": "line", "settlement": "push refunds"}})
+    rec_ = ar.forward_evaluate(p, a, "p")["recommendation"]["candidates"]["cand"]
+    m = rec_["markets"]["spread"]
+    assert m["status"] == "needs_human_review" and m["criteria"]["bookmaker_line"]["status"] == "failed"
+    assert rec_["status"] == "needs_human_review"
+
+
+def test_an_existing_forward_store_gains_line_source_without_touching_its_rows(tmp_path):
+    p = tmp_path / "old.sqlite"
+    old = sqlite3.connect(p)
+    old.executescript(ar.FORWARD_SCHEMA)
+    old.execute("INSERT INTO rf_forecasts (sport, protocol_id, model, role, model_version, data_version, game_id, market, line_key, "
+                "start_at, forecast_cutoff, forecasted_at, p_a, p_b, recorded_at) VALUES ('nba','p','m','incumbent','v','d','g',"
+                "'winner','','2026-11-23T00:00:00Z','2026-11-22T00:00:00Z','2026-11-22T00:00:00Z',0.6,0.4,'x')")
+    old.commit()
+    old.close()
+    c = ar.forward_connect(p)
+    row = c.execute("SELECT * FROM rf_forecasts").fetchone()
+    assert row["line_source"] is None and row["p_a"] == 0.6 and c.execute("SELECT COUNT(*) FROM rf_forecasts").fetchone()[0] == 1
+    c.close()
+
+
+def test_neural_candidates_are_dependency_blocked_and_goalie_candidates_are_forward_only(monkeypatch):
+    from app.candidates import deep
+    monkeypatch.setattr(deep, "libraries_present", lambda spec=None: False)
+    nhl = ar.nba_nhl_adapter("nhl")
+    blocked = nhl["blocked_models"]
+    assert blocked and all("dependency-blocked" in why for why in blocked.values())
+    assert not set(blocked) & set(nhl["models"]) and not set(blocked) & set(nhl["forward_models"])
+    goalie = [n for n in nhl["forward_models"] if "goalie" in n]
+    assert goalie and not set(goalie) & set(nhl["models"])                   # forward pool only, never walked historically
+    assert {n for n, m in nhl["models"].items() if m["role"] == "candidate"} <= set(nhl["forward_models"])
+
+
+def test_forward_summary_labels_each_sport_and_counts_paired_graded_items(tmp_path):
+    from app import research_status as rs
+    p = tmp_path / "research" / "forward-candidates.sqlite"
+    p.parent.mkdir()
+    assert rs.forward_summary(p) is None                                        # never created by the status page
+    one = lambda: [dict(rec(1), outcome=None, start_at=_t(5, 12), forecast_cutoff=_t(1))]   # noqa: E731
+    for model, role in (("inc", "incumbent"), ("cand", "candidate")):
+        ar.forward_record(p, sport="nba", protocol_id="p", model=model, role=role, model_version="v", data_version="d",
+                          forecasted_at=_t(1), records=one(), now=_t(1))
+    ar.forward_record(p, sport="ncaab", protocol_id="q", model="inc", role="incumbent", model_version="v", data_version="d",
+                      forecasted_at=_t(1), records=one(), now=_t(1))
+    c = ar.forward_connect(p)
+    with c:
+        c.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, graded_at) VALUES ('nba','g1','winner','','a','x')")
+        c.execute("CREATE TABLE IF NOT EXISTS rf_runs (id INTEGER PRIMARY KEY, kind TEXT, sport TEXT, at TEXT, outcome TEXT, detail TEXT)")
+        c.execute("INSERT INTO rf_runs (kind, sport, at, outcome, detail) VALUES ('record','nba','t','evaluated',"
+                  "'forward_status=candidates_recording candidates=1')")
+    c.close()
+    s = rs.forward_summary(p)
+    assert s["nba"]["status"] == "candidates_recording" and s["nba"]["paired_graded_items"] == 1 and s["nba"]["graded_games"] == 1
+    assert s["ncaab"]["status"] == "not_run" and "paired_graded_items" not in s["ncaab"]
+    assert s["ncaab"]["incumbent_forecasts"]["rows"] == 1 and "candidate_forecasts" not in s["ncaab"]

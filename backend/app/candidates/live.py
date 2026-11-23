@@ -702,7 +702,10 @@ def forward_record(data_dir: Path, *, now: Optional[str] = None, sports=FORWARD_
     for sport in sports:
         res = out[sport] = ar.record(data_dir, now, sport, adapters=adapters, exp_root=exp_root,
                                      baselines=baselines, timeout_s=timeout_s)
-        _note(data_dir, "record", sport, res["outcome"], f"inserted={res['inserted']} rejected={res['rejected']} {'; '.join(res['errors'])}", now)
+        _note(data_dir, "record", sport, res["outcome"],
+              f"forward_status={res.get('forward_status')} candidates={len(res.get('candidates') or [])} "
+              f"candidate_rows={res.get('candidate_rows', 0)} baseline_rows={res.get('baseline_rows', 0)} "
+              f"inserted={res['inserted']} rejected={res['rejected']} {'; '.join(res['errors'])}", now)
     return out
 
 
@@ -733,7 +736,7 @@ def forward_main(argv: Optional[list] = None) -> int:
     kw = dict(now=a.now, sports=tuple(a.sport or FORWARD_SPORTS), timeout_s=a.call_timeout)
     res = forward_record(config.data_dir(), baselines=a.baselines, **kw) if a.kind == "record" else forward_grade(config.data_dir(), **kw)
     for sport, r in res.items():
-        extra = " ".join(f"{k}={v}" for k, v in r.items() if k not in ("outcome", "errors"))
+        extra = " ".join(f"{k}={len(v) if k == 'candidates' else v}" for k, v in r.items() if k not in ("outcome", "errors"))
         print(f"forward-{a.kind}: sport={sport} outcome={r['outcome']} {extra} {'; '.join(r['errors'])}".rstrip())
     return 1 if any(r["outcome"] == "failed" for r in res.values()) else 0
 
