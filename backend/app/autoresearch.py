@@ -3319,15 +3319,9 @@ def main_v3(argv: list) -> int:
 
 
 def combine_outcomes(v3: Optional[str], v2: Optional[str]) -> str:
-    """One outcome for a sport that ran both protocols: evaluated if either evaluated; otherwise the most informative
-    non-success (failed, then skipped, then refused); no_candidates when neither had anything to search."""
-    outs = [o for o in (v3, v2) if o]
-    for o in ("evaluated", "failed", "skipped"):
-        if o in outs:
-            return o
-    if outs and all(o == "refused" for o in outs):
-        return "refused"
-    return "no_candidates"
+    """One outcome for a sport that ran both protocols: protocol v3's own outcome. v2 (the older NBA/NHL queue) only speaks
+    when v3 had nothing to search, so it never hides a v3 refusal, failure or unfinished queue. Both are printed and stored."""
+    return v3 if v3 and v3 != "no_candidates" else (v2 or "no_candidates")
 
 
 def _v2_outcome(r: dict, sport: str) -> tuple:
@@ -3383,6 +3377,11 @@ def _daily_cli(a) -> int:
 def main(argv=None) -> int:
     if argv is None:
         argv = sys.argv[1:]
+    pinned = os.environ.get("AUTORESEARCH_APP")       # the pinned checkout's backend, set by the workspace's prepare.py
+    if pinned and Path(pinned).resolve() != APP_DIR.resolve().parent:
+        print(f"REFUSED: this process loaded the app from {APP_DIR.resolve().parent}, not the pinned checkout {pinned} "
+              "(`python -m` puts the current directory before PYTHONPATH)", file=sys.stderr)
+        return 2
     if argv and argv[0] == "v3":
         return main_v3(list(argv[1:]))
     p = argparse.ArgumentParser(prog="python -m app.autoresearch", description=__doc__.split("\n")[0])

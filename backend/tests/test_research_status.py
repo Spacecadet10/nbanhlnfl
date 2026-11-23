@@ -718,11 +718,31 @@ def test_cli_daily_prints_one_sport_outcome_line_per_sport_and_nba_nhl_also_run_
     assert rc == 0 and v2_calls == [["nba", "nhl"]]
     assert "sport-outcome: nba evaluated v3=evaluated v2=no_candidates" in out
     assert "sport-outcome: soccer refused v3=refused" in out and "v2=" not in [l for l in out.splitlines() if "soccer" in l][0]
-    assert "sport-outcome: nhl refused v3=refused v2=no_candidates" not in out          # refused v3 + empty v2 is not "refused"
+    assert "sport-outcome: nhl refused v3=refused v2=no_candidates" in out              # an empty v2 queue never hides a v3 refusal
     rep = json.loads(next((exp / "reports").glob("daily5-*.json")).read_text())
     assert rep["combined"]["nba"]["v2"]["outcome"] == "no_candidates" and rep["v2"]["stopped"] == "queue empty"
     assert ar.combine_outcomes("skipped", "no_candidates") == "skipped" and ar.combine_outcomes("refused", "refused") == "refused"
-    assert ar.combine_outcomes("no_candidates", "evaluated") == "evaluated" and ar.combine_outcomes("failed", "evaluated") == "evaluated"
+    assert ar.combine_outcomes("no_candidates", "evaluated") == "evaluated" and ar.combine_outcomes("no_candidates", "failed") == "failed"
+    # Nov 23 06:00: NBA/NHL v3 refused (study cache missing) while one v2 trial ran, and the day was recorded as "evaluated"
+    for v3 in ("refused", "failed", "skipped", "evaluated"):
+        assert {ar.combine_outcomes(v3, v2) for v2 in (None, "evaluated", "no_candidates", "failed", "refused")} == {v3}
+
+
+def test_the_evaluator_refuses_to_run_from_another_checkout_than_the_pinned_one(tmp_path):
+    """Nov 23 06:00: `python -m` puts the current directory before PYTHONPATH, so the wrapper's directory (delivery) was run
+    instead of the pinned checkout. The pin is now checked by the process itself."""
+    import subprocess
+    import sys
+    backend = Path(ar.__file__).resolve().parents[1]
+    other = tmp_path / "pinned" / "backend"
+    other.mkdir(parents=True)
+    env = dict(os.environ, NBA_DATA_DIR=str(tmp_path), PYTHONPATH=str(other), PYTHONDONTWRITEBYTECODE="1")
+    argv = [sys.executable, "-m", "app.autoresearch", "status", "--exp-root", str(tmp_path / "exp"), "--workspace", str(tmp_path),
+            "--sport", "nba"]
+    r = subprocess.run(argv, cwd=backend, env=env | {"AUTORESEARCH_APP": str(other)}, capture_output=True, text=True)
+    assert r.returncode == 2 and "REFUSED" in r.stderr and "pinned" in r.stderr and str(backend) in r.stderr, r.stderr[-400:]
+    r = subprocess.run(argv, cwd=backend, env=env | {"AUTORESEARCH_APP": str(backend)}, capture_output=True, text=True)
+    assert "pinned" not in r.stderr, r.stderr[-400:]
 
 
 

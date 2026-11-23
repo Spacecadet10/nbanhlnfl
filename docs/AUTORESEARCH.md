@@ -262,8 +262,10 @@ evaluated markets, blockers (including every `unsupported` market and its reason
   it equals `soccer_markets_eval.research_compare` exactly (difference 0.0 for log loss and Brier, 6097 games, three models).
 - `IDENTITY.json` (app/backup.py): `stores.<sport>.coverage.last_final` is the cutoff (a date-only value covers that day).
 - `daily --sport <s>` (the CLI the wrapper calls) always runs v3; for nba/nhl it then runs the v2 workspace queue. The line is
-  `sport-outcome: <sport> <combined> v3=<o> [v2=<o>]`; combined = evaluated if either evaluated, else failed, else skipped, else refused
-  when both refused, else no_candidates. The daily5 report carries `combined` and `v2`.
+  `sport-outcome: <sport> <combined> v3=<o> [v2=<o>]`; combined = v3's own outcome; v2 only speaks when v3 had nothing to
+  search, so it never hides a v3 refusal, failure or unfinished queue (2026-11-23; before, "evaluated if either evaluated" hid the
+  NBA/NHL v3 refusals of Nov 23 06:00). The daily5 report carries `combined` and `v2`. With `AUTORESEARCH_APP` set to the pinned
+  backend, the evaluator refuses (exit 2) when it was loaded from any other checkout.
 - Forward API for the scheduled driver (the driver imports this module, never the reverse): `autoresearch.record(data_dir, now, sport,
   candidates=None)` and `autoresearch.grade(data_dir, now, sport)`; both return `{"outcome": evaluated|no_candidates|skipped|failed, ...}`.
   `record` stores incumbents and baselines too (the pairing reference) and only the named candidates.

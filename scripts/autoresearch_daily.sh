@@ -19,7 +19,7 @@
 # State (read by the status page, columns 1-5 by position): $AUTORESEARCH_HOME/daily-state.tsv, one row per sport:
 #   sport <TAB> last_attempt_utc <TAB> last_outcome <TAB> last_success_utc <TAB> last_reason <TAB> attempts_today (<local date>:<n>)
 # Same-day retries: launchd starts this at 06:00, 11:10 and 13:10 local. A sport whose last attempt was on today's LOCAL date is run
-# again only if that outcome was `refused` (game window / forecasting guard) or `skipped` for the total wall cap; evaluated,
+# again only if that outcome was `refused` (game window / forecasting guard, or stated by the evaluator) or `skipped` for the total wall cap; evaluated,
 # no_candidates, failed and any other skip are final for the day and print `outcome=done_today` (row untouched; `failed` is never
 # retried, so a broken sport cannot loop). At most 3 attempts per sport per local day (a wall-cap skip is not an attempt).
 # Exit: 0, or 1 if any sport failed, or 75 if every sport that actually ran was refused (and at least one ran).
@@ -106,7 +106,7 @@ for s in $ORDER; do
     else
       reason=$(sed -n "s/^sport-outcome: $s [a-z_]* [^(]*(\(.*\))\$/\1/p" "$tmp" | tail -1)
     fi
-    [ "$outcome" = refused ] && reason="guard refused (lock held, game window or forecasting load; see learning-runs.jsonl)"
+    [ "$rc" = 75 ] && reason="guard refused (lock held, game window or forecasting load; see learning-runs.jsonl)"
   fi
   # last_success only for `evaluated`; `no_candidates` is recorded as last_outcome and never counts as a success
   case "$outcome" in evaluated) NRUN=$((NRUN + 1)); ok=$at ;; no_candidates) NNC=$((NNC + 1)); ok=$(field "$s" 4) ;; *) ok=$(field "$s" 4) ;; esac

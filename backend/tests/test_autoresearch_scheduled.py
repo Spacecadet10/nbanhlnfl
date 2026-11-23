@@ -173,6 +173,18 @@ def test_a_sport_refused_earlier_today_is_retried_and_its_counter_increments(hom
     assert row[2] == "evaluated" and row[5] == f"{LOCAL_TODAY}:2" and len(row) == 6
 
 
+def test_a_refusal_stated_by_the_evaluator_keeps_its_own_reason_and_is_retried_the_same_day(home, tmp_path, monkeypatch):
+    (home / "workspace" / "prepare.py").write_text(
+        "import json, sys, os\nopen(os.environ['FAKE_OUT'], 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "print('sport-outcome: nba refused v3=refused v2=evaluated (the nba study tables are not cached (x.pkl): build them)')\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    row = state(home)["nba"]
+    assert row[2] == "refused" and row[3] == "" and "study tables are not cached" in row[4] and "guard" not in row[4], row
+    assert "refused=1" in r.stdout and r.returncode == 75
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert len(calls) == 2 and state(home)["nba"][5] == f"{LOCAL_TODAY}:2"
+
+
 def test_a_sport_evaluated_earlier_today_is_done_today_not_run_and_keeps_its_row(home, tmp_path, monkeypatch):
     row = seed(home, "nba", "evaluated", n=1)
     r, calls = daily(home, tmp_path, monkeypatch, "nba nhl")
