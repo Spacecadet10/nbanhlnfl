@@ -31,6 +31,17 @@ if [ ! -f "$SWITCH" ]; then
   exit 78
 fi
 PREPARE="${AUTORESEARCH_PREPARE:-$HOME_AR/workspace/prepare.py}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# The study runs through the pinned runner (code, interpreter, packages and snapshot of PIN.json, whatever this checkout is).
+# AUTORESEARCH_PYTHON (tests only) replaces it and is refused for the real research home.
+RUN=("${LEARNING_PYTHON:-python3}" -I "$HERE/research_runner.py")
+if [ -n "${AUTORESEARCH_PYTHON:-}" ]; then
+  if [ "$HOME_AR" = "$HOME/autoresearch-sports" ]; then
+    echo "refused: AUTORESEARCH_PYTHON would bypass the pinned runner"
+    exit 78
+  fi
+  RUN=("$AUTORESEARCH_PYTHON")
+fi
 BACKEND="${LEARNING_BACKEND:-$(cd "$(dirname "$0")/.." && pwd)/backend}"
 cd "$BACKEND" || exit 78
 SPORTS="${AUTORESEARCH_SPORTS:-nba nhl ncaab nfl soccer}"
@@ -85,11 +96,15 @@ for s in $ORDER; do
     att=$((prev + 1)); t1=$(date +%s)
     "${LEARNING_PYTHON:-python3}" -m app.learning_run --name "autoresearch-daily-$s" --max-minutes $((mins + 4)) --max-rss-gb 6 \
       --defer-sports "$s" "${win[@]}" --global-sports "$ALL" --global-hours 0.5 --global-lookback-hours "${AUTORESEARCH_GLOBAL_LOOKBACK_HOURS:-4}" -- \
-      "${AUTORESEARCH_PYTHON:-python3}" "$PREPARE" daily --sport "$s" --max-trials "$TRIALS" --max-minutes "$mins" \
+      "${RUN[@]}" "$PREPARE" daily --sport "$s" --max-trials "$TRIALS" --max-minutes "$mins" \
       --timeout "$TIMEOUT" >"$tmp" 2>&1
     rc=$?; wall=$(( $(date +%s) - t1 )); cat "$tmp"
-    # app.autoresearch prints `sport-outcome: <sport> <combined> v3=<o> [v2=<o>] [(reason)]`; the combined outcome is field 3.
-    stated=$(awk -v s="$s" '$1 == "sport-outcome:" && $2 == s {print $3}' "$tmp" | tail -1)
+    # app.autoresearch prints `sport-outcome: <sport> <combined> v3=<o> [v2=<o>] [(reason)]`. The outcome is v3's own; v2 speaks only
+    # when v3 had no candidate (the pinned evaluator's <combined> let a v2 success hide a v3 refusal on Nov 23).
+    stated=$(awk -v s="$s" '$1 == "sport-outcome:" && $2 == s {
+      a = ""; b = ""
+      for (i = 4; i <= 5 && i <= NF; i++) { if ($i ~ /^v3=/) a = substr($i, 4); if ($i ~ /^v2=/) b = substr($i, 4) }
+      print (a == "" ? $3 : (a == "no_candidates" && b != "" ? b : a)) }' "$tmp" | tail -1)
     case "$rc" in
       75|121|122|123) outcome=""; ;;                                  # the guard's own codes win over anything the child printed
       *) outcome=$stated ;;

@@ -8,8 +8,12 @@
 	     The wrapper runs the command through app.learning_run (one heavy job per machine, nice, wall-clock and memory caps, no start within
 	     2.5 h of an NBA/NHL/NCAAB tip-off) and writes data/research/learning-runs.jsonl. NBA_DATA_DIR here is only the guard's lock, log and
 	     read-only schedule lookup; prepare.py points the evaluator at its own read-only snapshot. -->
+	<!-- AUTORESEARCH_PYTHON: the wrapper starts prepare.py with the pinned runner (scripts/research_runner.py) instead of a plain
+	     python, so the run uses the pinned code and snapshot from any directory. The gated wrapper itself is unchanged. -->
 	<key>EnvironmentVariables</key>
 	<dict>
+		<key>AUTORESEARCH_PYTHON</key>
+		<string>/Users/andry/nba-predictor-delivery/scripts/research_runner.py</string>
 		<key>LEARNING_PYTHON</key>
 		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python</string>
 		<key>NBA_DATA_DIR</key>

@@ -185,6 +185,38 @@ def test_a_refusal_stated_by_the_evaluator_keeps_its_own_reason_and_is_retried_t
     assert len(calls) == 2 and state(home)["nba"][5] == f"{LOCAL_TODAY}:2"
 
 
+@pytest.mark.parametrize("line,outcome", [
+    ("evaluated v3=refused v2=evaluated (tables not cached)", "refused"), ("evaluated v3=failed v2=evaluated (boom)", "failed"),
+    ("evaluated v3=skipped v2=evaluated (item budget reached)", "skipped"), ("evaluated v3=no_candidates v2=evaluated", "evaluated"),
+    ("refused v3=no_candidates v2=refused (x)", "refused"), ("no_candidates v3=no_candidates", "no_candidates"),
+    ("evaluated v3=evaluated v2=failed (y)", "evaluated")])
+def test_the_wrapper_reads_v3s_own_outcome_whatever_the_pinned_evaluator_combined(home, tmp_path, monkeypatch, line, outcome):
+    """The pinned evaluator (23df530) still prints `evaluated` when only v2 ran: the wrapper must not repeat it (Nov 23 06:00)."""
+    (home / "workspace" / "prepare.py").write_text(f"print('sport-outcome: nba {line}')\n")
+    r, _ = daily(home, tmp_path, monkeypatch, "nba")
+    row = state(home)["nba"]
+    assert row[2] == outcome, r.stdout
+    assert bool(row[3]) == (outcome == "evaluated")                 # a hidden refusal never counts as a success
+
+
+def test_the_wrapper_uses_the_pinned_runner_and_refuses_a_python_override_for_the_real_home(tmp_path):
+    text = DAILY.read_text()
+    assert '-I "$HERE/research_runner.py"' in text and '"${RUN[@]}" "$PREPARE" daily' in text
+    real = tmp_path / "autoresearch-sports"                         # $HOME/autoresearch-sports, without AUTORESEARCH_HOME
+    real.mkdir()
+    (real / "SCHEDULE_DAILY_ENABLED").write_text("")
+    env = {k: v for k, v in os.environ.items() if k != "AUTORESEARCH_HOME"} | {"HOME": str(tmp_path), "AUTORESEARCH_PYTHON": sys.executable,
+                                                                             "LEARNING_PYTHON": sys.executable}
+    r = subprocess.run(["/bin/bash", str(DAILY)], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 78 and "AUTORESEARCH_PYTHON" in r.stdout
+
+
+def test_the_agent_template_goes_through_the_pinned_runner():
+    d = plistlib.loads((ROOT / "scripts" / "launchd" / "com.nba-predictor.autoresearch-agent.plist").read_bytes())
+    assert d["EnvironmentVariables"]["AUTORESEARCH_PYTHON"].endswith("/scripts/research_runner.py")
+    assert os.access(ROOT / "scripts" / "research_runner.py", os.X_OK)
+
+
 def test_a_sport_evaluated_earlier_today_is_done_today_not_run_and_keeps_its_row(home, tmp_path, monkeypatch):
     row = seed(home, "nba", "evaluated", n=1)
     r, calls = daily(home, tmp_path, monkeypatch, "nba nhl")
