@@ -151,7 +151,7 @@ LOCAL_YESTERDAY = (datetime.now().astimezone() - timedelta(days=1)).strftime("%Y
 
 
 def seed(home, sport, outcome, reason="-", n=1, day=None, at=None):
-    at = at or stamp(timedelta(minutes=-30))
+    at = at or stamp(timedelta(0))        # always today: 30 minutes ago is yesterday just after local midnight
     ok = at if outcome == "evaluated" else ""
     row = f"{sport}\t{at}\t{outcome}\t{ok}\t{reason}\t{day or LOCAL_TODAY}:{n}\n"
     with open(home / "daily-state.tsv", "a") as f:
