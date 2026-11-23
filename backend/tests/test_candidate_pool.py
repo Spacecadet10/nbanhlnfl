@@ -445,14 +445,28 @@ def test_a_line_whose_quote_was_retrieved_after_the_information_time_is_never_us
     c.row_factory = sqlite3.Row
     c.execute("CREATE TABLE games (game_id TEXT, tipoff_at TEXT)")
     c.execute("CREATE TABLE research_cohorts (cohort_id INTEGER, game_id TEXT, market TEXT, line REAL, line_source TEXT, "
-              "bookmaker TEXT, definition TEXT, generated_at TEXT, tipoff_at TEXT)")
+              "bookmaker TEXT, definition TEXT, generated_at TEXT, tipoff_at TEXT, information_at TEXT)")
     c.execute("INSERT INTO games VALUES ('g', '2026-10-12T23:00:00Z')")
     book = lambda at: json.dumps({"p": [0.5, 0, 0.5], "retrieved_at": at})          # noqa: E731
-    c.executemany("INSERT INTO research_cohorts VALUES (?,?,?,?,?,?,?,?,?)", [
-        (1, "g", "total", 6.5, "market", book("2026-10-12T21:40:00Z"), "d", "2026-10-12T21:45:00Z", "2026-10-12T23:00:00Z"),
-        (2, "g", "total", 5.5, "market", book("2026-10-12T21:57:00Z"), "d", "2026-10-12T21:58:00Z", "2026-10-12T23:00:00Z")])
+    c.executemany("INSERT INTO research_cohorts VALUES (?,?,?,?,?,?,?,?,?,?)", [
+        (1, "g", "total", 6.5, "market", book("2026-10-12T21:40:00Z"), "d", "2026-10-12T21:45:00Z", "2026-10-12T23:00:00Z",
+         "2026-10-12T21:45:00Z"),
+        (2, "g", "total", 5.5, "market", book("2026-10-12T21:57:00Z"), "d", "2026-10-12T21:58:00Z", "2026-10-12T23:00:00Z",
+         "2026-10-12T21:58:00Z")])
     unfrozen = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z")
     frozen = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:50:00Z")
     assert unfrozen[("g", "total")]["line"] == 5.5 and unfrozen[("g", "total")]["ref"] == "research_cohorts:2"
     assert frozen[("g", "total")]["line"] == 6.5 and frozen[("g", "total")]["ref"] == "research_cohorts:1"
-    assert pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:30:00Z") == {}
+    rej = {}
+    assert pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:30:00Z", rejected=rej) == {}
+    assert rej["total"] == 2 and "after the information time" in rej["reasons"]["total"]
+    # the live shape of a cohort without a quote: bookmaker is the TEXT 'null' (model-line team totals, NHL 3-way)
+    c.executemany("INSERT INTO research_cohorts VALUES (?,?,?,?,?,?,?,?,?,?)", [
+        (3, "g", "team_total_home", 3.5, "model", "null", "d", "2026-10-12T21:53:00Z", "2026-10-12T23:00:00Z", "2026-10-12T21:53:00Z"),
+        (4, "g", "reg3", None, "none", "null", "d", "2026-10-12T21:53:00Z", "2026-10-12T23:00:00Z", "2026-10-12T21:53:00Z")])
+    same_cycle = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:50:00Z")
+    assert same_cycle[("g", "team_total_home")]["ref"] == "research_cohorts:3" and same_cycle[("g", "reg3")]["ref"] == "research_cohorts:4"
+    rej = {}
+    later = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:40:00Z", rejected=rej)
+    assert ("g", "team_total_home") not in later and ("g", "reg3") not in later        # 13 min after: another cycle
+    assert rej["reg3"] == 1 and "cycle" in rej["reasons"]["reg3"]
