@@ -357,6 +357,14 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   review, not on the Nov 21-22 counts: candidate features use data up to the candidate's own run time, and a candidate row's
   `line_ref` links it to the research cohort, not to the primary it is compared with, so a later candidate run could know
   more; any information edge now favours the current model). A bar that falls back from the named model is `bar_fallback`.
+  **Owner decision (2026-11-23): fix the recorder, keep "never later".** Under that rule 0 of 12 NBA and 0 of 16 NHL games paired
+  on Nov 21-22 (the pool always ran 1-5 min after the served model). The candidate pool now reads every input (results, box
+  scores/shots, goalie listings, eligibility) as of the served forecast's information time of the same cycle
+  (`jobs.predict_now` passes `information_at` = the near-tipoff run's `as_of`; `candidates.live.record(information_at=...)`),
+  stores it in each row's `inputs.information_at` and keeps its real write time. The forward reader uses it as the row's
+  `forecast_cutoff`, and pairs compare information times on both sides (bar ledger rows: their run time, an upper bound).
+  Pool rows written before this change have no frozen time and never pair; NBA/NHL comparisons start with the first cycle
+  after deployment.
   (e) The bar is named in advance: NBA winner `elo`, NBA lines `points_normal`; NHL winner `hockey_elo`, NHL 3-way and lines
   `goals_poisson` (the served primaries); other sports have one incumbent per market. (f) A candidate whose only forecasts came
   after start - 60 min is `as_of_late` (counted with unpaired), not `missing`. (g) Certainty is judged on every stored row of a candidate's

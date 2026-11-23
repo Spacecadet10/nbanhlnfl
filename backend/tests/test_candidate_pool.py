@@ -375,3 +375,31 @@ def test_one_games_failure_never_withholds_a_candidates_other_markets_or_games(u
     out = _record(upcoming, lines=lines)
     assert out["errors"] == {f"multinomial_l2:nhl_base:{GID}": "RuntimeError: boom"}
     assert any(f["candidate"] == "poisson_draw:nhl_base" for f in out["forecasts"])
+
+
+def test_inputs_can_be_frozen_at_the_served_forecasts_information_time(upcoming, monkeypatch):
+    """Owner decision 2026-11-23: the pool runs minutes after the served forecast; with information_at every input is read as
+    of that time (results, events, listings, eligibility) and the row says so, while it keeps its real write time."""
+    from app.candidates import features as feats
+    seen = {}
+    real_walk = feats.walk
+    monkeypatch.setattr(pool_live.features, "walk", lambda rec, rows, events, deliver_until=None, **kw:
+                        seen.setdefault("deliver_until", deliver_until) and real_walk(rec, rows, events, deliver_until=deliver_until, **kw))
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"},
+             (GID, "total"): {"line": 6.5, "source": "core_cohort", "ref": "cohort:2"}}
+    info = "2026-10-12T21:55:00Z"
+    out = _record(upcoming, lines=lines, information_at=info)
+    assert out["errors"] == {} and out["created"] > 0 and out["information_at"] == info, out
+    assert seen["deliver_until"] == info
+    rows = upcoming.execute("SELECT generated_at, inputs FROM candidate_forecasts").fetchall()
+    assert {r["generated_at"] for r in rows} == {NOW}                                  # the real (fixed) write time
+    assert {json.loads(r["inputs"]).get("information_at") for r in rows} == {info}
+    bad = _record(upcoming, lines=lines, information_at="2026-10-12T22:05:00Z")      # later than the recording: refused
+    assert bad["status"] == "failed" and "after the recording time" in bad["errors"]["pool"]
+
+
+def test_the_cycle_passes_the_served_forecasts_time_to_the_pool():
+    import inspect
+    from app import jobs
+    src = inspect.getsource(jobs.predict_now)
+    assert 'candidate_pool(conn, game_ids=accepted, now=now, write=not dry_run, information_at=out.get("as_of"))' in src

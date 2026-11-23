@@ -987,7 +987,7 @@ def _ledger_store(path):
     c.executescript("""
     CREATE TABLE games (game_id TEXT PRIMARY KEY, season INTEGER, tipoff_at TEXT, status TEXT, home_score INT, away_score INT);
     CREATE TABLE candidate_forecasts (forecast_id INTEGER PRIMARY KEY, game_id TEXT, candidate TEXT, model_version TEXT, market TEXT,
-      line REAL, line_source TEXT, p_a REAL, p_mid REAL, p_b REAL, tipoff_at TEXT, generated_at TEXT);
+      line REAL, line_source TEXT, p_a REAL, p_mid REAL, p_b REAL, tipoff_at TEXT, generated_at TEXT, inputs TEXT);
     CREATE TABLE predictions (prediction_id INTEGER PRIMARY KEY, game_id TEXT, run_type TEXT, model_version TEXT, feature_version TEXT,
       cutoff_at TEXT, generated_at TEXT, home_win_prob REAL);
     CREATE TABLE market_forecasts (forecast_id INTEGER PRIMARY KEY, game_id TEXT, market TEXT, line REAL, line_source TEXT, policy TEXT,
@@ -1421,3 +1421,32 @@ def test_certainty_before_the_cut_still_bars_the_candidate(tmp_path, monkeypatch
     assert m["status"] == "suspect_invalid" and m["criteria"]["valid_probabilities"]["degenerate"] == 1
     fw = res["evaluation"]["markets"]["winner"]["comparisons"]["cand"]["vs_incumbent"]["forward"]
     assert fw["bar_fallback"] is True and fw["bar"] == "inc"     # the named NBA bar (elo) has no rows here: the fallback is shown
+
+
+
+def test_pool_rows_pair_by_their_frozen_information_time_and_never_know_more_than_the_bar(tmp_path):
+    conn = _ledger_store(tmp_path / "nba.sqlite")
+    conn.execute("UPDATE candidate_forecasts SET generated_at = '2026-11-22T23:04:00Z', "
+                 "inputs = '{\"information_at\": \"2026-11-22T22:59:30Z\"}' WHERE game_id = 'ahead'")
+    conn.execute("UPDATE market_forecasts SET generated_at = '2026-11-22T23:00:00Z' WHERE game_id = 'ahead'")
+    conn.commit()
+    up = ar._study_upcoming("nba", {"winner": [], "lines": ["points_normal"]})
+    cand = [r for r in up(conn, "2026-11-22T22:00:00Z", "ridge:nba_base") if r["market"] == "total"]
+    assert cand[0]["forecast_cutoff"] == "2026-11-22T22:59:30Z" and cand[0]["forecast_at"] == "2026-11-22T23:04:00Z"
+    p = tmp_path / "f.sqlite"
+    for model, role, recs in (("ridge:nba_base", "candidate", cand),
+                              ("points_normal", "incumbent", up(conn, "2026-11-22T22:00:00Z", "points_normal"))):
+        ar.forward_record(p, sport="nba", protocol_id="p", model=model, role=role, model_version="v", data_version="d",
+                          forecasted_at="2026-11-22T23:05:00Z", records=recs, now="2026-11-22T23:05:00Z")
+    rows, _ = ar._forward_rows(p, "nba", as_of=False)
+    pr = ar.forward_pairs(rows, "ridge:nba_base", "points_normal", "total")
+    assert pr["paired_games"] == 1 and pr["candidate_later_pairs"] == 0       # written 4 min later, but knew only up to 22:59:30
+    conn.execute("UPDATE candidate_forecasts SET inputs = NULL")               # an old pool row (no frozen time): never pairs
+    conn.commit()
+    p2 = tmp_path / "f2.sqlite"
+    for model, role, recs in (("ridge:nba_base", "candidate", [r for r in up(conn, "2026-11-22T22:00:00Z", "ridge:nba_base")
+                                                               if r["market"] == "total"]),
+                              ("points_normal", "incumbent", up(conn, "2026-11-22T22:00:00Z", "points_normal"))):
+        ar.forward_record(p2, sport="nba", protocol_id="p", model=model, role=role, model_version="v", data_version="d",
+                          forecasted_at="2026-11-22T23:05:00Z", records=recs, now="2026-11-22T23:05:00Z")
+    assert ar.forward_pairs(ar._forward_rows(p2, "nba", as_of=False)[0], "ridge:nba_base", "points_normal", "total")["paired_games"] == 0

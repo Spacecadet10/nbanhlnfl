@@ -1968,12 +1968,19 @@ def _study_upcoming(sport: str, members: Optional[dict] = None):
         if model_name in {s.name for s in registry.for_sport(sport)}:
             for f in conn.execute(
                     "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.p_a, f.p_mid, f.p_b, f.generated_at, "
-                    "g.tipoff_at AS game_tipoff, g.season FROM candidate_forecasts f JOIN games g USING (game_id) "
+                    "f.inputs, g.tipoff_at AS game_tipoff, g.season FROM candidate_forecasts f JOIN games g USING (game_id) "
                     "WHERE f.candidate = ? AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.generated_at < f.tipoff_at "
                     "ORDER BY f.generated_at", (model_name, now)):
                 if f["market"] in known:
-                    out.append(rec(f, f["market"], vec(f, f["market"]), f["line"],
-                                   _ledger_line_source(f["line_source"]) if known[f["market"]][0] == "line" else None))
+                    r = rec(f, f["market"], vec(f, f["market"]), f["line"],
+                            _ledger_line_source(f["line_source"]) if known[f["market"]][0] == "line" else None)
+                    try:            # inputs frozen at the served forecast's time (pool rows from 2026-11-23 on)
+                        info = json.loads(f["inputs"] or "{}").get("information_at")
+                    except ValueError:
+                        info = None
+                    if info and _iso(info) <= r["forecast_at"]:
+                        r["forecast_cutoff"] = _iso(info)
+                    out.append(r)
             return out
         if model_name in members["winner"]:
             from .agreement import FEATURE_VERSION
@@ -3039,18 +3046,21 @@ def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str]
 
 def forward_pairs(rows: list, cand: str, inc: str, market: str, late: Optional[set] = None) -> dict:
     """Candidate vs current-model pairs for one market. Per game: walk the current model's runs (at or before the evaluation
-    instant) from the latest back; take the first one for which the candidate has a run at most max_gap_minutes away with at
-    least one common line; both sides' rows of those two runs at the common lines form the pair (a ladder pairs line by line).
+    instant) from the latest back; take the first one for which the candidate has a run whose information time is at most
+    max_gap_minutes before and never after the bar's, with at least one common line; both sides' rows of those two runs at the common lines form the pair (a ladder pairs line by line).
     A game where the candidate never forecast is `missing`; one where it forecast but no run pairs is `unpaired` (timing or
     line), counted and reported, never silently dropped. Only rows at or before the instant exist here, so no later
     information enters a pair."""
-    def runs(model):
+    def runs(model, when):
         out: dict = {}
         for r in rows:
             if r["model"] == model and r["market"] == market:
-                out.setdefault(r["game_id"], {}).setdefault(r["forecasted_at"], {})[r["line_key"]] = r
+                out.setdefault(r["game_id"], {}).setdefault(r[when], {})[r["line_key"]] = r
         return out
-    ci, cc = runs(inc), runs(cand)
+    # Both sides by their INFORMATION time (forecast_cutoff): for the NBA/NHL pool, the served forecast's time its inputs were
+    # frozen at; for official ledger rows of the bar, their run time (an upper bound); elsewhere the run time. The candidate's
+    # must be at or before the bar's (within max_gap_minutes), so a candidate never knows more than the model it is paired with.
+    ci, cc = runs(inc, "forecast_cutoff"), runs(cand, "forecast_cutoff")
     before = timedelta(minutes=FORWARD_PAIRING["max_gap_minutes"])
     after = timedelta(minutes=FORWARD_PAIRING["max_candidate_later_minutes"])
     c_recs, i_recs, gaps, missing, unpaired, as_of_late = [], [], [], [], [], []
