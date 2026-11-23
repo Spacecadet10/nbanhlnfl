@@ -1939,8 +1939,9 @@ def _ledger_line_source(value) -> Optional[str]:
 
 def _study_upcoming(sport: str, members: Optional[dict] = None):
     """Forward forecasts for NBA/NHL from the official store's append-only pregame ledgers (read-only; written inside the
-    two-hour window by the existing recorders, never by research), so candidate and current-model rows come from the same runs:
-    - registry candidates: `candidate_forecasts` (the candidate pool, research-cand:<name>:<definition>);
+    two-hour window by the existing recorders, never by research), so candidate and current-model rows come from the same runs.
+    This module holds no ledger query: the reads are app.candidates_view's (the evaluator boundary test).
+    - registry candidates: the candidate pool's ledger (research-cand:<name>:<definition>);
     - current-model winner members: `predictions` rows of the agreement cohort (research-v2:<name>:<digest>, two-hour policy);
     - current-model line members: `market_forecasts` rows of the research cohort (research-v3:<name>:...), and the primary
       line model's own near-tipoff rows (<name>-...-policy=near_tipoff).
@@ -1963,14 +1964,11 @@ def _study_upcoming(sport: str, members: Optional[dict] = None):
         return {"a": f["p_a"], "b": f["p_b"]} if kind != "three_way" else {"a": f["p_a"], "mid": f["p_mid"], "b": f["p_b"]}
 
     def forecast_upcoming(conn, now, model_name):
+        from . import candidates_view
         from .candidates import registry
         out = []
         if model_name in {s.name for s in registry.for_sport(sport)}:
-            for f in conn.execute(
-                    "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.p_a, f.p_mid, f.p_b, f.generated_at, "
-                    "f.inputs, g.tipoff_at AS game_tipoff, g.season FROM candidate_forecasts f JOIN games g USING (game_id) "
-                    "WHERE f.candidate = ? AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.generated_at < f.tipoff_at "
-                    "ORDER BY f.generated_at", (model_name, now)):
+            for f in candidates_view.upcoming(conn, model_name, now):
                 if f["market"] in known:
                     r = rec(f, f["market"], vec(f, f["market"]), f["line"],
                             _ledger_line_source(f["line_source"]) if known[f["market"]][0] == "line" else None)
@@ -1983,23 +1981,11 @@ def _study_upcoming(sport: str, members: Optional[dict] = None):
                     out.append(r)
             return out
         if model_name in members["winner"]:
-            from .agreement import FEATURE_VERSION
-            prefix = f"research-v2:{model_name}:"
-            for f in conn.execute(
-                    "SELECT p.game_id, p.model_version, p.generated_at, p.home_win_prob, g.tipoff_at AS game_tipoff, g.season FROM predictions p "
-                    "JOIN games g USING (game_id) WHERE p.run_type = 'live' AND p.feature_version = ? "
-                    "AND substr(p.model_version, 1, ?) = ? AND g.tipoff_at > ? AND p.generated_at < g.tipoff_at "
-                    "ORDER BY p.generated_at", (FEATURE_VERSION, len(prefix), prefix, now)):
+            for f in candidates_view.upcoming_winner_member(conn, model_name, now):
                 q = float(f["home_win_prob"])
                 out.append(rec(f, "winner", {"a": q, "b": 1.0 - q}))
         if model_name in members["lines"]:
-            research, primary = f"research-v3:{model_name}:", f"{model_name}-"
-            for f in conn.execute(
-                    "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.generated_at, f.p_a, f.p_mid, f.p_b, "
-                    "g.tipoff_at AS game_tipoff, g.season FROM market_forecasts f JOIN games g USING (game_id) WHERE f.run_type = 'live' "
-                    "AND f.policy = 'near_tipoff' AND (substr(f.model_version, 1, ?) = ? OR substr(f.model_version, 1, ?) = ?) "
-                    "AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at ORDER BY f.generated_at",
-                    (len(research), research, len(primary), primary, now)):
+            for f in candidates_view.upcoming_line_member(conn, model_name, now):
                 if f["market"] in known and f["market"] != "winner":
                     out.append(rec(f, f["market"], vec(f, f["market"]), f["line"],
                                    _ledger_line_source(f["line_source"]) if known[f["market"]][0] == "line" else None))
@@ -2058,7 +2044,7 @@ def nba_nhl_adapter(sport: str, candidates: Optional[list] = None) -> dict:
             continue
         # Forward: every candidate the pool records (its own pregame ledger), incl. goalie-feature ones, which use the starter
         # only as known before the start. Historical research excludes those (rows learn the starter after the start).
-        forward_models[spec.name] = entry | {"source": "candidate pool (candidate_forecasts)"}
+        forward_models[spec.name] = entry | {"source": "candidate pool ledger"}
         if deep.is_deep(spec):              # libraries present: recorded forward by the pool, not walked historically
             continue
         if not registry.available(spec) or (candidates is not None and spec.name not in candidates) \

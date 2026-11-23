@@ -59,6 +59,31 @@ def game(conn, sport: str, game_id: str, as_of: str) -> Optional[dict]:
 
 
 def upcoming(conn, candidate: str, now: str) -> list:
-    """Recorded pregame forecasts of one candidate for games starting after `now` (read-only; for the research forward test)."""
-    return conn.execute("SELECT f.*, g.season FROM candidate_forecasts f JOIN games g USING (game_id) WHERE f.candidate=? "
-                        "AND f.tipoff_at > ? AND f.generated_at < f.tipoff_at ORDER BY f.generated_at", (candidate, now)).fetchall()
+    """Recorded pregame forecasts of one candidate for games that have not started (read-only; research forward test)."""
+    return conn.execute(
+        "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.p_a, f.p_mid, f.p_b, f.generated_at, "
+        "f.inputs, g.tipoff_at AS game_tipoff, g.season FROM candidate_forecasts f JOIN games g USING (game_id) "
+        "WHERE f.candidate = ? AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.generated_at < f.tipoff_at "
+        "ORDER BY f.generated_at", (candidate, now)).fetchall()
+
+
+def upcoming_winner_member(conn, model: str, now: str) -> list:
+    """A current-model winner member's recorded agreement-cohort rows for games that have not started (read-only)."""
+    from .agreement import FEATURE_VERSION
+    prefix = f"research-v2:{model}:"
+    return conn.execute(
+        "SELECT p.game_id, p.model_version, p.generated_at, p.home_win_prob, g.tipoff_at AS game_tipoff, g.season FROM predictions p "
+        "JOIN games g USING (game_id) WHERE p.run_type = 'live' AND p.feature_version = ? "
+        "AND substr(p.model_version, 1, ?) = ? AND g.tipoff_at > ? AND p.generated_at < g.tipoff_at "
+        "ORDER BY p.generated_at", (FEATURE_VERSION, len(prefix), prefix, now)).fetchall()
+
+
+def upcoming_line_member(conn, model: str, now: str) -> list:
+    """A current-model line member's near-tipoff rows (research cohort and the primary's own) for games not started (read-only)."""
+    research, primary = f"research-v3:{model}:", f"{model}-"
+    return conn.execute(
+        "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.generated_at, f.p_a, f.p_mid, f.p_b, "
+        "g.tipoff_at AS game_tipoff, g.season FROM market_forecasts f JOIN games g USING (game_id) WHERE f.run_type = 'live' "
+        "AND f.policy = 'near_tipoff' AND (substr(f.model_version, 1, ?) = ? OR substr(f.model_version, 1, ?) = ?) "
+        "AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at ORDER BY f.generated_at",
+        (len(research), research, len(primary), primary, now)).fetchall()
