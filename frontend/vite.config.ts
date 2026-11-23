@@ -10,7 +10,8 @@ export default defineConfig({
     // jobs' release, whose code their research definitions are bound to); everything else from API_PROXY_TARGET.
     proxy: {
       ...(process.env.API_PROXY_TARGET_RESEARCH
-        ? { '/api/research': process.env.API_PROXY_TARGET_RESEARCH, '/api/training-run': process.env.API_PROXY_TARGET_RESEARCH }
+        // The autoresearch status reads files only (no research definitions); the audit exists in this release's code, not in theirs.
+        ? { '/api/research/autoresearch': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000', '/api/research': process.env.API_PROXY_TARGET_RESEARCH, '/api/training-run': process.env.API_PROXY_TARGET_RESEARCH }
         : {}),
       '/api': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000',
     },
