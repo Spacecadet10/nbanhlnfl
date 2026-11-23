@@ -848,7 +848,7 @@ export interface AutoresearchV3Market { status: string; reason?: string; settlem
 export interface AutoresearchV3Sport {
   protocol_id?: string | null; at?: string; outcome: AutoresearchOutcome; reason?: string | null;
   last_attempt?: { at: string; outcome: AutoresearchOutcome; reason?: string | null } | null; last_success_at?: string | null;
-  candidates: string[]; candidate_count: number; evaluated_markets: string[]; blockers: string[]; kept?: string[]; needs_human_review?: string[];
+  candidates: string[]; candidate_count: number; evaluated_markets: string[]; blockers: string[]; kept?: string[]; needs_human_review?: string[]; suspect?: string[]; blocked_models?: Record<string, string>;
   queue?: { total: number; done: number; remaining: number; failed: string[]; ran_now: number; next_item: string | null } | null;
   next_run?: string | null; periods?: { search: number[]; validation: number[]; holdout: number[] }; periods_note?: string | null;
   unsupported?: Record<string, string>; evaluation?: Record<string, AutoresearchV3Market>;
@@ -863,7 +863,7 @@ export interface AutoresearchV3 {
   forward?: Record<string, AutoresearchForward> | null;
 }
 export interface AutoresearchForward {
-  status?: string; label?: string; graded_games?: number; paired_graded_items?: number;
+  status?: string; label?: string; grading?: string; graded_games?: number; paired_graded_items?: number; suspect_models?: Record<string, number>;
   candidate_forecasts?: { rows: number; models: number; games: number }; incumbent_forecasts?: { rows: number; models: number; games: number };
   last_record?: { at: string; outcome: string; detail: string }; last_grade?: { at: string; outcome: string; detail: string };
 }

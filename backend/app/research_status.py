@@ -164,8 +164,16 @@ FORWARD_LABELS = {
     "candidates_waiting": "candidates tracked; no forecast yet for a game still ahead",
     "no_candidate_passed": "no candidate passed research: only the current model is recorded, as the comparison baseline",
     "candidate_recording_unsupported": "candidate recording is not supported for this sport (no forward adapter)",
+    "candidates_failed": "candidates tracked, but every candidate call failed (see the recorder log)",
+    "no_candidates_registered": "no completed research result for this sport yet: only the current model is recorded",
+    "no_store": "no official store for this sport",
     "failed": "the last recording run failed",
     "not_run": "the forward recorder has not run for this sport"}
+
+
+GRADING_LABELS = {"graded": "graded new results", "waiting_for_results": "waiting for results (games started, not final)",
+                  "nothing_to_grade": "nothing to grade yet (no recorded game has started)", "failed": "grading failed",
+                  "evaluated": "graded new results", "no_candidates": "nothing graded (run before 2026-11-23)"}
 
 
 def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
@@ -203,6 +211,10 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
                         "AND g.game_id = c.game_id AND g.market = c.market AND g.line_key = c.line_key "
                         "WHERE c.role = 'candidate' GROUP BY c.sport"):
                     out.setdefault(r["sport"], {})["paired_graded_items"] = r["n"]
+            for r in conn.execute("SELECT sport, model, COUNT(*) n FROM rf_forecasts WHERE role = 'candidate' AND (p_a <= ? OR p_a >= ? "
+                                  "OR p_b <= ? OR p_b >= ? OR (p_mid IS NOT NULL AND (p_mid <= ? OR p_mid >= ?))) GROUP BY sport, model",
+                                  (1e-6, 1 - 1e-6) * 3):
+                out.setdefault(r["sport"], {}).setdefault("suspect_models", {})[r["model"]] = r["n"]
     except sqlite3.Error as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
     finally:
@@ -214,6 +226,8 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
             stated = ("not_run" if "last_record" not in v else
                       "candidates_recording" if v.get("candidate_forecasts") else "no_candidate_passed")
         v["status"], v["label"] = stated, FORWARD_LABELS.get(stated, stated)
+        g = (v.get("last_grade") or {}).get("outcome")
+        v["grading"] = GRADING_LABELS.get(g, g) if g else "the grader has not run for this sport"
     return out
 
 
@@ -229,7 +243,7 @@ def v3_status(root: Path) -> Optional[dict]:
     if not latest and not last:
         return None
     keep = ("protocol_id", "at", "last_attempt", "last_success_at", "outcome", "reason", "candidates", "evaluated_markets", "blockers",
-            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "needs_human_review", "evaluation", "data_version", "models", "markets", "caveats", "data_validation", "data_cutoff", "forward_candidates")
+            "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "needs_human_review", "evaluation", "data_version", "models", "markets", "caveats", "data_validation", "data_cutoff", "forward_candidates", "suspect", "blocked_models")
     sports = {}
     for s, st in sorted(latest.items()):
         sports[s] = {k: st.get(k) for k in keep} | {"candidate_count": len(st.get("candidates") or [])}

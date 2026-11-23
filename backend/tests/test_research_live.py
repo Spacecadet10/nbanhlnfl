@@ -606,14 +606,14 @@ def test_grade_settles_from_the_official_store_through_the_cores_grading_and_nev
     exp = select(tmp_path, ad, ["cand"])
     fwd_live.forward_record(fdata, now=FNOW, adapters={"ncaab": ad}, exp_root=exp, sports=("ncaab",))
     early = fwd_live.forward_grade(fdata, now="2026-11-22T20:00:00Z", adapters={"ncaab": ad}, sports=("ncaab",))["ncaab"]
-    assert early["graded"] == 0 and early["waiting"] == 2                       # g1 tipped off but is not final
+    assert early["graded"] == 0 and early["waiting"] == 2 and early["outcome"] == "waiting_for_results"   # g1 not final
     c = sqlite3.connect(fdata / "ncaab.sqlite")
     c.execute("UPDATE games SET status='final', home_score=80, away_score=70 WHERE game_id='g1'")   # total 150 = the line: a push
     c.commit()
     c.close()
     before = digest(fdata / "ncaab.sqlite")
     r = fwd_live.forward_grade(fdata, now="2026-11-22T23:00:00Z", adapters={"ncaab": ad}, sports=("ncaab",))["ncaab"]
-    assert r["outcome"] == "evaluated" and r["graded"] == 2 and r["waiting"] == 0 and digest(fdata / "ncaab.sqlite") == before
+    assert r["outcome"] == "graded" and r["graded"] == 2 and r["waiting"] == 0 and digest(fdata / "ncaab.sqlite") == before
     f = sqlite3.connect(fdata / "research" / "forward-candidates.sqlite")
     assert dict(f.execute("SELECT market, outcome FROM rf_grades")) == {"winner": "a", "total": "push"}
     assert fwd_live.forward_grade(fdata, now="2026-11-23T23:00:00Z", adapters={"ncaab": ad}, sports=("ncaab",))["ncaab"]["graded"] == 0

@@ -317,6 +317,35 @@ decides under MODEL_SELECTION §6.
 Every evaluation of the forward store is a look and is logged; only the first look at a market's minimum count is confirmatory,
 all others are labelled exploratory. A candidate version that changes during the forward window starts a new forward record.
 
+### Forward pairing, statuses and suspect models (amendment 2026-11-23, before any candidate's forward look)
+Written before any candidate had a forward look (no candidate had forward rows in the research store; the NBA/NHL pool's own
+prospective counts were not used to choose anything here). Constants: `autoresearch.FORWARD_PAIRING` (kept outside
+`PROMOTION`/`PROTOCOL_V3`, so protocol ids and research queues are unchanged).
+- **Selection, blind to results.** Only forecasts made at or before *start − 60 min* are scored; per model only its latest
+  definition (`model_version`), so a changed definition starts a new series. Rows are never deleted (append-only); later or
+  older rows stay stored and are simply not scored.
+- **Pairs.** A candidate is compared with the current model (best existing member per market) only on pairs taken from runs at
+  most **10 minutes** apart at the **same line** and the market's fixed side (a = home / over / team). Per game the current
+  model's runs are walked from the latest back; the first run with a candidate run inside the gap at a common line is used
+  (a ladder pairs line by line). Games where the candidate never forecast are *missing* (full-coverage criterion); games where
+  it forecast but nothing pairs are *unpaired* (timing or line), counted and shown; the new promotion criterion `pairing`
+  fails when more than 10% of the current model's games are unpaired. Per-model metrics use each model's last run at or
+  before the instant.
+- **NBA/NHL sources.** Pool candidates: `candidate_forecasts`; current-model winner members: `predictions` (agreement cohort,
+  `research-v2:<name>:<digest>`); line members: `market_forecasts` (`research-v3:<name>:…` and the primary's own near-tipoff
+  rows). All read-only, every row generated before the game's current start (`games.tipoff_at`). Lines are tagged
+  `bookmaker` or `reference_model`; any reference-line result goes to human review, never to a recommendation.
+- **Separate statuses.** Research evaluation (the v3 runner: evaluated / no_candidates / refused / failed / skipped; "evaluated,
+  no candidate kept" is a successful evaluation). Candidate recording (`forward_status`): candidates_recording,
+  candidates_waiting, candidates_failed, no_candidate_passed, no_candidates_registered, candidate_recording_unsupported,
+  no_store, failed. Grading: graded, waiting_for_results, nothing_to_grade, failed.
+- **Suspect models.** A forecast at probability ≤ 1e-6 or ≥ 1 − 1e-6 states certainty. The values are stored unchanged; the
+  model is marked `suspect_invalid` (research decision, forward recommendation and status page) and can never be kept or
+  recommended until a person diagnoses it. Log loss still clamps at 1e-15 for every record, which is stated, not hidden.
+  First case: NBA pool candidate `mlp:nba_base:normal` (team/game totals: its point head predicts game totals around 1,268
+  points against lines near 215; spreads look plausible), diagnosis open.
+- **Neural candidates** whose pinned library is not installed are `dependency-blocked` (research blockers and status page).
+
 ### Negative results
 "No candidate kept", "no candidates", failed items and refused sports are recorded (`attempts.jsonl`, `items.jsonl`, `state.json`)
 and shown; none is reported as a successful search.

@@ -754,9 +754,9 @@ def test_public_forward_api_records_references_and_candidates_then_grades_read_o
     assert ar.record(data, _t(2), "nba", ["cand"], {"nba": a})["already_recorded"] == 12
     assert ar.record(data, _t(2), "nba", candidates=["nobody"], adapters={"nba": a})["models"] == 1    # incumbent only
     assert ar.record(data, _t(2), "soccer", adapters={})["outcome"] == "refused"
-    assert ar.grade(data, _t(5), "nba", {"nba": a})["outcome"] == "no_candidates"          # games not started yet
+    assert ar.grade(data, _t(5), "nba", {"nba": a})["outcome"] == "nothing_to_grade"       # games not started yet: a grading status, not a research one
     g = ar.grade(data, _t(30), "nba", {"nba": a})
-    assert g["outcome"] == "evaluated" and g["graded"] == 6
+    assert g["outcome"] == "graded" and g["graded"] == 6
     assert (data / "research" / ar.FORWARD_FILE).is_file()
 
 
@@ -1046,7 +1046,7 @@ def test_record_tracks_the_pool_and_states_candidates_apart_from_the_current_mod
     ahead = [dict(rec(1), outcome=None, start_at=_t(10, 12), forecast_cutoff=_t(1))]
     a = fixture_adapter({"inc": []}) | {"forecast_upcoming": lambda conn, now, name: ahead if name in ("inc", "pool") else []}
     base = ar.record(data, _t(2), "nba", adapters={"nba": a})
-    assert base["outcome"] == "no_candidates" and base["forward_status"] == "no_candidate_passed"
+    assert base["outcome"] == "no_candidates" and base["forward_status"] == "no_candidates_registered"   # no research result given
     assert base["baseline_rows"] == 1 and base["candidate_rows"] == 0 and base["candidates"] == []
     pool = a | {"forward_models": {"pool": {"role": "candidate", "version": "p1", "description": "pool"},
                                    "quiet": {"role": "candidate", "version": "q1", "description": "pool"}}}
@@ -1144,3 +1144,146 @@ def test_forward_summary_labels_each_sport_and_counts_paired_graded_items(tmp_pa
     assert s["nba"]["status"] == "candidates_recording" and s["nba"]["paired_graded_items"] == 1 and s["nba"]["graded_games"] == 1
     assert s["ncaab"]["status"] == "not_run" and "paired_graded_items" not in s["ncaab"]
     assert s["ncaab"]["incumbent_forecasts"]["rows"] == 1 and "candidate_forecasts" not in s["ncaab"]
+
+
+def test_forward_pairs_are_selected_as_of_a_fixed_instant_before_the_start_and_later_rows_stay_stored(tmp_path):
+    p = tmp_path / "asof.sqlite"
+    start = _t(5, 12)
+    def put(model, role, at, line, pa):
+        r = dict(rec(1, market="total", line=line, p=pa), outcome=None, start_at=start, forecast_cutoff=at, forecast_at=at)
+        ar.forward_record(p, sport="ncaab", protocol_id="p", model=model, role=role, model_version="v", data_version="d",
+                          forecasted_at=at, records=[r], now=at)
+    put("inc", "incumbent", _t(5, 10), 150.5, 0.5)          # 2 h before the start
+    put("cand", "candidate", _t(5, 10), 150.5, 0.6)
+    put("inc", "incumbent", _t(5, 11.5), 152.5, 0.4)        # 30 min before: after the fixed instant (start - 60 min)
+    put("cand", "candidate", _t(5, 11.5), 152.5, 0.9)
+    by, _ = ar.forward_records(p, "ncaab")
+    assert ar.FORWARD_AS_OF_MINUTES == 60
+    for m in ("inc", "cand"):
+        assert [(r["line"], r["forecast_at"]) for r in by[m]] == [(150.5, _t(5, 10))]     # same instant, same line
+    assert ar.forward_connect(p).execute("SELECT COUNT(*) FROM rf_forecasts").fetchone()[0] == 4   # nothing removed
+
+
+def test_a_candidate_stating_certainty_is_suspect_never_kept_or_recommended_and_its_values_are_not_changed(tmp_path):
+    s = synthetic(n=400, seed=3, edge=0.8)
+    cand = [dict(r, probs={"a": 1.0, "b": 0.0}) if i % 5 == 0 else r for i, r in enumerate(s["cand"])]
+    ev = ar.evaluate_records(fixture_adapter({"inc": s["inc"], "cand": cand}), {"inc": s["inc"], "cand": cand})
+    w = ev["markets"]["winner"]
+    assert w["comparisons"]["cand"]["decision"] == "suspect_invalid" and "certainty" in w["comparisons"]["cand"]["reason"]
+    assert w["models"]["cand"]["degenerate_probabilities"] == 80 and ev["kept"] == [] and ev["suspect"] == ["cand:winner"]
+    p = tmp_path / "s.sqlite"
+    for model, role, recs in (("inc", "incumbent", s["inc"]), ("cand", "candidate", cand)):
+        ar.forward_record(p, sport="nba", protocol_id="p", model=model, role=role, model_version="v", data_version="d",
+                          forecasted_at=_t(-1), records=[dict(r, outcome=None, start_at=_t(i, 12), forecast_cutoff=_t(-2))
+                                                         for i, r in enumerate(recs)])
+    assert ar.forward_connect(p).execute("SELECT COUNT(*) FROM rf_forecasts WHERE model='cand' AND p_a = 1.0").fetchone()[0] == 80
+    c = ar.forward_connect(p)
+    with c:
+        for r in s["inc"]:
+            c.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, graded_at) VALUES (?,?,?,?,?,?)",
+                      ("nba", r["game_id"], "winner", "", r["outcome"], "x"))
+    c.close()
+    rec_ = ar.forward_evaluate(p, fixture_adapter({"inc": []}), "p")["recommendation"]["candidates"]["cand"]
+    assert rec_["status"] == "suspect_invalid" and rec_["markets"]["winner"]["criteria"]["valid_probabilities"]["degenerate"] == 80
+    from app import research_status as rs
+    c = ar.forward_connect(p)
+    with c:
+        c.execute("CREATE TABLE IF NOT EXISTS rf_runs (id INTEGER PRIMARY KEY, kind TEXT, sport TEXT, at TEXT, outcome TEXT, detail TEXT)")
+        c.execute("INSERT INTO rf_runs (kind, sport, at, outcome, detail) VALUES ('grade','nba','t','waiting_for_results','')")
+    c.close()
+    summ = rs.forward_summary(p)["nba"]
+    assert summ["suspect_models"] == {"cand": 80} and summ["grading"].startswith("waiting for results")
+
+
+def test_record_reports_suspect_candidate_rows():
+    import tempfile
+    d = Path(tempfile.mkdtemp())
+    bad = [dict(rec(1), probs={"a": 1.0, "b": 0.0}, outcome=None, start_at=_t(10, 12), forecast_cutoff=_t(1))]
+    a = fixture_adapter({"inc": []}) | {"forecast_upcoming": lambda conn, now, name: bad,
+                                        "forward_models": {"pool": {"role": "candidate", "version": "p", "description": "p"}}}
+    r = ar.record(d, _t(2), "nba", adapters={"nba": a})
+    assert r["suspect"] == {"inc": 1, "pool": 1} or r["suspect"] == {"pool": 1, "inc": 1}
+
+
+def _put(p, model, role, at, line, pa, gid="g1", start=None, version="v", market="total", sport="ncaab"):
+    r = {"game_id": gid, "season": 2027, "start_at": start or _t(5, 12), "forecast_cutoff": at, "forecast_at": at, "market": market,
+         "line": line, "probs": {"a": pa, "b": 1 - pa}, "outcome": None, "model_version": version}
+    return ar.forward_record(p, sport=sport, protocol_id="p", model=model, role=role, model_version=version, data_version="d",
+                             forecasted_at=at, records=[r], now=at)
+
+
+def test_forward_pairs_take_both_sides_from_runs_within_ten_minutes_at_the_same_line(tmp_path):
+    p = tmp_path / "pairs.sqlite"
+    _put(p, "cand", "candidate", _t(5, 9), 150.5, 0.6)                       # 3 h before the start
+    _put(p, "inc", "incumbent", _t(5, 9 + 2 / 60), 150.5, 0.5)               # 2 min later, same line: pairable
+    _put(p, "inc", "incumbent", _t(5, 10), 152.5, 0.4)                       # 1 h later, line moved, no candidate run near it
+    rows, _ = ar._forward_rows(p, "ncaab")
+    pr = ar.forward_pairs(rows, "cand", "inc", "total")
+    assert pr["paired_games"] == 1 and [r["line"] for r in pr["inc"]] == [150.5] and [r["probs"]["a"] for r in pr["inc"]] == [0.5]
+    assert pr["max_gap_minutes"] == pytest.approx(2.0) and pr["unpaired"] == [] and pr["missing"] == []
+    _put(p, "inc", "incumbent", _t(5, 9), 149.5, 0.5, gid="g2")              # candidate never forecast g2: missing
+    _put(p, "cand", "candidate", _t(5, 9), 151.5, 0.6, gid="g3")             # same time, different line: unpaired
+    _put(p, "inc", "incumbent", _t(5, 9), 148.5, 0.5, gid="g3")
+    _put(p, "cand", "candidate", _t(5, 9), 150.5, 0.6, gid="g4")             # same line, 40 min apart: unpaired
+    _put(p, "inc", "incumbent", _t(5, 9 + 40 / 60), 150.5, 0.5, gid="g4")
+    pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
+    assert pr["missing"] == ["g2"] and sorted(pr["unpaired"]) == ["g3", "g4"] and pr["paired_games"] == 1
+
+
+def test_unpaired_games_are_counted_and_judged_by_the_pairing_criterion_not_a_permanent_coverage_block(tmp_path):
+    p = tmp_path / "share.sqlite"
+    s = synthetic(n=300, seed=5, edge=0.8)
+    for i, (ri, rc) in enumerate(zip(s["inc"], s["cand"])):
+        start, at = _t(i, 12), _t(i, 8)
+        _put(p, "inc", "incumbent", at, None, ri["probs"]["a"], gid=ri["game_id"], start=start, market="winner", sport="nba")
+        cat = at if i % 4 else _t(i, 9)                                      # every 4th candidate run is 1 h away: unpaired
+        _put(p, "cand", "candidate", cat, None, rc["probs"]["a"], gid=ri["game_id"], start=start, market="winner", sport="nba")
+    c = ar.forward_connect(p)
+    with c:
+        for r in s["inc"]:
+            c.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, graded_at) VALUES (?,?,?,?,?,?)",
+                      ("nba", r["game_id"], "winner", "", r["outcome"], "x"))
+    c.close()
+    res = ar.forward_evaluate(p, fixture_adapter({"inc": []}), "p", record_look=False)
+    fw = res["evaluation"]["markets"]["winner"]["comparisons"]["cand"]["vs_incumbent"]["forward"]
+    assert fw["unpaired_games"] == 75 and fw["paired_games"] == 225 and fw["coverage"] == 1.0 and fw["forecast"] == 225
+    m = res["recommendation"]["candidates"]["cand"]["markets"]["winner"]
+    assert m["criteria"]["pairing"]["status"] == "failed" and m["criteria"]["min_settled_forward"]["n"] == 225
+
+
+def test_record_statuses_crash_candidate_errors_and_never_researched_are_distinct(tmp_path, monkeypatch):
+    d = tmp_path / "d"
+    d.mkdir()
+    ahead = [dict(rec(1), outcome=None, start_at=_t(10, 12), forecast_cutoff=_t(1))]
+
+    def up(conn, now, name):
+        if name == "pool":
+            raise RuntimeError("pool broken")
+        return ahead
+    a = fixture_adapter({"inc": []}) | {"forecast_upcoming": up,
+                                        "forward_models": {"pool": {"role": "candidate", "version": "p", "description": "p"}}}
+    r = ar.record(d, _t(2), "nba", adapters={"nba": a})
+    assert r["forward_status"] == "candidates_failed" and r["outcome"] == "failed" and r["baseline_rows"] == 1
+    plain = fixture_adapter({"inc": []}) | {"forecast_upcoming": lambda c, n, m: ahead}
+    assert ar.record(d, _t(2), "nba", adapters={"nba": plain}, exp_root=tmp_path / "exp")["forward_status"] == "no_candidates_registered"
+    st = tmp_path / "exp" / "v3" / "pid" / "nba"
+    st.mkdir(parents=True)
+    (st / "state.json").write_text(json.dumps({"sport": "nba", "outcome": "evaluated", "last_success_at": _t(1)}))
+    assert ar.record(d, _t(2), "nba", adapters={"nba": plain}, exp_root=tmp_path / "exp")["forward_status"] == "no_candidate_passed"
+    monkeypatch.setattr(ar, "forward_record", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk")))
+    crash = ar.record(d, _t(2), "nba", adapters={"nba": plain})
+    assert crash["outcome"] == "failed" and crash["forward_status"] == "failed"
+    rejected = fixture_adapter({"inc": []}) | {"forecast_upcoming": lambda c, n, m: [dict(ahead[0], start_at=_t(1))],
+                                               "forward_models": {"pool": {"role": "candidate", "version": "p", "description": "p"}}}
+    monkeypatch.undo()
+    rj = ar.record(d, _t(2), "nba", adapters={"nba": rejected})                # started game: every row rejected
+    assert rj["candidate_rows"] == 0 and rj["forward_status"] != "candidates_recording" and rj["rejected"] == 2
+
+
+def test_a_new_ledger_definition_starts_a_new_series_and_old_rows_stay_stored(tmp_path):
+    p = tmp_path / "ver.sqlite"
+    _put(p, "inc", "incumbent", _t(5, 8), 150.5, 0.5, version="research-v2:elo:old")
+    _put(p, "inc", "incumbent", _t(6, 8), 150.5, 0.5, gid="g2", start=_t(6, 12), version="research-v2:elo:new")
+    by, info = ar.forward_records(p, "ncaab")
+    assert [r["game_id"] for r in by["inc"]] == ["g2"] and info["inc"]["version"] == "research-v2:elo:new"
+    assert ar.forward_connect(p).execute("SELECT COUNT(DISTINCT model_version) FROM rf_forecasts").fetchone()[0] == 2

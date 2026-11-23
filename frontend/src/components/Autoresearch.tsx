@@ -8,7 +8,7 @@ const MARKET: Record<string, string> = { winner: 'Winner', reg3: 'Regulation thr
 const signed = (x?: number | null) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x.toFixed(5)}`);
 const OUTCOME: Record<AutoresearchOutcome, string> = { evaluated: 'Evaluated', no_candidates: 'No candidates (nothing was searched)', refused: 'Refused', failed: 'Failed', skipped: 'Skipped (budget or time)' };
 const SPORT_NAME: Record<string, string> = { nba: 'NBA', nhl: 'NHL', nfl: 'NFL', soccer: 'Soccer', ncaab: 'NCAAB' };
-const DECISION: Record<string, string> = { needs_human_review: 'Needs human review (reference line)', keep: 'Kept (exploratory)', reject: 'Rejected', discard: 'Rejected', crash: 'Crashed', timeout: 'Timed out', invalid: 'Invalid', interrupted: 'Interrupted' };
+const DECISION: Record<string, string> = { needs_human_review: 'Needs human review (reference line)', suspect_invalid: 'Suspect: forecasts at probability 0 or 1 (never kept)', keep: 'Kept (exploratory)', reject: 'Rejected', discard: 'Rejected', crash: 'Crashed', timeout: 'Timed out', invalid: 'Invalid', interrupted: 'Interrupted' };
 
 /** Sports autoresearch: an agent proposes train.py changes, the fixed evaluator fits and scores them on validation seasons of a
  *  read-only snapshot, and every decision is logged. Research only: nothing shown here is approved or used for a forecast. */
@@ -56,9 +56,10 @@ function V3Research({ v }: { v: AutoresearchV3 }) {
         <td>{s.next_run ?? '—'}{s.data_cutoff?.last_final ? <div className="small muted">data through {dateTime(s.data_cutoff.last_final)}</div> : null}</td></tr>)}
     </tbody></table></div>
     {v.forward && !('error' in v.forward) && <><h4>Forward test (games still ahead; research store, never official)</h4>
-      <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Status</th><th>Candidate forecasts</th><th>Current-model forecasts</th><th>Graded games</th><th>Paired graded (candidate and current model, same game, market and line)</th><th>Last record / grade</th></tr></thead><tbody>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Candidate recording</th><th>Grading</th><th>Candidate forecasts</th><th>Current-model forecasts</th><th>Graded games</th><th>Graded items with both a candidate and the current model (raw stored rows; the comparison uses the pairing rule)</th><th>Last record / grade</th></tr></thead><tbody>
         {Object.entries(v.forward).map(([sport, f]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
-          <td>{f.label ?? f.status ?? '—'}</td>
+          <td>{f.label ?? f.status ?? '—'}{f.suspect_models && Object.keys(f.suspect_models).length > 0 ? <div className="small" role="alert">Suspect (forecasts at probability 0 or 1, never recommended until diagnosed): {Object.entries(f.suspect_models).map(([m, n]) => `${m} (${n})`).join(', ')}</div> : null}</td>
+          <td>{f.grading ?? '—'}</td>
           <td>{f.candidate_forecasts ? `${f.candidate_forecasts.rows} (${f.candidate_forecasts.models} models, ${f.candidate_forecasts.games} games)` : 'none'}</td>
           <td>{f.incumbent_forecasts ? `${f.incumbent_forecasts.rows} (${f.incumbent_forecasts.models} models, ${f.incumbent_forecasts.games} games)` : 'none'}</td>
           <td>{f.graded_games ?? 0}</td><td>{f.paired_graded_items ?? 0}</td>
@@ -73,6 +74,7 @@ function V3Detail({ sport, s }: { sport: string; s: AutoresearchV3Sport }) {
   return <details className="card"><summary><strong>{SPORT_NAME[sport] ?? sport}</strong> · {s.kept?.length ? `kept (exploratory): ${s.kept.join(', ')}` : 'no candidate kept'} · seasons search {s.periods?.search.join(', ')} / validation {s.periods?.validation.join(', ')} / holdout {s.periods?.holdout.join(', ')} (read once, never by daily runs)</summary>
     {s.periods_note && <p className="small muted">{s.periods_note}</p>}
     {s.caveats && <ul className="small muted">{(Array.isArray(s.caveats) ? s.caveats.map((c, i) => [String(i), c] as [string, string]) : Object.entries(s.caveats)).map(([k, c]) => <li key={k}>{Array.isArray(s.caveats) ? c : `${k}: ${c}`}</li>)}</ul>}
+    {s.suspect && s.suspect.length > 0 && <p role="alert">Suspect, never kept or recommended until diagnosed (forecasts state certainty, probability 0 or 1): {s.suspect.join(', ')}.</p>}
     {s.needs_human_review && s.needs_human_review.length > 0 && <p role="note">Needs human review (graded at a reference line owned by a compared model, never tracked forward automatically): {s.needs_human_review.join(', ')}.</p>}
     {s.data_validation && !s.data_validation.ok && <p role="alert">Data validation: {s.data_validation.issues.join('; ')}</p>}
     <div className="table-wrap"><table className="table"><thead><tr><th>Market</th><th>Best existing model (log loss, ECE)</th><th>Games</th><th>Baselines (log loss)</th><th>Sportsbook</th><th>Candidates: decision, validation Δ [95%]</th></tr></thead><tbody>
