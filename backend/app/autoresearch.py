@@ -37,7 +37,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import config, sports
+from . import config, research_audit, sports
 
 UPSTREAM = {"repo": "https://github.com/karpathy/autoresearch", "commit": "228791fb499afffb54b46200aca536f79142f117"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -420,7 +420,30 @@ def best_existing(data: dict, scored) -> dict:
 def _paths(exp_root: Path, sport: str) -> tuple[str, Path, dict]:
     snap = snapshot_identity(sport)
     pid = protocol_id({sport: snap})
+    refuse_blocked(exp_root, pid, sport)
     return pid, exp_root / pid / sport, snap
+
+
+# --- Audit (app/research_audit.py): invalid or unverified records are never used; they stay where they are ----------------------
+def audit_entries(exp_root: Path) -> list:
+    """The audit entries; an unreadable or broken audit file refuses (it never means "nothing is invalid")."""
+    try:
+        return research_audit.load(exp_root)
+    except research_audit.AuditError as exc:
+        raise Refused(f"the research audit file is unusable, so nothing may be selected: {exc}") from exc
+
+
+def refuse_blocked(exp_root: Path, pid: str, sport: str) -> None:
+    e = research_audit.verdict(audit_entries(exp_root), pid, sport)
+    if e:
+        raise Refused(f"{sport} records of {pid} may not be used: {research_audit.why(e)}")
+
+
+def _valid_records(root: Path) -> list:
+    """`_records` without the trials an audit entry blocks (and results copied from them)."""
+    entries, pid, sport = audit_entries(root.parents[1]), root.parent.name, root.name
+    return [r for r in _records(root) if not any(t and research_audit.verdict(entries, pid, sport, t)
+                                                 for t in (r.get("trial_id"), r.get("cached_from")))]
 
 
 def _registered(meta_path: Path, workspace: Path) -> dict:
@@ -937,7 +960,7 @@ def incumbents(root: Path, sport: str, meta: dict) -> dict:
     """Per market: the last kept trial (replayed from the append-only log), else the best existing member."""
     cur = {m: {"trial": None, "member": s["member"], "label": f"existing member {s['member']}", "vectors": None}
            for m, s in meta["start_incumbent"].items()}
-    for r in _records(root):
+    for r in _valid_records(root):
         if r["event"] == "finished" and r["status"] == "keep" and not r.get("cached_from"):
             for m, s in r["markets"].items():
                 if s.get("decision") == "keep":
@@ -989,8 +1012,8 @@ def run_trial(sport: str, exp_root: Path, workspace: Path, description: str = ""
             state = commit_state(workspace, meta["workspace_base"], commit)
         except (subprocess.CalledProcessError, UnicodeDecodeError) as exc:
             sha = _git(workspace, "rev-parse", "--verify", f"{commit}^{{commit}}")
-            if any(r["commit"] == sha for r in _records(root) if r["event"] == "finished"):
-                return {**[r for r in _records(root) if r["commit"] == sha][-1], "cached": True}
+            if any(r["commit"] == sha for r in _valid_records(root) if r["event"] == "finished"):
+                return {**[r for r in _valid_records(root) if r["commit"] == sha][-1], "cached": True}
             return _finish(root, {"trial_id": f"{_now().replace(':', '').replace('-', '')}-unreadable", "key": sha[:16],
                                   "commit": sha, "sport": sport, "protocol_id": pid, "event": "finished", "status": "invalid",
                                   "description": description, "finished_at": _now(),
@@ -1002,7 +1025,7 @@ def run_trial(sport: str, exp_root: Path, workspace: Path, description: str = ""
         key = _sha(json.dumps([pid, sport, state["train_sha256"], state["protected"], state["changed"], seed, inc_state],
                               sort_keys=True).encode())[:16]
         failed = ("crash", "timeout", "interrupted")
-        done = [r for r in _records(root) if r["event"] == "finished"]
+        done = [r for r in _valid_records(root) if r["event"] == "finished"]
         mine = [r for r in done if r["commit"] == state["commit"]]
         if mine:                              # a commit is evaluated once (upstream); only a failed attempt may be retried
             if not retry or mine[-1]["status"] not in failed:
@@ -1100,7 +1123,7 @@ def daily(sports_: list, exp_root: Path, workspace: Path, max_trials: int, max_m
             root = exp_root / meta["protocol_id"] / sport
             commits = [meta["workspace_base"], *_git(workspace, "rev-list", "--reverse",
                                                     f"{meta['workspace_base']}..{report['ref']}").split()]
-            seen = {r["commit"] for r in _records(root) if r["event"] == "finished"}
+            seen = {r["commit"] for r in _valid_records(root) if r["event"] == "finished"}
             for c in [c for c in commits if c not in seen]:
                 if runs >= max_trials:
                     report["stopped"] = "trial budget reached"
@@ -1195,7 +1218,7 @@ def holdout(sport: str, exp_root: Path, workspace: Path, ask: Callable[[str], bo
         sources = {}
         for c in kept.values():
             saved = root / "trials" / c["trial"] / EDITABLE
-            rec = next(r for r in _records(root) if r["trial_id"] == c["trial"] and r["event"] == "finished")
+            rec = next(r for r in _valid_records(root) if r["trial_id"] == c["trial"] and r["event"] == "finished")
             if not saved.is_file() or _sha(saved.read_bytes()) != rec["train_sha256"]:
                 raise Refused(f"saved train.py of trial {c['trial']} is missing or differs from the logged sha256")
             sources[c["trial"]] = saved.read_text()
@@ -2162,7 +2185,13 @@ def _jsonl_add(p: Path, rec: dict) -> None:
 
 def _last_success(exp_root: Path, sport: str) -> Optional[str]:
     best = None
+    try:
+        entries = audit_entries(exp_root)
+    except Refused:
+        return None
     for p in (exp_root / "v3").glob(f"*/{sport}/attempts.jsonl"):
+        if research_audit.verdict(entries, p.parents[1].name, sport):
+            continue
         for a in _jsonl_read(p):
             if a.get("outcome") == "evaluated" and (best is None or a["at"] > best):      # no_candidates is not a success
                 best = a["at"]
@@ -2213,6 +2242,7 @@ def run_sport_v3(sport: str, exp_root: Path, *, max_items: int = BUDGET_V3["max_
         adapter = normalise_adapter(adapter)
         validate_adapter(adapter)
         pid = v3_protocol_id(adapter, _data_id(adapter, sport))
+        refuse_blocked(exp_root, pid, sport)    # before anything is scored, resumed or written into the blocked folder
         root = exp_root / "v3" / pid / sport
         status["data_identity"] = _data_id(adapter, sport)
         status["caveats"] = adapter.get("caveats")
@@ -2501,6 +2531,7 @@ def holdout_v3(sport: str, exp_root: Path, ask: Callable[[str], bool] = _ask_tty
     adapter = normalise_adapter(adapter)
     validate_adapter(adapter)
     pid = v3_protocol_id(adapter, _data_id(adapter, sport))
+    refuse_blocked(exp_root, pid, sport)
     root = exp_root / "v3" / pid / sport
     ev_path = root / "evaluation.json"
     if not ev_path.is_file():
@@ -2738,7 +2769,10 @@ def sealed_kwargs(produce) -> dict:
 def research_completed(exp_root: Path, sport: str) -> bool:
     """Whether protocol v3 has completed an evaluation of this sport (a state.json with a last success), so that "no candidate
     passed" is a research result and not just the absence of one."""
+    entries = audit_entries(Path(exp_root))
     for p in (Path(exp_root) / "v3").glob(f"*/{sport}/state.json"):
+        if research_audit.verdict(entries, p.parents[1].name, sport):
+            continue
         try:
             st = json.loads(p.read_text())
         except (OSError, ValueError):
@@ -2751,8 +2785,10 @@ def research_completed(exp_root: Path, sport: str) -> bool:
 def registered_candidates(exp_root: Path, sport: str) -> list:
     """The candidates the research system selected for forward tracking: `forward_candidates` of the sport's newest v3 state.json
     (real keeps only: a keep at a reference line needs human review and is never in it)."""
-    best = None
+    best, entries = None, audit_entries(Path(exp_root))
     for p in (Path(exp_root) / "v3").glob(f"*/{sport}/state.json"):
+        if research_audit.verdict(entries, p.parents[1].name, sport):      # invalid or unverified: never tracked forward
+            continue
         try:
             st = json.loads(p.read_text())
         except (OSError, ValueError):

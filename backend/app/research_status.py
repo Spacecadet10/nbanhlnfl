@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from . import research_audit
+
 NOTE = ("Research only. Trials search the validation seasons of a read-only data snapshot; a 'keep' means a candidate beat "
         "the incumbent there (exploratory, repeated search), not that it is approved or used. Forecasts never come from "
         "here; promotion stays a separate, manual decision on the forward record.")
@@ -66,7 +68,25 @@ def _trial(r: dict) -> dict:
                         for m, s in (r.get("markets") or {}).items()}}
 
 
-def sport_status(root: Path, meta: dict, recent: int) -> dict:
+def _audit(root: Path) -> tuple:
+    """(entries, None) or ([], why the audit file is unusable)."""
+    try:
+        return research_audit.load(root), None
+    except research_audit.AuditError as exc:
+        return [], str(exc)
+
+
+def _blocked(entries: list, pid: str, sport: str, r: dict) -> Optional[str]:
+    """Why an audit entry blocks this trial (or the trial it was copied from), or None."""
+    for t in (r.get("trial_id"), r.get("cached_from")):
+        e = research_audit.verdict(entries, pid, sport, t) if t else None
+        if e:
+            return research_audit.why(e)
+    return None
+
+
+def sport_status(root: Path, meta: dict, recent: int, entries: Optional[list] = None) -> dict:
+    entries, pid, sport = entries or [], root.parent.name, root.name
     recs = _jsonl(root / "trials.jsonl")
     done = [r for r in recs if r.get("event") == "finished"]
     started = {r["trial_id"] for r in recs if r.get("event") == "started"}
@@ -77,7 +97,7 @@ def sport_status(root: Path, meta: dict, recent: int) -> dict:
     incumbents = {m: {"source": "existing member", "label": s["member"], "log_loss": s.get("log_loss")}
                   for m, s in (meta.get("start_incumbent") or {}).items()}
     for r in done:                                # the last kept trial per market (same replay as the evaluator)
-        if r.get("status") == "keep" and not r.get("cached_from"):
+        if r.get("status") == "keep" and not r.get("cached_from") and not _blocked(entries, pid, sport, r):
             for m, s in (r.get("markets") or {}).items():
                 if s.get("decision") == "keep":
                     incumbents[m] = {"source": "kept trial", "label": f"trial {r['trial_id']} ({r['commit'][:7]})",
@@ -92,7 +112,8 @@ def sport_status(root: Path, meta: dict, recent: int) -> dict:
             "failures": sum(r.get("status") in FAILED for r in done),
             "running": sorted(started - {r.get("trial_id") for r in done}),
             "unreadable_lines": sum(r.get("event") == "unreadable" for r in recs),
-            "recent": [_trial(r) for r in done[-recent:]][::-1],
+            "invalidated": sum(_blocked(entries, pid, sport, r) is not None for r in done),
+            "recent": [_trial(r) | {"audit": _blocked(entries, pid, sport, r)} for r in done[-recent:]][::-1],
             "holdout": [{"event": h.get("event"), "at": h.get("at")} for h in holdout]}
 
 
@@ -104,11 +125,14 @@ def status(recent: int = 12) -> dict:
     if not root.is_dir():
         return {"configured": False, "note": NOTE, "reason": f"Research directory {root} does not exist."}
     sports = {}
-    for meta_path in root.glob("*/*/protocol.json"):
+    entries, audit_error = _audit(root)
+    for meta_path in root.glob("*/*/protocol.json") if audit_error is None else ():
         meta = _read(meta_path)
         if not meta:
             continue
         sport = meta.get("sport") or meta_path.parent.name
+        if research_audit.verdict(entries, meta_path.parents[1].name, sport):
+            continue                              # a blocked protocol is never the current one; it is listed under `audit`
         if sport not in sports or meta.get("registered_at", "") > sports[sport][1].get("registered_at", ""):
             sports[sport] = (meta_path.parent, meta)
     agent = root / "agent"
@@ -137,7 +161,10 @@ def status(recent: int = 12) -> dict:
                 "driver_alive": _alive(active.get("driver_pid"), active.get("driver_token"))},
             "agent_runs": sorted(runs.values(), key=lambda r: r.get("started_at") or "", reverse=True)[:10],
             "last_daily": last_daily and {k: last_daily.get(k) for k in ("started_at", "finished_at", "outcome", "stopped", "refused")},
-            "sports": {s: sport_status(p, m, recent) for s, (p, m) in sorted(sports.items())},
+            "sports": {s: sport_status(p, m, recent, entries) for s, (p, m) in sorted(sports.items())},
+            "audit": {"error": audit_error, "entries": [
+                {"at": e["at"], "status": e["status"], "reason": e["reason"], "protocol_id": e["scope"]["protocol_id"],
+                 "sport": e["scope"]["sport"], "trial_id": e["scope"].get("trial_id"), "by": e.get("by")} for e in reversed(entries)]},
             "v3": v3_status(root)}
 
 
@@ -246,8 +273,11 @@ def v3_status(root: Path) -> Optional[dict]:
     keep = ("protocol_id", "at", "last_attempt", "last_success_at", "outcome", "reason", "candidates", "evaluated_markets", "blockers",
             "queue", "next_run", "periods", "periods_note", "unsupported", "kept", "needs_human_review", "evaluation", "data_version", "models", "markets", "caveats", "data_validation", "data_cutoff", "forward_candidates", "suspect", "blocked_models")
     sports = {}
+    entries, audit_error = _audit(root)
     for s, st in sorted(latest.items()):
-        sports[s] = {k: st.get(k) for k in keep} | {"candidate_count": len(st.get("candidates") or [])}
+        e = research_audit.verdict(entries, st.get("protocol_id") or "", s)
+        audit = f"the audit file is unusable: {audit_error}" if audit_error else research_audit.why(e) if e else None
+        sports[s] = {k: st.get(k) for k in keep} | {"audit": audit} | {"candidate_count": len(st.get("candidates") or [])}
         sports[s]["models"] = {n: {"role": m.get("role"), "version": m.get("version")} for n, m in (st.get("models") or {}).items()}
         sports[s]["markets"] = {m: {"kind": v.get("kind"), "settlement": v.get("settlement"), "line_basis": v.get("line_basis")}
                                 for m, v in (st.get("markets") or {}).items()}
