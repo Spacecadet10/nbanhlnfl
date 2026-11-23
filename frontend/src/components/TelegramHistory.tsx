@@ -144,7 +144,7 @@ function Filters({ d, market, pickMarket, from, to, set, everywhere, competition
         <select value={market} onChange={(e) => set('tg_market', e.target.value)}>
           <option value="">All markets</option>
           {options.map((m) => <option key={m.market} value={m.market}>{m.title}</option>)}
-          {market && !options.some((m) => m.market === market) && <option value={market}>{market}</option>}
+          {market && !options.some((m) => m.market === market) && <option value={market}>{market.replace(/_/g, ' ')}</option>}
         </select></label>}
       {competitionName && <label>Competition
         <select value={everywhere ? 'all' : 'one'} onChange={(e) => set('tg_scope', e.target.value === 'one' ? 'one' : '')}>

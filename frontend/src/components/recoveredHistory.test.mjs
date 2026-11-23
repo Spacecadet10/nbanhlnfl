@@ -82,3 +82,9 @@ test('NCAAB pages never claim recovered predictions, and the filters that share 
   assert.match(src, /params\.get\('tg_market'\)/);
   assert.match(src, /params\.get\('tg_scope'\)/);
 });
+
+test('a recovered-market filter never follows the reader to another league (the API would refuse it)', () => {
+  const src = readFileSync(join(import.meta.dirname, 'Selection.tsx'), 'utf8');
+  const set = src.slice(src.indexOf('export function useLeague'), src.indexOf('export function useSport'));
+  for (const k of ['tg_market', 'tg_scope']) assert.match(set, new RegExp(`next\\.delete\\('${k}'\\)`));
+});

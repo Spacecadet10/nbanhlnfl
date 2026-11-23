@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { HistoryResponse, MarketId, Policy, PredictionRecord, Sport } from '../api/types';
-import { useDataRevision } from '../api/freshness';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
@@ -55,7 +54,7 @@ export function HistoryPage() {
 
   // Recovered Telegram predictions of the same market, dates and team (the canonical view merges them into its table).
   const recovered = useApi((s) => (canonical ? api.telegramHistory(sport, { market, ...filters }, s) : Promise.resolve(null)),
-    [sport, market, filters.date_from, filters.date_to, filters.team, canonical], useDataRevision());
+    [sport, market, filters.date_from, filters.date_to, filters.team, canonical]);
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);

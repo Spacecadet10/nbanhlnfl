@@ -36,6 +36,8 @@ export function useLeague(): [League, (l: League) => void] {
     next.delete('conf');     // confidence levels are sport- and market-specific
     next.delete('conference');   // conferences belong to NCAAB
     next.delete('competition');
+    next.delete('tg_market');    // recovered-prediction filters name one league's markets and competition
+    next.delete('tg_scope');
     // Game identifiers belong to one league. Choose a game in the new league before opening its dashboard.
     if (s !== league && location.pathname.startsWith('/games/')) navigate({ pathname: '/', search: next.toString() });
     else setParams(next);
@@ -93,7 +95,7 @@ export function useSoccerMatchUrlSync(): void {
     const next = new URLSearchParams(params);
     next.set('sport', 'soccer');
     if (want) next.set('competition', want); else next.delete('competition');
-    for (const k of ['market', 'conf', 'team', 'date']) next.delete(k);   // NBA/NHL selections do not apply to soccer
+    for (const k of ['market', 'conf', 'team', 'date', 'tg_market', 'tg_scope']) next.delete(k);   // NBA/NHL selections do not apply to soccer
     setParams(next, { replace: true });
   }, [stale, match, want, params, setParams]);
 }
