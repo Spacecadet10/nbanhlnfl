@@ -47,6 +47,7 @@ test('the line and the line source are the card\'s own words; earlier cards say 
   assert.equal(lineText({ card_line_text: 'Model line' }), 'Model line');
   assert.equal(lineText({ card_line_text: null }), null);
   assert.equal(earlierText([]), null);
+  assert.equal(earlierText(undefined), null);
   assert.equal(earlierText([{ differs: false }, { differs: false }]), '2 earlier cards, same prediction');
   assert.equal(earlierText([{ differs: true }, { differs: false }]), '2 earlier cards, 1 different');
   assert.equal(earlierText([{ differs: true }]), '1 earlier card, 1 different');
@@ -56,6 +57,7 @@ test('a sport without recovered rows says so', () => {
   assert.equal(unavailableText('no_rows_for_sport', 'NCAAB'), 'No recovered Telegram predictions for NCAAB: the source holds none.');
   assert.match(unavailableText('file_missing', 'NBA'), /not imported/);
   assert.match(unavailableText('unreadable', 'NBA'), /could not be read/);
+  assert.match(unavailableText('old_format', 'NBA'), /rebuilt/);
 });
 
 test('both pages of every sport use the recovered history components', () => {
@@ -68,4 +70,15 @@ test('both pages of every sport use the recovered history components', () => {
   }
   assert.match(read('components/TelegramHistory.tsx'), /row\.label/);            // the required label, from the API
   assert.match(read('components/TelegramHistory.tsx'), /Unpriced/);
+});
+
+test('NCAAB pages never claim recovered predictions, and the filters that share the page with a date live in the URL', () => {
+  const read = (f) => readFileSync(join(import.meta.dirname, '..', f), 'utf8');
+  assert.match(read('components/Canonical.tsx'), /recovered\?\.available && /);
+  assert.match(read('pages/HistoryPage.tsx'), /hasResearch\(sport\) && !canonical/);
+  assert.match(read('pages/PerformancePage.tsx'), /if \(!hasResearch\(sport\)\) return null;.*no recovered/s);
+  // Layout remounts the page on every URL change, so a market or competition kept in component state would be lost with a date.
+  const src = read('components/TelegramHistory.tsx');
+  assert.match(src, /params\.get\('tg_market'\)/);
+  assert.match(src, /params\.get\('tg_scope'\)/);
 });

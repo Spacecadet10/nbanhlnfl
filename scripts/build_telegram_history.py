@@ -7,8 +7,8 @@ card's own text: 57.3 is not 57.4), side and line source.
 
 Rules (declared before this run):
 - One row per (sport, game, market); a duplicate in the source is an error, not a silent drop.
-- OVERLAP RULE (Nov 22, owner brief): the recovered record and the live record are always shown separately and never summed,
-  so a game both sources hold is counted ONCE IN EACH displayed record. Such a row is no longer dropped; it is kept with
+- OVERLAP RULE (Nov 22, owner brief): on the cards the recovered and live records are shown separately and never summed (Performance
+  and Prediction History total them with each game and market counted once, app/telegram_history.py), so a game both sources hold is counted ONCE IN EACH displayed record. Such a row is no longer dropped; it is kept with
   `also_in_live: true` (NBA/NHL/NFL/NCAAB: a canonical pregame game_forecasts row, status 'forecast' made before the start;
   Soccer: a soccer_live_forecasts row for the match) and counted in `summary[sport].overlap_with_live`. Before Nov 22 these rows
   were excluded as "live_record_counts_it" (216 of 1189), which left the recovered record without the games Nov 15-16.
@@ -51,7 +51,8 @@ LINE = {'Bookmaker line at forecast': 'bookmaker', 'Model line': 'model'}
 POINT_SPORTS = ('nba', 'nhl', 'nfl')
 LABEL = 'Recovered Telegram cards'
 TORONTO = ZoneInfo('America/Toronto')
-OVERLAP_RULE = ('Recovered and live records are shown apart and never summed: a game both sources hold is counted once in the recovered '
+OVERLAP_RULE = ('On the cards, recovered and live records are shown apart and never summed (Performance and Prediction History count '
+                'each game and market once): a game both sources hold is counted once in the recovered '
                 'record and once in the live record; the recovered rows keep also_in_live=true and are reported, not dropped.')
 
 

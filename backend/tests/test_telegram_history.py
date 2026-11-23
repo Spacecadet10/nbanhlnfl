@@ -120,7 +120,7 @@ def test_the_nba_endpoint_shows_the_original_row_and_counts_the_live_forecast_on
     pct = to.displayed_percentage(row["confidence"])
     _file(data, [rec(G1, pct=pct, side=side, grade="win" if side == "a" else "loss", day="2026-10-21"),
                  rec("espn:old", pct="71.5", day="2026-10-20")])
-    body = client.get("/api/telegram-history", params={"market": "winner"}).json()
+    body = client.get("/api/telegram-history", params={"market": "winner", "live_rows": True}).json()
     assert body["available"] is True and body["sport"] == "nba"
     assert [(r["game_id"], r["percentage"], r["overlap"]["status"], r["counted"]) for r in body["rows"]] == [
         (G1, pct, "same", False), ("espn:old", "71.5", "none", True)]
@@ -184,3 +184,44 @@ def test_unsettled_rows_never_enter_the_card_bucket_records(tmp_path, monkeypatc
     path.write_text(json.dumps({"period": None, "rows": [dict(rec("u", grade="unsettled"), market="winner", percentage="60.0")]}))
     r = to.telegram_record("nba", "winner", {"confidence": .6, "side": "a", "line_source": "none"}, "self")
     assert (r["wins"], r["losses"], r["no_history"]) == (0, 0, True)
+
+
+OLD_FORMAT = {"sport": "nba", "market": "winner", "percentage": "59.7", "side": "a", "line_source": "none", "game_id": "x", "grade": "loss",
+              "grade_source": "telegram_export", "also_in_live": False, "pick": "FLA win", "matchup": "DET @ FLA", "final_score": None,
+              "message_id": 1, "start_at": "2026-11-03T00:00:00Z", "sent_at_local": "2026-11-02T17:10:50", "start_date_local": "2026-11-02"}
+
+
+@pytest.mark.parametrize("body,reason", [
+    ({"rows": [OLD_FORMAT]}, "old_format"),                              # a file built before this release: never half-shown
+    ({"rows": [rec()]}, "old_format"),                                    # rows without the reconciliation block
+    ({"rows": "x", "reconciliation": {}}, "unreadable"), ({"rows": [1], "reconciliation": {}}, "unreadable"),
+    ({"rows": [{"sport": "nba"}], "reconciliation": {}}, "old_format"), ({"rows": [rec()], "reconciliation": [1]}, "unreadable"),
+    ([], "unreadable"), ({"reconciliation": {}}, "unreadable")])
+def test_an_old_or_damaged_file_is_unavailable_with_a_reason_never_a_crash_or_half_a_row(ready, client, data, body, reason):
+    client.now = AFTER
+    path = data / "research" / "telegram_history.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body))
+    r = client.get("/api/telegram-history")
+    assert r.status_code == 200
+    assert (r.json()["available"], r.json()["reason"], r.json()["rows"]) == (False, reason, [])
+
+
+def test_a_game_the_live_record_voided_is_still_counted_once_there_and_the_card_stays_visible():
+    out = th.combine("nba", [rec()], [liv(grade="void")])
+    assert counts(out["summary"]["combined"]) == (1, 0, 0, 0, 0) and out["summary"]["combined"]["void"] == 1
+    assert out["rows"][0]["grade"] == "win" and out["rows"][0]["overlap"]["live"]["grade"] == "void"
+    assert out["summary"]["overlap"]["grade_conflicts"] == 1                   # reported, never silent
+
+
+def test_live_rows_are_sent_only_when_asked_for(ready, client, data):
+    record_now(ready)
+    client.now = "2026-10-21T23:40:00Z"
+    _file(data, [rec("espn:old", day="2026-10-20")])
+    assert client.get("/api/telegram-history").json()["live_rows"] == []
+    assert len(client.get("/api/telegram-history", params={"live_rows": "true", "market": "winner"}).json()["live_rows"]) == 1
+
+
+def test_the_soccer_note_says_which_markets_are_meant():
+    assert "match result, double chance and draw no bet" in th.note("soccer") and "goal and corner" in th.note("soccer")
+    assert "goal and corner" not in th.note("nba")

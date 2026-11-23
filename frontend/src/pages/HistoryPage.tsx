@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { HistoryResponse, MarketId, Policy, PredictionRecord, Sport } from '../api/types';
+import { useDataRevision } from '../api/freshness';
 import { useApi } from '../api/useApi';
 import { RunBadge } from '../components/Badges';
 import { ConfidenceFilter, confidenceLevels, levelLabel, MarketRecordLine, RecordLine, useConfidence } from '../components/ConfidenceFilter';
@@ -54,7 +55,7 @@ export function HistoryPage() {
 
   // Recovered Telegram predictions of the same market, dates and team (the canonical view merges them into its table).
   const recovered = useApi((s) => (canonical ? api.telegramHistory(sport, { market, ...filters }, s) : Promise.resolve(null)),
-    [sport, market, filters.date_from, filters.date_to, filters.team, canonical]);
+    [sport, market, filters.date_from, filters.date_to, filters.team, canonical], useDataRevision());
 
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -105,9 +106,9 @@ export function HistoryPage() {
       )}
       {canonical && recovered.state.status === 'error' && <p className="warn small">Recovered Telegram predictions unavailable: {recovered.state.error}{' '}
         <button type="button" className="link-btn" onClick={recovered.retry}>Retry</button></p>}
-      {!canonical && run === 'live' && realMode && <p className="small muted">Recovered Telegram predictions (Nov 2–16) are listed with the live record in the Current Forecast view.{' '}
+      {hasResearch(sport) && !canonical && run === 'live' && realMode && <p className="small muted">Recovered Telegram predictions (Nov 2–16) are listed with the live record in the Current Forecast view.{' '}
         <button type="button" className="link-btn" onClick={() => setPolicy('canonical')}>Show them</button></p>}
-      {canonical ? <CanonicalHistory sport={sport} market={market} filters={filters} limit={limit} recovered={recovered.state.status === 'success' ? recovered.state.data : null} />
+      {canonical ? <CanonicalHistory sport={sport} market={market} filters={filters} limit={limit} recovered={recovered.state.status === 'success' ? recovered.state.data : recovered.state.status === 'loading' ? undefined : null} />
       : !isWinner ? (
         <MarketHistory sport={sport} market={market} policy={policy} level={level} filters={filters} hasFilters={hasFilters}
           showAll={() => setLevel(null)} />

@@ -81,7 +81,7 @@ export const api = {
     { competition, ...(season != null ? { season: String(season) } : {}), ...(model ? { model } : {}), offset: String(offset), limit: '100' }, signal),
   // NFL: data-only reads (schedule, results, matchup facts). Separate endpoints; NFL is never passed as `sport`.
   /** Recovered Telegram predictions with the live record, each game and market counted once. No market = every market. */
-  telegramHistory: (league: League, f: { market?: string; date_from?: string; date_to?: string; team?: string; competition?: string }, signal?: AbortSignal) =>
+  telegramHistory: (league: League, f: { market?: string; date_from?: string; date_to?: string; team?: string; competition?: string; live_rows?: string }, signal?: AbortSignal) =>
     get<TgReport>(league === 'nfl' ? '/nfl/telegram-history' : league === 'soccer' ? '/soccer/telegram-history' : '/telegram-history',
       { ...f, ...(league === 'nfl' || league === 'soccer' ? {} : { sport: league }) }, signal),
   nflRecord: (signal?: AbortSignal) => get<NflRecord>('/nfl/record', undefined, signal),

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { League, TgExact, TgLive, TgReport, TgRow, TgSummary } from '../api/types';
+import { useDataRevision } from '../api/freshness';
 import { useApi } from '../api/useApi';
 import { calendarDate, dateTime, FULL_DATE, pct } from '../format';
 import { useCarriedSearch } from './Selection';
@@ -14,7 +15,7 @@ import { addTallies, earlierText, gradeLabel, lineText, mergeByStart, overlapTex
 const sportName = (s: string) => (s === 'soccer' ? 'Soccer' : s.toUpperCase());
 const gradeClass = (g: string) => (g === 'win' ? 'ok' : g === 'loss' ? 'bad' : 'muted');
 /** The card's own send time (Toronto wall clock in the export), shown without shifting it. */
-const sentText = (local: string) => `${calendarDate(local.slice(0, 10), FULL_DATE)}, ${local.slice(11, 16)} Toronto`;
+const sentText = (local: string | null) => local == null ? 'at an unknown time' : `${calendarDate(local.slice(0, 10), FULL_DATE)}, ${local.slice(11, 16)} Toronto`;
 const periodText = (r: TgReport) => (r.period ? `${calendarDate(r.period.from, FULL_DATE)} – ${calendarDate(r.period.to, FULL_DATE)}` : '');
 const LINE: Record<string, string> = { bookmaker: 'bookmaker line', model: 'model line', none: '' };
 
@@ -28,7 +29,7 @@ function CardSaid({ row }: { row: TgRow }) {
   return <>
     <strong>{row.pick}</strong> {row.percentage}%{row.recommended && <span className="badge"> Recommended pick</span>}
     <span className="small muted recovered-line">{line ? `${line} · ` : ''}Unpriced</span>
-    <span className="small muted recovered-line">Exact {row.percentage}% {row.direction}, all dates: {row.bucket.combined.predictions ? recordText(row.bucket.combined) : 'no counted prediction (this game is counted under its live forecast)'}</span>
+    <span className="small muted recovered-line">Exact {row.percentage}% {row.direction}, all dates, this game included: {row.bucket.combined.predictions ? recordText(row.bucket.combined) : 'no counted prediction (this game is counted under its live forecast)'}</span>
   </>;
 }
 
@@ -98,7 +99,7 @@ function Reconciliation({ d }: { d: TgReport }) {
       <summary>Reconciliation of the {sportName(d.sport)} source rows (every market)</summary>
       <div className="table-wrap"><table className="table compare"><tbody>{rows.map(([k, n]) => <tr key={k}><th scope="row">{k}</th><td>{n}</td></tr>)}</tbody></table></div>
       {d.not_predictions.length > 0 && <ul>{d.not_predictions.map((x) => <li key={`${x.message_id}-${x.market_key}`}>
-        {x.matchup}: {x.pick} {x.percentage}% · message {x.message_id}, sent {sentText(x.sent_at_local)} after the {dateTime(x.start_at)} start</li>)}</ul>}
+        {x.matchup}: {x.pick} {x.percentage}% · message {x.message_id}, sent {sentText(x.sent_at_local)}{x.reason === 'sent_after_start' ? ` after the ${dateTime(x.start_at)} start` : ': no card of record for this game and market'}</li>)}</ul>}
     </details>
   );
 }
@@ -118,31 +119,35 @@ function ExactTable({ rows }: { rows: TgExact[] }) {
   );
 }
 
-function useDates(): [string | undefined, string | undefined, (k: string, v: string) => void] {
+/** Every filter lives in the URL: the layout remounts the page when the URL changes, so component state would be lost. */
+function useFilters() {
   const [params, setParams] = useSearchParams();
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);
     if (v) next.set(k, v); else next.delete(k);
     setParams(next);
   };
-  return [params.get('date_from') ?? undefined, params.get('date_to') ?? undefined, set];
+  return { from: params.get('date_from') ?? undefined, to: params.get('date_to') ?? undefined, market: params.get('tg_market') ?? '',
+    everywhere: params.get('tg_scope') !== 'one', set };
 }
 
-function Filters({ d, market, setMarket, from, to, setDate, everywhere, setEverywhere, competitionName }: {
-  d?: TgReport; market: string; setMarket?: (m: string) => void; from?: string; to?: string; setDate: (k: string, v: string) => void;
-  everywhere?: boolean; setEverywhere?: (v: boolean) => void; competitionName?: string;
+function Filters({ d, market, pickMarket, from, to, set, everywhere, competitionName }: {
+  d?: TgReport; market: string; pickMarket: boolean; from?: string; to?: string; set: (k: string, v: string) => void;
+  everywhere: boolean; competitionName?: string;
 }) {
+  const options = d?.markets ?? [];
   return (
     <form className="filters" onSubmit={(e) => e.preventDefault()}>
-      <label>From <input type="date" value={from ?? ''} onChange={(e) => setDate('date_from', e.target.value)} /></label>
-      <label>To <input type="date" value={to ?? ''} onChange={(e) => setDate('date_to', e.target.value)} /></label>
-      {setMarket && <label>Market
-        <select value={market} onChange={(e) => setMarket(e.target.value)}>
+      <label>From <input type="date" value={from ?? ''} onChange={(e) => set('date_from', e.target.value)} /></label>
+      <label>To <input type="date" value={to ?? ''} onChange={(e) => set('date_to', e.target.value)} /></label>
+      {pickMarket && <label>Market
+        <select value={market} onChange={(e) => set('tg_market', e.target.value)}>
           <option value="">All markets</option>
-          {(d?.markets ?? []).map((m) => <option key={m.market} value={m.market}>{m.title}</option>)}
+          {options.map((m) => <option key={m.market} value={m.market}>{m.title}</option>)}
+          {market && !options.some((m) => m.market === market) && <option value={market}>{market}</option>}
         </select></label>}
-      {setEverywhere && <label>Competition
-        <select value={everywhere ? 'all' : 'one'} onChange={(e) => setEverywhere(e.target.value === 'all')}>
+      {competitionName && <label>Competition
+        <select value={everywhere ? 'all' : 'one'} onChange={(e) => set('tg_scope', e.target.value === 'one' ? 'one' : '')}>
           <option value="all">All competitions</option><option value="one">{competitionName}</option>
         </select></label>}
     </form>
@@ -186,17 +191,15 @@ function LedgerTable({ rows, live, titles }: { rows: TgRow[]; live: TgLive[]; ti
 
 /** Prediction History for the leagues whose own history has no date filter or market choice (NFL, Soccer). */
 export function RecoveredLedger({ league, competition, competitionName }: { league: League; competition?: string; competitionName?: string }) {
-  const [from, to, setDate] = useDates();
-  const [market, setMarket] = useState('');
-  const [everywhere, setEverywhere] = useState(true);
+  const { from, to, market, everywhere, set } = useFilters();
+  const rev = useDataRevision();
   const comp = everywhere ? undefined : competition;
-  const { state, retry } = useApi((s) => api.telegramHistory(league, { market, date_from: from, date_to: to, competition: comp }, s), [league, market, from, to, comp]);
+  const { state, retry } = useApi((s) => api.telegramHistory(league, { market, date_from: from, date_to: to, competition: comp, live_rows: 'true' }, s), [league, market, from, to, comp], rev);
   const d = state.status === 'success' ? state.data : undefined;
   return (
     <div className="card" id="all-predictions">
-      <h2>All recorded predictions: live and recovered</h2>
-      <Filters d={d} market={market} setMarket={setMarket} from={from} to={to} setDate={setDate}
-        {...(competition ? { everywhere, setEverywhere, competitionName } : {})} />
+      <h2>{league === 'soccer' ? 'Live and recovered predictions: match result, double chance, draw no bet' : 'All recorded predictions: live and recovered'}</h2>
+      <Filters d={d} market={market} pickMarket from={from} to={to} set={set} everywhere={everywhere} competitionName={competition && competitionName} />
       <AsyncView state={state} retry={retry}>{(r) => <>
         <p className="small muted">{r.available ? `${r.note} Recovered: ${periodText(r)}.` : unavailableText(r.reason, sportName(r.sport))}</p>
         <RecoveredTotals s={r.summary} />
@@ -209,18 +212,16 @@ export function RecoveredLedger({ league, competition, competitionName }: { leag
 
 /** Aggregate performance of the live and recovered predictions, each game and market once, with the exact-percentage records. */
 export function RecoveredPerformance({ league, market: fixed, competition, competitionName }: { league: League; market?: string; competition?: string; competitionName?: string }) {
-  const [from, to, setDate] = useDates();
-  const [chosen, setChosen] = useState('');
-  const [everywhere, setEverywhere] = useState(true);
+  const { from, to, market: chosen, everywhere, set } = useFilters();
+  const rev = useDataRevision();
   const market = fixed ?? chosen;
   const comp = everywhere ? undefined : competition;
-  const { state, retry } = useApi((s) => api.telegramHistory(league, { market, date_from: from, date_to: to, competition: comp }, s), [league, market, from, to, comp]);
+  const { state, retry } = useApi((s) => api.telegramHistory(league, { market, date_from: from, date_to: to, competition: comp }, s), [league, market, from, to, comp], rev);
   const d = state.status === 'success' ? state.data : undefined;
   return (
     <div className="card" id="all-predictions">
-      <h2>All predictions: live and recovered Telegram</h2>
-      <Filters d={d} market={market} setMarket={fixed ? undefined : setChosen} from={from} to={to} setDate={setDate}
-        {...(competition ? { everywhere, setEverywhere, competitionName } : {})} />
+      <h2>{league === 'soccer' ? 'Live and recovered Telegram: match result, double chance, draw no bet' : 'All predictions: live and recovered Telegram'}</h2>
+      <Filters d={d} market={market} pickMarket={!fixed} from={from} to={to} set={set} everywhere={everywhere} competitionName={competition && competitionName} />
       <AsyncView state={state} retry={retry}>{(r) => <>
         <p className="small muted">{r.available ? `${r.note} Recovered: ${periodText(r)}.` : unavailableText(r.reason, sportName(r.sport))}</p>
         {r.available && <>

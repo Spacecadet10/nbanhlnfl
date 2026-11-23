@@ -51,14 +51,15 @@ export function mergeByStart<L, R extends { start_at: string }>(live: L[], start
 /** The line note as the card printed it ("Bookmaker line at forecast · sportsbook 49.6% · underpriced"), or null. */
 export const lineText = (r: Pick<TgRow, 'card_line_text'>): string | null => r.card_line_text;
 
-export function earlierText(cards: Pick<TgEarlierCard, 'differs'>[]): string | null {
-  if (cards.length === 0) return null;
+export function earlierText(cards: Pick<TgEarlierCard, 'differs'>[] | null | undefined): string | null {
+  if (!cards || cards.length === 0) return null;
   const n = cards.filter((c) => c.differs).length;
   return `${cards.length} earlier card${cards.length === 1 ? '' : 's'}, ${n ? `${n} different` : 'same prediction'}`;
 }
 
 export function unavailableText(reason: string | null, sport: string): string {
   return reason === 'no_rows_for_sport' ? `No recovered Telegram predictions for ${sport}: the source holds none.`
+    : reason === 'old_format' ? 'The recovered Telegram predictions in this data store are from an older build and need to be rebuilt.'
     : reason === 'file_missing' ? 'Recovered Telegram predictions are not imported in this data store.'
     : 'The recovered Telegram predictions could not be read.';
 }

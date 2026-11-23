@@ -117,8 +117,8 @@ export function CanonicalSummaryLine({ s }: { s: CanonicalSummary }) {
   );
 }
 
-/** `recovered`: the recovered Telegram predictions of the same selection, merged by start into the same table. */
-export function CanonicalHistory({ sport, market, filters, limit, recovered }: { sport: Sport; market: MarketId; filters: { date_from?: string; date_to?: string; team?: string }; limit: number; recovered: TgReport | null }) {
+/** `recovered` (undefined while it loads, null when unavailable): the recovered Telegram predictions of the same selection, merged by start into the same table. */
+export function CanonicalHistory({ sport, market, filters, limit, recovered }: { sport: Sport; market: MarketId; filters: { date_from?: string; date_to?: string; team?: string }; limit: number; recovered: TgReport | null | undefined }) {
   const carried = useCarriedSearch();
   const { state, retry } = useApi((s) => api.canonicalHistory(sport, market, { ...filters, limit }, s),
     [sport, market, filters.date_from, filters.date_to, filters.team, limit]);
@@ -129,10 +129,10 @@ export function CanonicalHistory({ sport, market, filters, limit, recovered }: {
       <p className="small muted">
         One row per game since canonical recording began{h.recording_began_at ? ` (${dateTime(h.recording_began_at)})` : ''}: its canonical record
         and grade, or why there is none. Preseason games ({h.preseason_games}) have no validated model and are listed without a probability.
-        Forecasts from before canonical recording are in the legacy views; recovered Telegram predictions (Nov 2–16) are listed here with their own label.
+        Forecasts from before canonical recording are in the legacy views{recovered?.available && '; recovered Telegram predictions are listed here with their own label'}.
         {h.total > h.rows.length && ` Showing the latest ${h.rows.length} of ${h.total}; the record covers all ${h.total}.`}
       </p>
-      {h.rows.length === 0 && !recovered?.rows.length ? <Empty>{h.recording_began_at ? 'No records match these filters.' : 'Recording has not started in this data store.'}</Empty> : (
+      {h.rows.length === 0 && recovered === undefined ? <Empty>Loading recovered predictions…</Empty> : h.rows.length === 0 && !recovered?.rows.length ? <Empty>{h.recording_began_at ? 'No records match these filters.' : 'Recording has not started in this data store.'}</Empty> : (
         <div className="table-wrap"><table className="table history">
           <thead><tr><th>Date</th><th>Game</th><th>Forecast</th><th>Result</th><th>Grade</th><th>Record</th><th>Model</th></tr></thead>
           <tbody>

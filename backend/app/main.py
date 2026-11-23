@@ -649,30 +649,31 @@ def _telegram_filters(sport: str, market: Optional[str], date_from: Optional[dat
 
 @app.get("/api/telegram-history")
 def telegram_history_report(market: Optional[str] = None, date_from: Optional[date] = None, date_to: Optional[date] = None,
-                            team: Optional[str] = None, p=Depends(get_provider)):
+                            team: Optional[str] = None, live_rows: bool = False, p=Depends(get_provider)):
     """Recovered Telegram predictions (Nov 2-16 2026) as the cards showed them, each game and market counted once together with
     the live record (app/telegram_history.py). Read-only; never a reconstruction. No market = every market."""
     from . import telegram_history as th
     _canonical_provider(p)
     filters = _telegram_filters(p.sport, market, date_from, date_to)
-    return {"as_of": p.now, **th.report(p.sport, th.provider_live_items(p), th.point_teams(p.conn), team=team, **filters)}
+    return {"as_of": p.now, **th.report(p.sport, th.provider_live_items(p), th.point_teams(p.conn), team=team, live_rows=live_rows, **filters)}
 
 
 @app.get("/api/nfl/telegram-history")
 def nfl_telegram_history(market: Optional[str] = None, date_from: Optional[date] = None, date_to: Optional[date] = None,
-                         team: Optional[str] = None, mode: str = Depends(api_mode)):
+                         team: Optional[str] = None, live_rows: bool = False, mode: str = Depends(api_mode)):
     """The NFL's recovered Telegram predictions (see /api/telegram-history)."""
     from . import telegram_history as th
     from .nfl_live import Views
     filters = _telegram_filters("nfl", market, date_from, date_to)
     with _nfl_store(mode) as conn:
         views = Views(conn)
-        return {"as_of": views.now, **th.report("nfl", th.nfl_live_items(conn, views), th.point_teams(conn), team=team, **filters)}
+        return {"as_of": views.now, **th.report("nfl", th.nfl_live_items(conn, views), th.point_teams(conn), team=team, live_rows=live_rows, **filters)}
 
 
 @app.get("/api/soccer/telegram-history")
 def soccer_telegram_history(market: Optional[str] = None, date_from: Optional[date] = None, date_to: Optional[date] = None,
-                            team: Optional[str] = None, competition: Optional[str] = None, mode: str = Depends(api_mode)):
+                            team: Optional[str] = None, competition: Optional[str] = None, live_rows: bool = False,
+                            mode: str = Depends(api_mode)):
     """Soccer's recovered Telegram predictions, every competition unless one is named (see /api/telegram-history)."""
     from . import soccer_live, telegram_history as th
     filters = _telegram_filters("soccer", market, date_from, date_to)
@@ -681,7 +682,7 @@ def soccer_telegram_history(market: Optional[str] = None, date_from: Optional[da
     with _soccer_store(mode) as conn:
         now = soccer_live.utc_now()
         return {"as_of": now, **th.report("soccer", th.soccer_live_items(conn, now), th.soccer_teams(conn), team=team,
-                                          competition=competition, **filters)}
+                                          competition=competition, live_rows=live_rows, **filters)}
 
 
 @app.get("/api/thresholds")

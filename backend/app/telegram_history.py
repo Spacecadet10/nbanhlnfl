@@ -29,26 +29,43 @@ SOCCER_MARKETS = ("1x2_regulation", "double_chance", "draw_no_bet")
 SOCCER_TITLES = {"1x2_regulation": "Match result (90 min)"}
 DECISIVE = ("win", "loss", "push")
 VOID = ("void", "cancelled", "canceled")
-_cache: dict = {}
+REQUIRED = {"sport", "market", "percentage", "side", "line_source", "game_id", "grade", "grade_source", "pick", "line", "home_line",
+            "recommended", "card_line_text", "earlier_versions", "matchup", "final_score", "message_id", "start_at", "sent_at_local",
+            "start_date_local"}
+_cache: tuple = (None, None)
+
+
+def note(sport: str) -> str:
+    if sport != "soccer":
+        return NOTE
+    return NOTE + (" Soccer: match result, double chance and draw no bet only, the markets the cards showed; live goal and corner "
+                   "forecasts have their own panel. A draw-no-bet percentage is the chance of an outright win; a draw is a push.")
 
 
 # --- The imported file ------------------------------------------------------------------------------------------------
 def load() -> tuple[Optional[dict], Optional[str]]:
     """(the imported file, None) or (None, why not), cached by path and modification time."""
+    global _cache
     path = to.telegram_history_path()
     try:
         key = (str(path), path.stat().st_mtime_ns)
     except OSError:
         return None, "file_missing"
-    if _cache.get("key") != key:
-        try:
-            body = json.loads(path.read_text())
-            body["rows"][:0]                         # a file without rows is unreadable, not empty
-        except (OSError, ValueError, KeyError, TypeError):
-            return None, "unreadable"
-        _cache.clear()
-        _cache.update(key=key, body=body)
-    return _cache["body"], None
+    cached_key, cached = _cache
+    if cached_key == key:
+        return cached, None
+    try:
+        body = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None, "unreadable"
+    if not isinstance(body, dict) or not isinstance(body.get("rows"), list) or not all(isinstance(r, dict) for r in body["rows"]):
+        return None, "unreadable"
+    if "reconciliation" not in body or not all(REQUIRED <= r.keys() for r in body["rows"]):
+        return None, "old_format"            # built before this release: its rows lack the line and the card's versions
+    if not isinstance(body["reconciliation"], dict):
+        return None, "unreadable"
+    _cache = (key, body)                     # one assignment: a concurrent request never sees half a cache
+    return body, None
 
 
 # --- Live items: the live forecast of record per game and market, in one shape -----------------------------------------
@@ -159,8 +176,9 @@ def _overlap(row: dict, live: Optional[dict]) -> dict:
         version = next((v for v in live["versions"] if _same(row, v)), None)
         status = "earlier_live_version" if version else "different"
     shown = {k: live[k] for k in ("forecast_id", "generated_at", "model_version", "pick", "percentage", "side", "home_line", "grade")}
-    # A different side or line may grade differently without any error; both grades stay shown.
-    conflict = row["grade"] in DECISIVE and live["grade"] in DECISIVE and row["grade"] != live["grade"]
+    # A different side or line, or a start that moved after the live forecast (void), may grade differently without any error: the
+    # live grade is the one counted, both grades stay shown and the difference is reported.
+    conflict = row["grade"] in DECISIVE and live["grade"] in (*DECISIVE, *VOID, "unscorable") and row["grade"] != live["grade"]
     return {"status": status, "live": shown, "version_id": version["forecast_id"] if version else None, "grade_conflict": conflict}
 
 
@@ -264,19 +282,23 @@ def combine(sport: str, rows: list, live: list, market: Optional[str] = None, da
                                 key=lambda x: (x["start_at"], x["game_id"], x["market"]), reverse=True)}
 
 
-def report(sport: str, live: list, teams: Optional[dict] = None, **filters) -> dict:
-    """The endpoint body. `teams` {game_id: {home, away[, competition_id]}} from the store, for the team and competition filters."""
+def report(sport: str, live: list, teams: Optional[dict] = None, live_rows: bool = False, **filters) -> dict:
+    """The endpoint body (`live_rows`: also list the live predictions). `teams` {game_id: {home, away[, competition_id]}} from the store, for the team and competition filters."""
     body, why = load()
     rows = [] if body is None else [r for r in body["rows"] if r["sport"] == sport]
     reason = why or (None if rows else "no_rows_for_sport")
-    base = {"sport": sport, "available": reason is None, "reason": reason, "label": LABEL, "note": NOTE,
+    base = {"sport": sport, "available": reason is None, "reason": reason, "label": LABEL, "note": note(sport),
             "period": None, "reconciliation": None, "not_predictions": [], "filters": filters}
     if reason:
         out = combine(sport, [], live, **filters)
+        if not live_rows:
+            out["live_rows"] = []
         out["summary"] = {**out["summary"], "recovered": None}
         return {**base, **out}
     dates = sorted({r["start_date_local"] for r in rows if r.get("start_date_local")})
     out = combine(sport, [{**r, **(teams or {}).get(r["game_id"], {})} for r in rows], live, **filters)
+    if not live_rows:
+        out["live_rows"] = []
     everything = combine(sport, rows, live)["summary"]
     recon = dict((body.get("reconciliation") or {}).get(sport) or {})
     recon.update(overlap=everything["overlap"], counted_recovered=everything["recovered"]["recovered_only"],
