@@ -319,16 +319,31 @@ def test_the_global_guard_refuses_any_sports_imminent_tipoff_but_not_one_in_prog
     assert go(tmp_path, [PY, "-c", "pass"], **kw) == 0
 
 
+def test_with_a_global_lookback_any_sports_game_in_progress_refuses_and_a_final_one_does_not(tmp_path):
+    data = tmp_path / "data"
+    games_store(data, "nfl", -1.0)                                  # an NFL game started 1 h ago, not final: live jobs are busy
+    kw = dict(defer_sports=("soccer",), defer_hours=0.75, lookback_hours=0.0, global_sports=("nba", "nfl"), global_hours=0.5)
+    assert go(tmp_path, [PY, "-c", "pass"], **kw) == 0                                   # default: the earlier behaviour
+    assert go(tmp_path, [PY, "-c", "pass"], global_lookback_hours=4.0, **kw) == lr.EXIT_REFUSED
+    assert "in progress" in events(tmp_path)[-1]["reason"]
+    c = sqlite3.connect(data / "nfl.sqlite")
+    c.execute("UPDATE games SET status = 'final'")
+    c.commit()
+    c.close()
+    assert go(tmp_path, [PY, "-c", "pass"], global_lookback_hours=4.0, **kw) == 0       # finished games never block
+
+
 def test_cli_window_flags_and_a_sport_only_run_that_ignores_other_sports(tmp_path, monkeypatch):
     monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path / "data"))
     games_store(tmp_path / "data", "nba", 1.0)
     seen = {}
     monkeypatch.setattr(lr, "run_guarded", lambda cmd, **kw: seen.update(kw) or 0)
     argv = ["--name", "x", "--max-minutes", "1", "--max-rss-gb", "1", "--defer-sports", "soccer", "--defer-hours", "0.75",
-            "--lookback-hours", "0", "--global-sports", "nba,soccer", "--global-hours", "0.5", "--", "true"]
+            "--lookback-hours", "0", "--global-sports", "nba,soccer", "--global-hours", "0.5", "--global-lookback-hours", "4",
+            "--", "true"]
     assert lr.main(argv) == 0
     assert (seen["defer_sports"], seen["defer_hours"], seen["lookback_hours"], seen["global_sports"], seen["global_hours"]) == \
-        (("soccer",), 0.75, 0.0, ("nba", "soccer"), 0.5)
+        (("soccer",), 0.75, 0.0, ("nba", "soccer"), 0.5) and seen["global_lookback_hours"] == 4.0
     assert lr.main(argv[:-2] + ["--global-sports", "bogus", "--", "true"]) == lr.EXIT_USAGE
 
 

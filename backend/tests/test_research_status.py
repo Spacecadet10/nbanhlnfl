@@ -1287,3 +1287,35 @@ def test_a_new_ledger_definition_starts_a_new_series_and_old_rows_stay_stored(tm
     by, info = ar.forward_records(p, "ncaab")
     assert [r["game_id"] for r in by["inc"]] == ["g2"] and info["inc"]["version"] == "research-v2:elo:new"
     assert ar.forward_connect(p).execute("SELECT COUNT(DISTINCT model_version) FROM rf_forecasts").fetchone()[0] == 2
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_games_count_as_prospective(monkeypatch):
+    """Synthetic fixtures are dated before the real `prospective_from`; tests of the pairing logic treat them as prospective.
+    The cut itself is tested below with its real value."""
+    monkeypatch.setitem(ar.FORWARD_PAIRING, "prospective_from", "1970-01-01T00:00:00Z")
+
+
+def test_games_before_the_prospective_cut_are_exploratory_and_never_count(tmp_path, monkeypatch):
+    assert ar.FORWARD_PAIRING["prospective_from"] == "1970-01-01T00:00:00Z"   # the autouse override is active here
+    monkeypatch.setitem(ar.FORWARD_PAIRING, "prospective_from", _t(150))
+    p = tmp_path / "cut.sqlite"
+    s = synthetic(n=300, seed=7, edge=0.8)
+    for i, (ri, rc) in enumerate(zip(s["inc"], s["cand"])):
+        _put(p, "inc", "incumbent", _t(i, 8), None, ri["probs"]["a"], gid=ri["game_id"], start=_t(i, 12), market="winner", sport="nba")
+        _put(p, "cand", "candidate", _t(i, 8), None, rc["probs"]["a"], gid=ri["game_id"], start=_t(i, 12), market="winner", sport="nba")
+    c = ar.forward_connect(p)
+    with c:
+        for r in s["inc"]:
+            c.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, graded_at) VALUES (?,?,?,?,?,?)",
+                      ("nba", r["game_id"], "winner", "", r["outcome"], "x"))
+    c.close()
+    res = ar.forward_evaluate(p, fixture_adapter({"inc": []}), "p", record_look=False)
+    fw = res["evaluation"]["markets"]["winner"]["comparisons"]["cand"]["vs_incumbent"]["forward"]
+    assert fw["paired_games"] == 150 and fw["exploratory_before_prospective_from"]["paired_games"] == 150
+    assert res["recommendation"]["candidates"]["cand"]["markets"]["winner"]["criteria"]["min_settled_forward"]["n"] == 150
+
+
+def test_real_prospective_cut_is_after_the_designs_inspection():
+    src = open(ar.__file__).read()
+    assert '"prospective_from": "2026-11-24T00:00:00Z"' in src          # fixed in code, after the Nov 21-22 count inspection

@@ -318,8 +318,11 @@ Every evaluation of the forward store is a look and is logged; only the first lo
 all others are labelled exploratory. A candidate version that changes during the forward window starts a new forward record.
 
 ### Forward pairing, statuses and suspect models (amendment 2026-11-23, before any candidate's forward look)
-Written before any candidate had a forward look (no candidate had forward rows in the research store; the NBA/NHL pool's own
-prospective counts were not used to choose anything here). Constants: `autoresearch.FORWARD_PAIRING` (kept outside
+Correction (owner review, 2026-11-23): this rule is NOT "before any forward result". No candidate had rows in the research
+store, but the NBA/NHL candidate pool had already graded games (Nov 15-22) on its own page, and while building the rule its
+pairing COUNTS (not scores) were inspected on Nov 21-22 games from a copy of the data. Therefore the rule is confirmatory only for
+games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00:00Z; earlier games are reported as exploratory
+(`exploratory_before_prospective_from`) and never count toward any promotion criterion. Constants: `autoresearch.FORWARD_PAIRING` (kept outside
 `PROMOTION`/`PROTOCOL_V3`, so protocol ids and research queues are unchanged).
 - **Selection, blind to results.** Only forecasts made at or before *start − 60 min* are scored; per model only its latest
   definition (`model_version`), so a changed definition starts a new series. Rows are never deleted (append-only); later or
@@ -345,6 +348,14 @@ prospective counts were not used to choose anything here). Constants: `autoresea
   First case: NBA pool candidate `mlp:nba_base:normal` (team/game totals: its point head predicts game totals around 1,268
   points against lines near 215; spreads look plausible), diagnosis open.
 - **Neural candidates** whose pinned library is not installed are `dependency-blocked` (research blockers and status page).
+- **Research load during games (2026-11-23).** Verified behaviour before this change: a sport's research step waited for that
+  sport's own games (2.5 h before, 4 h lookback; Soccer only 0.75 h before, no lookback) and for any sport's kick-off within
+  0.5 h, but NOT for other sports' games already in progress. Now every research step also refuses while any sport's game that
+  started within 4 h is not final (`learning_run --global-lookback-hours`, wrapper default 4), because live jobs (odds,
+  near-tipoff forecasts of later games, results) run during games. Measured on the fixtures known on Nov 23 (Nov 23 - Dec 6,
+  06:00 / 11:10 / 13:10 slots): 5 of 70 sport-days lost with or without the change, all on Sun Nov 29 (soccer from 06:30, NFL
+  from 13:00, NBA/NHL in the evening); the same-day retries cannot recover such a day. The simulation treats future games as not
+  final, so it over-counts in-progress games.
 
 ### Negative results
 "No candidate kept", "no candidates", failed items and refused sports are recorded (`attempts.jsonl`, `items.jsonl`, `state.json`)

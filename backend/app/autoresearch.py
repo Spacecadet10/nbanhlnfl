@@ -2939,14 +2939,17 @@ def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None,
     return res
 
 
-# Forward pairing rule, fixed 2026-11-23 before any candidate's forward look and blind to results (docs/AUTORESEARCH.md
-# "Forward pairing"). Kept out of PROMOTION/PROTOCOL_V3 so the research protocol id (and every queue) is unchanged.
+# Forward pairing rule, fixed 2026-11-23 and blind to results (docs/AUTORESEARCH.md "Forward pairing"). It was designed after
+# NBA/NHL pool games had already been graded elsewhere and after pairing COUNTS (not scores) were inspected on Nov 21-22 games,
+# so it is confirmatory only for games starting at or after `prospective_from`; earlier games are reported as exploratory and
+# never count toward a promotion criterion. Kept out of PROMOTION/PROTOCOL_V3 so the protocol id (and every queue) is unchanged.
 FORWARD_PAIRING = {
     "as_of_minutes": 60,          # only forecasts made at or before start - 60 min are scored
     "max_gap_minutes": 10,        # a candidate and the current model are paired only from runs at most 10 min apart ...
     "same_line": True,            # ... at the same line (and the market's fixed side a/b)
     "max_unpaired_share": 0.10,   # a promotion criterion: at most 10% of the current model's games unpaired (timing/line)
-    "version": "the latest model_version of each model only (an earlier definition is never mixed into its series)"}
+    "version": "the latest model_version of each model only (an earlier definition is never mixed into its series)",
+    "prospective_from": "2026-11-24T00:00:00Z"}   # games starting earlier: exploratory only
 FORWARD_AS_OF_MINUTES = FORWARD_PAIRING["as_of_minutes"]
 
 
@@ -3143,7 +3146,10 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
                                 for n, i in info.items()}, "periods": {"forward": seasons}}
     ev = evaluate_records(fw, by_model, stages=("forward",))
     # Candidate vs current model: re-decided on time-and-line pairs (FORWARD_PAIRING), never on independently selected rows.
-    rows, _ = _forward_rows(path, adapter["sport"], protocol_id)
+    all_rows, _ = _forward_rows(path, adapter["sport"], protocol_id)
+    cut = FORWARD_PAIRING["prospective_from"]
+    rows = [r for r in all_rows if r["start_at"] >= cut]             # confirmatory: games starting at or after the cut only
+    early = [r for r in all_rows if r["start_at"] < cut]
     for market, e in ev["markets"].items():
         if e.get("status") != "evaluated":
             continue
@@ -3160,6 +3166,11 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
                     "unpaired_share": (len(pr["unpaired"]) / cohort) if cohort else 0.0,
                     "max_gap_minutes": pr["max_gap_minutes"],
                     "coverage": ((cohort - len(pr["missing"])) / cohort) if cohort else 0.0}
+            ex = forward_pairs(early, c, e["incumbent"], market)
+            dec["exploratory_before_prospective_from"] = {
+                "paired_games": ex["paired_games"], "games": ex["games"],
+                "note": f"games starting before {cut}: the pairing rule was designed after these were graded elsewhere; "
+                        "reported for information, never counted toward a promotion criterion"}
             cmp_["vs_incumbent"] = {"forward": dec}
             if cmp_.get("decision") != "suspect_invalid":
                 cmp_["decision"], cmp_["reason"] = dec["decision"], dec.get("reason")

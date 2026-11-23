@@ -6,7 +6,8 @@
 # games are near is skipped without stopping the others:
 #   - own-sport window: nba/nhl/ncaab/nfl no start within 2.5 h before a tip-off or 4 h after one that is not final;
 #     soccer only within 0.75 h before a kick-off (see docs/AUTORESEARCH.md "Five-sport schedule" for the Oct-Dec evidence);
-#   - global forecasting-load guard: no start within 0.5 h before ANY sport's tip-off;
+#   - global live-load guard: no start within 0.5 h before ANY sport's tip-off, nor while ANY sport's game is in progress
+#     (started within AUTORESEARCH_GLOBAL_LOOKBACK_HOURS, default 4, and not final) -- 2026-11-23: live jobs run during games;
 #   - budgets: AUTORESEARCH_TRIALS (3) trials and AUTORESEARCH_MINUTES (12) minutes per sport, AUTORESEARCH_TOTAL_MINUTES (100)
 #     for the whole run (a sport starts only if >= 6 minutes remain; the run ends before adaptive-train's 09:30 start from 06:00).
 # Resumable queue: prepare.py only scores commits without a record, so work left by a refused/timed-out sport is picked up the
@@ -83,7 +84,7 @@ for s in $ORDER; do
     if [ "$s" = soccer ]; then win=(--defer-hours 0.75 --lookback-hours 0); else win=(--defer-hours 2.5); fi
     att=$((prev + 1)); t1=$(date +%s)
     "${LEARNING_PYTHON:-python3}" -m app.learning_run --name "autoresearch-daily-$s" --max-minutes $((mins + 4)) --max-rss-gb 6 \
-      --defer-sports "$s" "${win[@]}" --global-sports "$ALL" --global-hours 0.5 -- \
+      --defer-sports "$s" "${win[@]}" --global-sports "$ALL" --global-hours 0.5 --global-lookback-hours "${AUTORESEARCH_GLOBAL_LOOKBACK_HOURS:-4}" -- \
       "${AUTORESEARCH_PYTHON:-python3}" "$PREPARE" daily --sport "$s" --max-trials "$TRIALS" --max-minutes "$mins" \
       --timeout "$TIMEOUT" >"$tmp" 2>&1
     rc=$?; wall=$(( $(date +%s) - t1 )); cat "$tmp"
