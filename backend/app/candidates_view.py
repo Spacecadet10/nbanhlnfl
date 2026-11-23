@@ -1,9 +1,13 @@
 """Per-game view of every candidate's recorded forecasts (candidate_forecasts, migration 0019), including the neural ones.
 
-Research only: these rows are never a canonical forecast, never vote and are not graded here. Each candidate model version is
+Research only: candidate rows are never a canonical forecast, never vote and are not graded here. Each candidate model version is
 shown on its own (the latest pregame row of that version per market), never pooled with another version. Only rows made
 strictly before the start are shown: before the start stored with the row and before the game's current start. A row whose
 start has moved since is flagged. A registry candidate with no row for this game is listed as such; nothing is inferred.
+
+The `upcoming*` readers at the end serve the research forward test only (read-only): the candidate ledger and the current
+model's recorded rows (`predictions`, `market_forecasts`). They return a row only for the start it was made for, so a forecast
+for a superseded start is never carried to the new one.
 """
 import json
 from typing import Optional
@@ -63,7 +67,7 @@ def upcoming(conn, candidate: str, now: str) -> list:
     return conn.execute(
         "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.p_a, f.p_mid, f.p_b, f.generated_at, "
         "f.inputs, g.tipoff_at AS game_tipoff, g.season FROM candidate_forecasts f JOIN games g USING (game_id) "
-        "WHERE f.candidate = ? AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.generated_at < f.tipoff_at "
+        "WHERE f.candidate = ? AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.tipoff_at = g.tipoff_at "
         "ORDER BY f.generated_at", (candidate, now)).fetchall()
 
 
@@ -74,7 +78,7 @@ def upcoming_winner_member(conn, model: str, now: str) -> list:
     return conn.execute(
         "SELECT p.game_id, p.model_version, p.generated_at, p.home_win_prob, g.tipoff_at AS game_tipoff, g.season FROM predictions p "
         "JOIN games g USING (game_id) WHERE p.run_type = 'live' AND p.feature_version = ? "
-        "AND substr(p.model_version, 1, ?) = ? AND g.tipoff_at > ? AND p.generated_at < g.tipoff_at "
+        "AND substr(p.model_version, 1, ?) = ? AND g.tipoff_at > ? AND p.generated_at < g.tipoff_at AND p.cutoff_at = g.tipoff_at "
         "ORDER BY p.generated_at", (FEATURE_VERSION, len(prefix), prefix, now)).fetchall()
 
 
@@ -85,5 +89,5 @@ def upcoming_line_member(conn, model: str, now: str) -> list:
         "SELECT f.game_id, f.model_version, f.market, f.line, f.line_source, f.generated_at, f.p_a, f.p_mid, f.p_b, "
         "g.tipoff_at AS game_tipoff, g.season FROM market_forecasts f JOIN games g USING (game_id) WHERE f.run_type = 'live' "
         "AND f.policy = 'near_tipoff' AND (substr(f.model_version, 1, ?) = ? OR substr(f.model_version, 1, ?) = ?) "
-        "AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at ORDER BY f.generated_at",
+        "AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.tipoff_at = g.tipoff_at ORDER BY f.generated_at",
         (len(research), research, len(primary), primary, now)).fetchall()

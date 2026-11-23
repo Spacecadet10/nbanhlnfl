@@ -329,6 +329,8 @@ def core_lines(conn, game_ids, now: str, quotes_until: Optional[str] = None, rej
                     book = json.loads(r["bookmaker"]) if r["bookmaker"] else None
                 except ValueError:
                     book = {"unreadable": True}
+                if book and not isinstance(book, dict):
+                    book = {"unreadable": True}
                 if book:
                     ok = bool(book.get("retrieved_at")) and book["retrieved_at"] <= quotes_until
                     why = "cohort quote retrieved after the information time"

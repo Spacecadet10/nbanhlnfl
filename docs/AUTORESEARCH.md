@@ -336,7 +336,9 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   before the instant.
 - **NBA/NHL sources.** Pool candidates: `candidate_forecasts`; current-model winner members: `predictions` (agreement cohort,
   `research-v2:<name>:<digest>`); line members: `market_forecasts` (`research-v3:<name>:…` and the primary's own near-tipoff
-  rows). All read-only, every row generated before the game's current start (`games.tipoff_at`). Lines are tagged
+  rows). All read-only, every row generated before the game's current start (`games.tipoff_at`). A row is read only for the start it
+  was made for, and rows already recorded for a superseded start stay stored but are not evaluated;
+  games a model forecast only for a superseded start are counted per model and market (`superseded_start`). Lines are tagged
   `bookmaker` or `reference_model`; any reference-line result goes to human review, never to a recommendation.
 - **Separate statuses.** Research evaluation (the v3 runner: evaluated / no_candidates / refused / failed / skipped; "evaluated,
   no candidate kept" is a successful evaluation). Candidate recording (`forward_status`): candidates_recording,

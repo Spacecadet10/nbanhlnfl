@@ -584,6 +584,28 @@ def test_nba_adapter_numbers_equal_the_existing_study_summary(monkeypatch):
     assert a["periods"]["validation"] == [2024] and not set(a["periods"]["holdout"]) & {2022, 2023, 2024}
 
 
+def test_the_historical_walk_of_a_current_model_member_never_calls_a_ledger_reader(monkeypatch):
+    """Behaviour, not text: every candidates_view ledger reader raises. (Study tables are pre-seeded: the table build itself is
+    not exercised here.)"""
+    from app import candidates_view
+
+    def refuse(*a, **k):
+        raise AssertionError("the evaluator reached a live forecast ledger")
+    for name in ("upcoming", "upcoming_winner_member", "upcoming_line_member"):
+        monkeypatch.setattr(candidates_view, name, refuse)
+    conn = type("NoStore", (), {"execute": refuse})()
+    rows = [{"game_id": f"g{i}", "season": 2023 + i % 2, "cutoff_at": _t(i), "tipoff_at": _t(i, 12), "line": None, "realised": 2 * (i % 2),
+             "vectors": {"elo": (0.6, 0.0, 0.4)}} for i in range(40)]
+    monkeypatch.setitem(ar._STUDY, ("nba", "validation", str(ar.config.db_path("nba"))),
+                        {"tables": {"winner": rows}, "members": {"winner": ["elo"], "lines": []}, "rows": [], "events": {},
+                         "recorder": None, "dataset": "x", "features": None, "walk": {}, "specs": {}})
+    a = ar.nba_nhl_adapter("nba", candidates=[])
+    walked = a["walk"](conn, [2023, 2024], "elo")
+    assert len(walked) == 40 and ar.model_metrics(walked, "binary")["n"] == 40
+    with pytest.raises(AssertionError, match="live forecast ledger"):      # the guard bites: the forward reader does reach it
+        a["forecast_upcoming"](conn, _t(0), next(iter(a["forward_models"])))
+
+
 # --- status ---
 def test_v3_status_reports_each_sport_with_attempts_blockers_and_next_run(client, monkeypatch, exp):
     s = synthetic(n=300, seed=13, edge=0.8)
@@ -1038,6 +1060,48 @@ def test_nba_forward_reads_pool_candidates_and_current_model_members_from_the_pr
     pn = up(conn, now, "points_normal")                                          # the primary's own near-tipoff rows
     assert [(r["market"], r["line_source"]) for r in pn] == [("total", "reference_model")]
     assert up(conn, now, "gbt_v1") == []
+
+
+def test_a_forecast_made_for_a_superseded_start_is_never_recorded_under_the_new_start(tmp_path):
+    conn = _ledger_store(tmp_path / "nba.sqlite")
+    conn.execute("UPDATE games SET tipoff_at = '2026-11-23T02:00:00Z' WHERE game_id = 'ahead'")      # moved after the forecasts
+    conn.commit()
+    up = ar._study_upcoming("nba", {"winner": ["logistic"], "lines": ["ridge_points", "points_normal"]})
+    for name in ("ridge:nba_base", "logistic", "ridge_points", "points_normal"):
+        assert up(conn, "2026-11-22T23:30:00Z", name) == [], name
+
+
+def test_forward_rows_recorded_for_a_superseded_start_stay_stored_but_are_not_evaluated(tmp_path):
+    p = tmp_path / "f.sqlite"
+    base = {"game_id": "g", "season": 2027, "market": "winner", "line": None, "probs": {"a": 0.6, "b": 0.4}, "outcome": None}
+    for at, start in (("2026-11-25T18:00:00Z", "2026-11-25T20:00:00Z"), ("2026-11-25T18:30:00Z", "2026-11-25T22:00:00Z")):
+        ar.forward_record(p, sport="nba", protocol_id="p", model="m", role="candidate", model_version="v", data_version="d",
+                          forecasted_at=at, now=at, records=[base | {"start_at": start, "forecast_cutoff": at, "forecast_at": at}])
+    rows, _ = ar._forward_rows(p, "nba")
+    assert [r["start_at"] for r in rows] == ["2026-11-25T22:00:00Z"]
+    c = sqlite3.connect(p)
+    assert c.execute("SELECT COUNT(*) FROM rf_forecasts").fetchone()[0] == 2                          # the original row is kept
+    c.close()
+
+
+def test_a_game_the_bar_only_forecast_at_a_superseded_start_is_counted_not_hidden(tmp_path):
+    p = tmp_path / "f.sqlite"
+    base = {"season": 2027, "market": "winner", "line": None, "probs": {"a": 0.6, "b": 0.4}, "outcome": None}
+    old, new = "2026-11-25T20:00:00Z", "2026-11-25T22:00:00Z"
+    at, later = "2026-11-25T18:00:00Z", "2026-11-25T18:30:00Z"
+    for model, role, game, when, start in (("inc", "incumbent", "moved", at, old), ("cand", "candidate", "moved", at, old),
+                                           ("cand", "candidate", "moved", later, new),
+                                           ("inc", "incumbent", "fixed", at, old), ("cand", "candidate", "fixed", at, old)):
+        ar.forward_record(p, sport="nba", protocol_id="p", model=model, role=role, model_version="v", data_version="d",
+                          forecasted_at=when, now=when,
+                          records=[base | {"game_id": game, "start_at": start, "forecast_cutoff": when, "forecast_at": when}])
+    dropped = {}
+    rows, _ = ar._forward_rows(p, "nba", superseded=dropped)
+    assert {(r["model"], r["game_id"]) for r in rows} == {("inc", "fixed"), ("cand", "fixed"), ("cand", "moved")}
+    assert dropped == {("inc", "winner"): {"moved"}}                  # cand has a row for the current start: not listed
+    a = fixture_adapter({"inc": [], "cand": []})
+    ev = ar._forward_stage(p, a | {"sport": "nba"}, "p")
+    assert ev["superseded_start"] == {"inc": {"winner": 1}}
 
 
 def test_record_tracks_the_pool_and_states_candidates_apart_from_the_current_model(tmp_path):

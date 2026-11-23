@@ -2973,11 +2973,13 @@ def forward_as_of(start_at: str) -> str:
 
 
 def _forward_rows(path: Optional[Path], sport: str, protocol_id: Optional[str] = None, *, since: Optional[str] = None,
-                  until: Optional[str] = None, as_of: bool = True) -> tuple:
+                  until: Optional[str] = None, as_of: bool = True, superseded: Optional[dict] = None) -> tuple:
     """Stored forward rows joined to their grades, oldest first, restricted per model AND market to the latest model_version
     (one model name can come from two ledgers, e.g. NHL goals_poisson: winner from the agreement cohort, lines from the primary)
     and, with `as_of`, to forecasts made at or before the game's evaluation instant (start - as_of_minutes). `since`/`until`
-    keep games starting at or after / before a time (the prospective cut). Returns (rows as dicts, info)."""
+    keep games starting at or after / before a time (the prospective cut). A game's current start is the one on its most recently
+    recorded row; rows for another start are not evaluated, and `superseded` (a dict) collects, per (model, market), the games
+    for which that model has rows only for a superseded start. Returns (rows as dicts, info)."""
     conn = forward_connect(path)
     try:
         q = ("SELECT f.*, g.outcome, g.point_actual FROM rf_forecasts f LEFT JOIN rf_grades g ON g.sport=f.sport AND "
@@ -2986,12 +2988,22 @@ def _forward_rows(path: Optional[Path], sport: str, protocol_id: Optional[str] =
         rows = [dict(r) for r in conn.execute(q, (sport, protocol_id) if protocol_id else (sport,)).fetchall()]
     finally:
         conn.close()
-    latest_version, info = {}, {}
+    latest_version, latest_start, info = {}, {}, {}
     for r in rows:                                       # oldest first: the last version seen is the current one
         latest_version[(r["model"], r["market"])] = r["model_version"]
         info[r["model"]] = {"role": r["role"], "version": r["model_version"], "description": "forward forecasts",
                             "data_version": r["data_version"]}
-    rows = [r for r in rows if r["model_version"] == latest_version[(r["model"], r["market"])]
+    for r in sorted(rows, key=lambda r: r["id"]):        # in recording order
+        latest_start[r["game_id"]] = r["start_at"]
+    rows = [r for r in rows if r["model_version"] == latest_version[(r["model"], r["market"])]]
+    if superseded is not None:
+        current = {(r["model"], r["market"], r["game_id"]) for r in rows if r["start_at"] == latest_start[r["game_id"]]}
+        for r in rows:
+            at = latest_start[r["game_id"]]
+            if (r["model"], r["market"], r["game_id"]) not in current and (since is None or at >= since) \
+                    and (until is None or at < until):
+                superseded.setdefault((r["model"], r["market"]), set()).add(r["game_id"])
+    rows = [r for r in rows if r["start_at"] == latest_start[r["game_id"]]
             and (not as_of or r["forecasted_at"] <= forward_as_of(r["start_at"]))
             and (since is None or r["start_at"] >= since) and (until is None or r["start_at"] < until)]
     return rows, info
@@ -3172,7 +3184,12 @@ def _forward_stage(path, adapter: dict, protocol_id, *, since=None, until=None) 
           "bar": FORWARD_PAIRING["bar"].get(sport, {})}
     ev = evaluate_records(fw, by_model, stages=("forward",))
     rows, _ = _forward_rows(path, sport, protocol_id, since=since, until=until)
-    raw, _ = _forward_rows(path, sport, protocol_id, since=since, until=until, as_of=False)
+    superseded: dict = {}
+    raw, _ = _forward_rows(path, sport, protocol_id, since=since, until=until, as_of=False, superseded=superseded)
+    # games left out of a model's record because it forecast only a superseded start: counted here, never hidden
+    ev["superseded_start"] = {}
+    for (n, market), games in sorted(superseded.items()):
+        ev["superseded_start"].setdefault(n, {})[market] = len(games)
     for market, e in ev["markets"].items():
         if e.get("status") != "evaluated":
             continue
@@ -3290,7 +3307,7 @@ def main_v3(argv: list) -> int:
                 oc.execute("PRAGMA query_only = ON")
                 now = _iso(a.now or _now())
                 for name in a.model or [n for n in adapter["models"]]:
-                    m = adapter["models"][name]
+                    m = (adapter["models"] | (adapter.get("forward_models") or {}))[name]
                     recs = adapter["forecast_upcoming"](oc, now, name) if adapter.get("forecast_upcoming") else []
                     print(json.dumps({name: forward_record(None, sport=chosen[0], protocol_id=pid, model=name, role=m["role"],
                                                            model_version=m["version"], data_version=adapter["data_version"],
