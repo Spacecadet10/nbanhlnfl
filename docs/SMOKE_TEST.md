@@ -1968,3 +1968,10 @@ back three days). Headless Chrome 156 with DevTools device metrics: real 1280×9
 ## Nov 12 — Telegram card context and soccer
 
 338 focused tests passed; exact command and source review in docs/evidence/card-output-2026-11-12/REVIEW.md. Archived Detroit and Senegal–Sudan snapshots rendered locally as labelled previews and visually inspected; repeated sends, missing data, cutoff/refusal and long all-market soccer cases tested. No test Telegram messages. Browser/API/frontend desktop and phone flows unverified in this sender-only change; no frontend/API modifications or full-app-ready claim. Scheduled production delivery to be checked after release.
+
+## Nov 23 (UTC) — recovered Telegram predictions, live `127.0.0.1:4173` (delivery 4224965)
+
+Headless Chrome over CDP (extension not connected), 1440×1000 and 390×844: History and Performance of NBA, NHL, NFL, Soccer, NCAAB; date, team,
+market and competition filters; legacy policy view; Nov 17. No horizontal page overflow, no page error (one missing favicon.ico).
+`node dom.mjs http://127.0.0.1:4173 <out>`: 2,378 rendered rows vs the Desktop JSON, 0 missing. `python3 -I verify.py http://127.0.0.1:8101`: BAD 0.
+Scripts and screenshots: ~/nba-predictor-research-data/recovered-history-2026-11-22/.

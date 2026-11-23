@@ -1,3 +1,39 @@
+## Recovered Telegram predictions in Performance and Prediction History — branch recovered-history 4224965, RELEASED to delivery (2026-11-23 ~04:50Z) — Claude Opus 5.5 (lead)
+- Owner: the Nov 2-16 original predictions (Desktop JSON, sha256 ae9cfd15..., same file as docs/telegram_record.json) must be in
+  the historical views, not only in card summaries. New GET /api/telegram-history (NBA/NHL/NCAAB), /api/nfl/telegram-history,
+  /api/soccer/telegram-history (app/telegram_history.py; read-only; no model code, distinct from /api/recovered-forecasts).
+- Pages: NBA/NHL History merges the rows into the canonical table (dates, team, market); NFL/Soccer History has one dated list with
+  market (and competition) filters; Performance of all four has totals per market, exact-% records, individual rows, reconciliation.
+- COUNTING RULE (on the page): one prediction per (sport, game, market). The last card before the start is the prediction;
+  earlier cards are listed as versions, not counted; a game+market also in the live record is counted once, by the live forecast
+  of record; the card stays listed (same / earlier live version / different). Sent at or after the start = excluded, listed.
+  Unsettled stays unsettled; every row is unpriced; model version unknown.
+- Reconciliation (live API): card rows 905 NBA / 576 NHL / 110 NFL / 126 Soccer = 1,717; last card per game+market 460/498/105/126 =
+  1,189 (all imported, 0 excluded, 0 unmatched, 0 unsettled, 0 unaccounted); earlier cards 440/66/5/0 = 511; sent after start
+  5/12/0/0 = 17. Duplicates of live 80/42/25/69 = 216: 191 same, 25 earlier live version (24 NBA, 1 NHL), 0 different; counted only
+  in recovered 380/456/80/57 = 973. 1,123 graded by the export, 66 from the stored final score, 0 disagree; 8 of the 25 earlier-version
+  rows graded differently from the live forecast that is counted (7 NBA, 1 NHL), both grades shown.
+  Combined = union of game+market keys: NBA 680, NHL 738, NFL 200, Soccer 420. No Nov 17 and no NCAAB row.
+- Data: research/telegram_history.json rebuilt from the Desktop JSON (old file: evidence telegram_history.before.json); bucket fields
+  identical in all 1,189 rows, so cards/colours/best_pick_record do not change. Rebuild: `python scripts/build_telegram_history.py --data-dir <data>`.
+  A pre-release file reads as 'old_format' (unavailable with a reason), never half-shown.
+- Review: independent Opus REQUEST CHANGES (old-file page crash, filters lost, NCAAB wording, soccer scope, malformed file) -> fixed
+  test-first -> re-review APPROVE with one finding (filters following a league switch), fixed (010a10c). 4224965 (rule text, rows open)
+  was added after the re-review. NOT done: weekly_report_review.json entry (reviewer: recorder inputs unchanged).
+- Tests: backend suite at 010a10c, 164 files in 6 chunks, 3,171 collected = 3,161 passed + 1 skipped + 9 failed: 8 test_deep_study
+  (torch/keras absent) + test_adaptive ...publishes_briefly (60 s in-test limit; failed the same on unmodified 787d861 at load ~55; passed alone
+  on 4224965 at load ~20). 4224965 (rule text + UI): 154 passed, 1 skipped on 7 affected files. Frontend 72 unit passed, typecheck, build.
+  check_project.py: FAILs only on pre-existing docs files.
+- Verified live: verify.py on :8101 and :4173: 1,189/1,189 rows equal the source, BAD 0, per-day sums equal totals; dom.mjs: 2,378
+  rendered rows (both pages) checked against the source, 0 missing; headless Chrome 1440 and 390: no horizontal page overflow, no errors.
+  Chrome extension was not connected (headless Chrome over CDP instead).
+- Live steps: delivery 787d861 -> 4224965 ff + npm build + `app.release pin`; api-delivery and web kickstarted; no plist, migration, venv or
+  backup-runner change (runner stays 787d861). research-6 (another session) rebases on this; it deploys after the 07:47 check Nov 23.
+- OPEN: earlier cards marked "same" ignore the printed line text (2 cards); while a History request fails its recovered rows hide too;
+  if NFL live is re-activated later, Nov 15-16 NFL overlap labels can drop (still counted once); all-market payload ~1.1 MB.
+- ROLLBACK: cd ~/nba-predictor-delivery && git checkout --detach 787d861 && (cd frontend && npm run build) && pin; the new data file is
+  safe for the old code; kickstart api-delivery and web. Evidence: ~/nba-predictor-research-data/recovered-history-2026-11-22/.
+
 ## Five-sport research (sports-research-v3) — branch research-5 23df530, RELEASED to delivery (2026-11-22 ~21:28Z) — Claude Opus 5.5 (lead)
 - Built by 4 agents (core evaluator; NCAAB+NFL adapters; Soccer adapter + readiness fix; scheduling/snapshot/forward driver),
   integrated in research-5; independent Opus review x2 (REQUEST CHANGES -> fixed; round-2 must-fix 131423a and minors 23df530
