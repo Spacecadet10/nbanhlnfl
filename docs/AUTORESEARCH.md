@@ -371,6 +371,12 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   else the market is skipped). Replay test `test_replay_inputs_arriving_after_the_information_time_cannot_change_a_frozen_candidate`:
   a result, a moved start and an unserved game planted after the information time leave the frozen forecasts identical to a run
   made at the information time, while an unfrozen run does change. The real write time stays in `generated_at`.
+  Cohorts without a bookmaker quote (stored as the text 'null': NBA/NHL model-line team totals and the NHL 3-way) are used only
+  from the same cycle (cohort information time within 10 min after the cutoff): that line is the served line model's own
+  reference line of the cycle and reads no quote; such results are `reference_model` and always go to human review. Cohorts
+  rejected at the cutoff are counted per market (`cohort_lines_rejected`). Measured on a copy of Nov 22 cohorts with the cutoff
+  60 s before each cohort: the cycle's own cohort was kept for NBA winner 40/47, spread 40/40, total 38/40, team totals 40/40 and
+  every NHL market 8/8 (the misses are quotes retrieved in that last minute).
   (e) The bar is named in advance: NBA winner `elo`, NBA lines `points_normal`; NHL winner `hockey_elo`, NHL 3-way and lines
   `goals_poisson` (the served primaries); other sports have one incumbent per market. (f) A candidate whose only forecasts came
   after start - 60 min is `as_of_late` (counted with unpaired), not `missing`. (g) Certainty is judged on every stored row of a candidate's

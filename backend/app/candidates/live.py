@@ -307,22 +307,37 @@ def fit_deep_artifacts(conn, now: Optional[str] = None, write: bool = True) -> d
     return out
 
 
-def core_lines(conn, game_ids, now: str, quotes_until: Optional[str] = None) -> dict:
+SAME_CYCLE = timedelta(minutes=10)     # a no-quote cohort line (model line / 3-way) of the same cycle as the information time
+
+
+def core_lines(conn, game_ids, now: str, quotes_until: Optional[str] = None, rejected: Optional[dict] = None) -> dict:
     """(game_id, market) -> the exact line of the latest core research cohort generated at or before `now` (never the
     expanded experiment's), with its cohort id as the reference — for every market, so a winner/reg3 forecast also names
     the cohort it was made against (a new cohort gives a new candidate row). Used when the caller passes no lines."""
     out = {}
     for gid in game_ids:
-        for r in conn.execute("SELECT cohort_id, market, line, line_source, bookmaker FROM research_cohorts WHERE game_id=? "
+        for r in conn.execute("SELECT cohort_id, market, line, line_source, bookmaker, information_at FROM research_cohorts WHERE game_id=? "
                               "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' "
                               "AND tipoff_at = (SELECT tipoff_at FROM games WHERE game_id=?) ORDER BY generated_at, cohort_id",
                               (gid, now, gid)):
-            if quotes_until is not None and r["bookmaker"]:     # a quote retrieved after the information time: not usable
+            if quotes_until is not None:
+                # Frozen at the information time. A bookmaker line: its quote must have been retrieved at or before it. A
+                # cohort without a quote (stored as the text 'null': the primary's own model line, or the 3-way market) has no
+                # external input; it must belong to the same cycle (cohort information time within SAME_CYCLE after it).
                 try:
-                    got = (json.loads(r["bookmaker"]) or {}).get("retrieved_at")
+                    book = json.loads(r["bookmaker"]) if r["bookmaker"] else None
                 except ValueError:
-                    got = None
-                if got is None or got > quotes_until:
+                    book = {"unreadable": True}
+                if book:
+                    ok = bool(book.get("retrieved_at")) and book["retrieved_at"] <= quotes_until
+                    why = "cohort quote retrieved after the information time"
+                else:
+                    ok = bool(r["information_at"]) and _parse(r["information_at"]) <= _parse(quotes_until) + SAME_CYCLE
+                    why = "no-quote cohort not of the information time's cycle"
+                if not ok:
+                    if rejected is not None:
+                        rejected[r["market"]] = rejected.get(r["market"], 0) + 1
+                        rejected.setdefault("reasons", {})[r["market"]] = why
                     continue                   # (an earlier cohort of this game may still qualify: latest qualifying wins)
             out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}" if r["line"] is not None
                                        else "none", "ref": f"research_cohorts:{r['cohort_id']}"}
@@ -359,7 +374,10 @@ def _record(conn, game_ids, now, lines, write, specs, out, information_at: Optio
         return
     ids = {g["game_id"] for g in eligible}
     if lines is None:
-        lines = core_lines(conn, ids, now, quotes_until=information_at) if _has(conn, "research_cohorts") else {}
+        rej: dict = {}
+        lines = core_lines(conn, ids, now, quotes_until=information_at, rejected=rej) if _has(conn, "research_cohorts") else {}
+        if rej:
+            out["cohort_lines_rejected"] = rej          # visible: a market whose newest cohort was not usable at the cutoff
     rec = _recorder(conn, eng, ids, info)
     events = _events(conn, eng, rows, known, info)
     walk = features.walk(rec, rows, events, deliver_until=info)
