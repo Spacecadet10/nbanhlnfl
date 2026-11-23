@@ -1255,3 +1255,44 @@ export interface CoverageRow {
   forecasting_with_fits: CoverageCell; evaluated: CoverageCell; improved_prospectively: CoverageCell;
 }
 export interface LearningCoverage { mode: Mode; rows: CoverageRow[]; stores?: Record<string, string>; note: string }
+
+// --- Recovered Telegram predictions (GET /api[/nfl|/soccer]/telegram-history, backend app/telegram_history.py) ------------
+export interface TgTally {
+  predictions: number; win: number; loss: number; push: number; void: number; unsettled: number; settled: number;
+  win_rate: number | null; ci95: [number, number] | null; stated: number | null; expected_wins: number | null; small_sample: boolean;
+}
+export interface TgCell { recovered: TgTally; live: TgTally; combined: TgTally }
+export interface TgSummary {
+  live: TgTally; combined: TgTally;
+  recovered: (TgTally & { recovered_only: number; priced: number; unpriced: number }) | null;
+  overlap: { same: number; earlier_live_version: number; different: number; grade_conflicts: number };
+}
+export interface TgEarlierCard { message_id: number; sent_at_local: string; pick: string; percentage: string; card_line_text: string | null; differs: boolean }
+export interface TgLive {
+  game_id: string; market: string; market_title?: string; percentage: string; side: string; home_line: number | null; line_source: string; grade: string;
+  start_at: string; game_date: string; forecast_id: number; generated_at: string; model_version: string; pick: string; matchup: string;
+  home: string; away: string; competition_id?: string; final_score: string | null;
+}
+export interface TgRow {
+  origin: 'recovered'; label: string; sport: string; game_id: string; game_date: string; start_at: string; matchup: string;
+  market: string; market_title: string; direction: string; pick: string; side: string; line: number | null; home_line: number | null;
+  percentage: string; line_source: string; card_line_text: string | null; recommended: boolean; price: null; priced: false;
+  grade: string; grade_source: 'telegram_export' | 'store_final' | null; final_score: string | null; message_id: number; sent_at_local: string;
+  model_version: null; counted: boolean; earlier_versions: TgEarlierCard[]; bucket: TgCell; competition_id?: string;
+  overlap: { status: 'none' | 'same' | 'earlier_live_version' | 'different'; live: Pick<TgLive, 'forecast_id' | 'generated_at' | 'model_version' | 'pick' | 'percentage' | 'side' | 'home_line' | 'grade'> | null;
+    version_id: number | null; grade_conflict: boolean };
+}
+export interface TgExact extends TgCell {
+  market: string; market_title: string; percentage: string; side: string; direction: string; line_source: string; overlap: number;
+}
+export interface TgReconciliation {
+  source_rows: number; one_per_game: number; included: number; excluded: number; unmatched: number; earlier_versions: number;
+  sent_after_start: number; unaccounted: number; unsettled: number; counted_recovered: number; disagreements: number;
+  overlap: TgSummary['overlap']; excluded_rows: { game_id: string; market_key: string; selection: string; percent: number; reason: string }[];
+}
+export interface TgReport {
+  as_of: string; sport: string; available: boolean; reason: string | null; label: string; note: string;
+  period: { from: string; to: string } | null; reconciliation: TgReconciliation | null;
+  not_predictions: { game_id: string; market_key: string; matchup: string; pick: string; percentage: string; message_id: number; sent_at_local: string; start_at: string; reason: string }[];
+  rows: TgRow[]; live_rows: TgLive[]; summary: TgSummary; markets: ({ market: string; title: string } & TgSummary)[]; exact_percentages: TgExact[];
+}

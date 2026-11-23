@@ -4,13 +4,15 @@ import { NoSkillNote } from './Skill';
 import { ModelPct, PickEvidence } from './PickEvidence';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import type { CanonicalForecast, CanonicalGrade, CanonicalRecord, CanonicalState, CanonicalSummary, MarketId, Sport, Team } from '../api/types';
+import type { CanonicalForecast, CanonicalGrade, CanonicalRecord, CanonicalState, CanonicalSummary, MarketId, Sport, Team, TgReport } from '../api/types';
 import { useApi } from '../api/useApi';
 import { calendarDate, dateTime, FULL_DATE, num, pct } from '../format';
 import { ProbabilityBar } from './ProbabilityBar';
 import { MARKET } from './Research';
 import { useCarriedSearch } from './Selection';
 import { AsyncView, Empty } from './States';
+import { RecoveredHistoryNote, RecoveredHistoryRow } from './TelegramHistory';
+import { mergeByStart } from './recoveredHistory';
 import { Icon, MetricCard } from './ui';
 
 /** Where the canonical forecast is shown: every sport and every market it defines (the API rejects a market a sport lacks). */
@@ -115,24 +117,28 @@ export function CanonicalSummaryLine({ s }: { s: CanonicalSummary }) {
   );
 }
 
-export function CanonicalHistory({ sport, market, filters, limit }: { sport: Sport; market: MarketId; filters: { date_from?: string; date_to?: string; team?: string }; limit: number }) {
+/** `recovered`: the recovered Telegram predictions of the same selection, merged by start into the same table. */
+export function CanonicalHistory({ sport, market, filters, limit, recovered }: { sport: Sport; market: MarketId; filters: { date_from?: string; date_to?: string; team?: string }; limit: number; recovered: TgReport | null }) {
   const carried = useCarriedSearch();
   const { state, retry } = useApi((s) => api.canonicalHistory(sport, market, { ...filters, limit }, s),
     [sport, market, filters.date_from, filters.date_to, filters.team, limit]);
   return (
     <AsyncView state={state} retry={retry}>{(h) => <>
+      {recovered && <RecoveredHistoryNote d={recovered} />}
       <CanonicalSummaryLine s={h.record} />
       <p className="small muted">
         One row per game since canonical recording began{h.recording_began_at ? ` (${dateTime(h.recording_began_at)})` : ''}: its canonical record
         and grade, or why there is none. Preseason games ({h.preseason_games}) have no validated model and are listed without a probability.
-        Forecasts from before canonical recording are in the legacy views.
+        Forecasts from before canonical recording are in the legacy views; recovered Telegram predictions (Nov 2–16) are listed here with their own label.
         {h.total > h.rows.length && ` Showing the latest ${h.rows.length} of ${h.total}; the record covers all ${h.total}.`}
       </p>
-      {h.rows.length === 0 ? <Empty>{h.recording_began_at ? 'No records match these filters.' : 'Recording has not started in this data store.'}</Empty> : (
+      {h.rows.length === 0 && !recovered?.rows.length ? <Empty>{h.recording_began_at ? 'No records match these filters.' : 'Recording has not started in this data store.'}</Empty> : (
         <div className="table-wrap"><table className="table history">
           <thead><tr><th>Date</th><th>Game</th><th>Forecast</th><th>Result</th><th>Grade</th><th>Record</th><th>Model</th></tr></thead>
           <tbody>
-            {h.rows.map((row) => {
+            {mergeByStart(h.rows, (row) => row.tipoff, recovered?.rows ?? []).map((x) => {
+              if (x.kind === 'recovered') return <RecoveredHistoryRow key={`recovered|${x.row.game_id}`} row={x.row} />;
+              const row = x.row;
               const c = row.canonical, r = c.record;
               return (
                 <tr key={row.game_id}>

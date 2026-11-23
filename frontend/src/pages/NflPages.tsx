@@ -9,6 +9,7 @@ import { useDataRevision } from '../api/freshness';
 import { useCarriedSearch } from '../components/Selection';
 import { AsyncView, Empty } from '../components/States';
 import { gameRoute } from '../components/gameRoute';
+import { RecoveredLedger, RecoveredPerformance } from '../components/TelegramHistory';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { calendarDate, dateTime, FULL_DATE, tipoffTime } from '../format';
@@ -332,7 +333,9 @@ function NflRecords({ page }: { page: 'performance' | 'history' }) {
   const { state, retry } = useApi(s => api.nflRecord(s), [], rev);
   const carried = useCarriedSearch();
   return <section><PageTitle icon={page === 'history' ? 'history' : 'performance'} title={page === 'history' ? 'NFL Prediction History' : 'NFL Performance'}
-    sub="Prospective forecasts only. Exact percentages stay separate by market, side, model and line source." />
+    sub="Forecasts made before the game. Exact percentages stay separate by market, side, model and line source." />
+    {page === 'history' ? <RecoveredLedger league="nfl" /> : <RecoveredPerformance league="nfl" />}
+    <h2>Live record by market</h2>
     <AsyncView state={state} retry={retry}>{r => <>
       <p className="notice">Live recording {r.recording_began_at ? `began ${dateTime(r.recording_began_at)}` : 'has no picks yet. The first forecast appears within two hours of kickoff.'}</p>
       {r.historical_test && <details className="card"><summary>Separate historical test · frozen winner 75%+</summary>

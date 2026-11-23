@@ -52,6 +52,10 @@ export function HistoryPage() {
     ? api.predictions(sport, { ...filters, run_type: run, min_confidence: level, policy, limit }, s) : Promise.resolve(null)),
     [sport, filters.date_from, filters.date_to, filters.team, run, level, policy, isWinner, limit, canonical]);
 
+  // Recovered Telegram predictions of the same market, dates and team (the canonical view merges them into its table).
+  const recovered = useApi((s) => (canonical ? api.telegramHistory(sport, { market, ...filters }, s) : Promise.resolve(null)),
+    [sport, market, filters.date_from, filters.date_to, filters.team, canonical]);
+
   const update = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value); else next.delete(key);
@@ -99,7 +103,11 @@ export function HistoryPage() {
           <button type="button" className="link-btn" onClick={meta.retry}>Retry</button>
         </p>
       )}
-      {canonical ? <CanonicalHistory sport={sport} market={market} filters={filters} limit={limit} />
+      {canonical && recovered.state.status === 'error' && <p className="warn small">Recovered Telegram predictions unavailable: {recovered.state.error}{' '}
+        <button type="button" className="link-btn" onClick={recovered.retry}>Retry</button></p>}
+      {!canonical && run === 'live' && realMode && <p className="small muted">Recovered Telegram predictions (Nov 2–16) are listed with the live record in the Current Forecast view.{' '}
+        <button type="button" className="link-btn" onClick={() => setPolicy('canonical')}>Show them</button></p>}
+      {canonical ? <CanonicalHistory sport={sport} market={market} filters={filters} limit={limit} recovered={recovered.state.status === 'success' ? recovered.state.data : null} />
       : !isWinner ? (
         <MarketHistory sport={sport} market={market} policy={policy} level={level} filters={filters} hasFilters={hasFilters}
           showAll={() => setLevel(null)} />

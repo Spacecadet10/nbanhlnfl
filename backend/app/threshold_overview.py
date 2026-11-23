@@ -249,9 +249,11 @@ def _telegram_index() -> Optional[dict]:
             sports: set = set()
             days: dict = {}
             for r in body['rows']:
+                sports.add(r['sport'])
+                if r['grade'] == 'unsettled':        # listed in History, never in a settled bucket record
+                    continue
                 key = (r['sport'], r['market'], r['percentage'], r['side'], r['line_source'])
                 idx.setdefault(key, {})[r['game_id']] = r['grade']
-                sports.add(r['sport'])
                 day = r.get('start_date_local') or (r.get('start_at') or '')[:10] or None
                 if day:
                     when[(key, r['game_id'])] = day

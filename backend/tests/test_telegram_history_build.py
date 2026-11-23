@@ -47,10 +47,14 @@ def make(tmp_path, games=(), forecasts=(), matches=(), soccer_forecasts=()):
 def row(sport="NBA", gid="espn:1", key="winner", sel="OKC win", pct=54, result="win", line_source="", **kw):
     return dict(message_id=1, sent_at_local="2026-11-02T17:00:00", sport=sport, game_id=gid, matchup="OKC @ CLE", starts="x",
                 final_score=None, market=key.upper(), market_key=key, selection=sel, percent=pct, line_source=line_source,
-                recommended=False, result=result, **kw)
+                **{"recommended": False, **kw}, result=result)
 
 
-GAME = ("espn:1", "2026-11-02T00:00:00Z", "final", 110, 117)      # home CLE 110, away OKC 117 -> OKC (away) won
+GAME = ("espn:1", "2026-11-02T23:00:00Z", "final", 110, 117)      # home CLE 110, away OKC 117 -> OKC (away) won
+
+
+# Starts 2026-11-02 18:00 Toronto, after the 17:00 card of row().
+GAME2 = ("espn:1", "2026-11-02T23:00:00Z", "final", 110, 117)
 
 
 def build(tmp_path, rows):
@@ -67,7 +71,7 @@ def test_displayed_percentage_is_kept_exactly_57_3_is_not_57_4(tmp_path):
 def test_a_game_the_live_record_also_counts_stays_in_the_recovered_record_flagged_and_counted(tmp_path):
     """Nov 22: the recovered record is shown apart from the live one and never summed with it, so a game both sources hold is
     counted once in EACH displayed record. It is no longer dropped; it is flagged and reported."""
-    make(tmp_path, games=[GAME], forecasts=[("espn:1", "winner", "forecast", "2026-11-01T22:30:00Z", "2026-11-02T00:00:00Z")])
+    make(tmp_path, games=[GAME], forecasts=[("espn:1", "winner", "forecast", "2026-11-02T22:30:00Z", "2026-11-02T23:00:00Z")])
     out = build(tmp_path, [row(), row(key="total", sel="Under 229.5", pct=57.4, line_source="Bookmaker line at forecast")])
     assert {(r["market"], r["also_in_live"]) for r in out["rows"]} == {("winner", True), ("total", False)}
     assert out["excluded"] == []
@@ -102,7 +106,7 @@ def test_earlier_cards_of_a_game_are_reported_as_superseded_never_counted(tmp_pa
 
 
 def test_a_missing_forecast_row_does_not_exclude_the_game(tmp_path):
-    make(tmp_path, games=[GAME], forecasts=[("espn:1", "winner", "missing", "2026-11-01T22:30:00Z", "2026-11-02T00:00:00Z")])
+    make(tmp_path, games=[GAME], forecasts=[("espn:1", "winner", "missing", "2026-11-02T22:30:00Z", "2026-11-02T23:00:00Z")])
     assert len(build(tmp_path, [row()])["rows"]) == 1
 
 
@@ -113,14 +117,63 @@ def test_an_ungraded_row_is_graded_from_the_store_final_and_says_so(tmp_path):
     assert {(x["market"], x["grade"], x["grade_source"]) for x in r} == {("winner", "win", "store_final"), ("spread", "win", "store_final")}
 
 
-def test_an_ungraded_row_with_no_final_is_excluded_not_guessed(tmp_path):
-    make(tmp_path, games=[("espn:1", "2026-11-02T00:00:00Z", "scheduled", None, None)])
+def test_an_ungraded_row_with_no_final_stays_unsettled_never_a_loss_never_dropped(tmp_path):
+    """Nov 22 (owner): missing outcomes remain unsettled. Before, the row was excluded and the prediction disappeared."""
+    make(tmp_path, games=[("espn:1", "2026-11-02T23:00:00Z", "scheduled", None, None)])
     out = build(tmp_path, [row(result=None)])
-    assert out["rows"] == [] and out["excluded"][0]["reason"] == "no_final_result_in_store"
+    assert [(r["grade"], r["grade_source"], r["final_score"]) for r in out["rows"]] == [("unsettled", None, None)]
+    assert out["excluded"] == [] and out["summary"]["nba"]["unsettled"] == 1
+
+
+def test_each_row_keeps_what_the_card_said_line_recommendation_and_printed_sportsbook_but_no_price(tmp_path):
+    make(tmp_path, games=[GAME2])
+    rows = [row(key="spread", sel="OKC -4.5", pct=53.1, recommended=True,
+                line_source="Bookmaker line at forecast · sportsbook 49.6% · underpriced"),
+            row(key="total", sel="Under 229.5", pct=57.4, line_source="Model line"), row(pct=54)]
+    got = {r["market"]: r for r in build(tmp_path, rows)["rows"]}
+    sp = got["spread"]
+    assert (sp["line"], sp["home_line"], sp["side"]) == (-4.5, 4.5, "b")      # the card shows the picked away team's line
+    assert sp["recommended"] is True and sp["card_line_text"] == "Bookmaker line at forecast · sportsbook 49.6% · underpriced"
+    assert (got["total"]["line"], got["total"]["home_line"]) == (229.5, 229.5)
+    assert got["winner"]["line"] is None and all(r["price"] is None for r in got.values())
+
+
+def test_earlier_cards_of_the_game_are_kept_as_versions_and_say_whether_they_differed(tmp_path):
+    make(tmp_path, games=[GAME2])
+    last = {**row(pct=54), "message_id": 3, "sent_at_local": "2026-11-02T17:30:00"}
+    same = {**row(pct=54), "message_id": 2, "sent_at_local": "2026-11-02T17:20:00"}
+    diff = {**row(pct=51, sel="CLE win"), "message_id": 1, "sent_at_local": "2026-11-02T17:10:00"}
+    out = bth.build({"per_game_rows": [last], "all_card_rows": [diff, same, last]}, tmp_path)
+    assert len(out["rows"]) == 1
+    assert [(v["message_id"], v["pick"], v["percentage"], v["differs"]) for v in out["rows"][0]["earlier_versions"]] == [
+        (1, "CLE win", "51.0", True), (2, "OKC win", "54.0", False)]
+
+
+def test_a_card_sent_at_or_after_the_start_is_never_a_prediction_and_is_listed(tmp_path):
+    make(tmp_path, games=[GAME2, ("espn:2", "2026-11-02T23:00:00Z", "final", 100, 90)])
+    ok = {**row(), "message_id": 1}
+    late_only = {**row(gid="espn:2", sel="CLE win"), "message_id": 9, "sent_at_local": "2026-11-02T18:00:00"}   # = 23:00Z, the start
+    out = bth.build({"per_game_rows": [ok], "all_card_rows": [ok, late_only]}, tmp_path)
+    assert [r["game_id"] for r in out["rows"]] == ["espn:1"] and out["rows"][0]["earlier_versions"] == []
+    assert [(x["game_id"], x["message_id"], x["reason"]) for x in out["not_predictions"]] == [("espn:2", 9, "sent_after_start")]
+    # and a per-game row that was itself sent after the start is excluded, not counted
+    out = bth.build({"per_game_rows": [late_only]}, tmp_path)
+    assert out["rows"] == [] and out["excluded"][0]["reason"] == "sent_after_start"
+
+
+def test_every_source_card_row_is_accounted_for(tmp_path):
+    make(tmp_path, games=[GAME2])
+    last = {**row(), "message_id": 3, "sent_at_local": "2026-11-02T17:30:00"}
+    early = {**row(pct=51), "message_id": 1}
+    late = {**row(pct=60), "message_id": 5, "sent_at_local": "2026-11-02T22:00:00"}
+    gone = {**row(gid="espn:9"), "message_id": 7}
+    out = bth.build({"per_game_rows": [last, gone], "all_card_rows": [early, last, late, gone]}, tmp_path)
+    assert out["reconciliation"]["nba"] == {"source_rows": 4, "one_per_game": 2, "included": 1, "excluded": 1, "unmatched": 1,
+                                            "earlier_versions": 1, "sent_after_start": 1, "unaccounted": 0, "unsettled": 0}
 
 
 def test_a_spread_push_is_a_push_and_the_exported_grade_is_kept_when_the_store_disagrees(tmp_path):
-    make(tmp_path, games=[("espn:1", "2026-11-02T00:00:00Z", "final", 110, 117)])
+    make(tmp_path, games=[("espn:1", "2026-11-02T23:00:00Z", "final", 110, 117)])
     r = build(tmp_path, [row(key="spread", sel="OKC -7", result=None, pct=60, line_source="Bookmaker line at forecast")])["rows"]
     assert r[0]["grade"] == "push"                                          # away team OKC won by 7, line -7 (home +7)
     out = build(tmp_path, [row(result="loss")])                             # exported 'loss' but the store says OKC won
@@ -144,7 +197,7 @@ def test_soccer_sides_use_the_apps_soccer_keys(selection, market, expected):
 
 
 def soccer_row(key, sel, pct, result="win", gid="soccer:fifa.friendly:1"):
-    return dict(message_id=2, sport="SOCCER", game_id=gid, matchup="Tahiti vs Cook Islands", starts="x", final_score=None,
+    return dict(message_id=2, sent_at_local="2026-11-13T22:31:27", sport="SOCCER", game_id=gid, matchup="Tahiti vs Cook Islands", starts="x", final_score=None,
                 market=key.upper(), market_key=key, selection=sel, percent=pct, line_source="", recommended=False, result=result)
 
 

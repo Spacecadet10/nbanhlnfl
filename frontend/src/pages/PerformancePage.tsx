@@ -18,6 +18,7 @@ import { calendarDate, FULL_DATE, num, pct } from '../format';
 import { canonicalFor, CanonicalReport } from '../components/Canonical';
 import { ThresholdOverviewCard } from '../components/ThresholdOverview';
 import { PaperRulesCard } from '../components/PaperRules';
+import { RecoveredPerformance } from '../components/TelegramHistory';
 import { hasResearch } from '../components/sportCaps';
 import { Icon, PageTitle } from '../components/ui';
 
@@ -46,6 +47,7 @@ export function PerformancePage() {
           <PolicyToggle value={policy} onChange={setPolicy} canonical />
           {market === 'winner' && <RunTypeToggle value={run} onChange={setRun} />}
         </div>
+        <RecoveredPerformance league={sport} market={market} />
         <CanonicalReport sport={sport} market={market} />
         <ThresholdOverviewCard sport={sport} />
         {hasResearch(sport) && <PaperRulesCard sport={sport} />}
@@ -62,6 +64,7 @@ export function PerformancePage() {
           ? <MarketSelect value={market} markets={markets} onChange={setMarket} />
           : meta.state.status === 'error' ? <p className="warn small">Market list unavailable: {meta.state.error}</p> : null}
         <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>
+        <RecoveredPointer onShow={() => setPolicy('canonical')} />
         <CoverageCard sport={sport} market={market} />
         {hasResearch(sport) && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
         <MarketPerformance sport={sport} market={market} policy={policy} />
@@ -77,6 +80,7 @@ export function PerformancePage() {
         {(p) => p && (
           <>
             {p.mode === 'real' && run === 'live' && <div className="policy-row"><PolicyToggle value={policy} onChange={setPolicy} canonical={canonicalFor(sport, market)} /></div>}
+            {p.mode === 'real' && run === 'live' && <RecoveredPointer onShow={() => setPolicy('canonical')} />}
             {p.mode === 'real' && run === 'live' && <CoverageCard sport={sport} market={market} />}
             {hasResearch(sport) && run === 'live' && policy === 'near_tipoff' && <><ThresholdResearch sport={sport} market={market} /><RecoveredThresholds sport={sport} market={market} /></>}
             <Report perf={p} run={run} setRun={setRun} />
@@ -88,6 +92,12 @@ export function PerformancePage() {
       <PerformanceStatus sport={sport} />
     </section>
   );
+}
+
+/** The legacy ledgers hold no recovered prediction: say where they are counted. */
+function RecoveredPointer({ onShow }: { onShow: () => void }) {
+  return <p className="small muted">Recovered Telegram predictions (Nov 2–16) are counted with the live record in the Current Forecast view.{' '}
+    <button type="button" className="link-btn" onClick={onShow}>Show them</button></p>;
 }
 
 /** Research and model-selection cards: loaded only when research details are shown, so the default page is the record. */

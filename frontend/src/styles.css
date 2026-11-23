@@ -1447,3 +1447,7 @@ h1,h2,h3,.hero-matchup,.metric-value,.tile-value,.brand { font-family:'Barlow Co
 .bucket-green { color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }
 .bucket-red { color: var(--bad); font-weight: 600; overflow-wrap: anywhere; }
 .bucket-neutral { overflow-wrap: anywhere; }
+
+/* Recovered Telegram predictions (TelegramHistory.tsx): the original card text, never mixed up with a live forecast. */
+.badge-recovered { white-space: normal; line-height: 1.3; text-transform: none; letter-spacing: 0; background: var(--accent-lavender-soft); border-color: var(--border-lavender); color: var(--accent-lavender-ink); }
+.recovered-line { display: block; font-size: 0.93em; }
