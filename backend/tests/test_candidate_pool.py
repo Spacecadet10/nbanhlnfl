@@ -402,4 +402,57 @@ def test_the_cycle_passes_the_served_forecasts_time_to_the_pool():
     import inspect
     from app import jobs
     src = inspect.getsource(jobs.predict_now)
-    assert 'candidate_pool(conn, game_ids=accepted, now=now, write=not dry_run, information_at=out.get("as_of"))' in src
+    assert 'information_at=out.get("as_of")' in src and 'served={f["game_id"]: f["tipoff_at"] for f in out["forecasts"]}' in src
+
+
+def _probs(out):
+    return sorted((f["candidate"], f["market"], f["line"], tuple(f["p"])) for f in out["forecasts"])
+
+
+def test_replay_inputs_arriving_after_the_information_time_cannot_change_a_frozen_candidate(upcoming):
+    """Replay: a result for one of the teams becomes available, a start moves and a game appears AFTER the information time;
+    a frozen run (information_at) gives exactly the forecasts of a run made at the information time, while an unfrozen run
+    at the same real time does see the new result (so the plant is effective)."""
+    info = "2026-10-12T21:50:00Z"
+    lines = {(GID, "spread"): {"line": -1.5, "source": "core_cohort", "ref": "cohort:1"},
+             (GID, "total"): {"line": 6.5, "source": "core_cohort", "ref": "cohort:2"}}
+    g = upcoming.execute("SELECT * FROM games WHERE game_id = ?", (GID,)).fetchone()
+    served = {GID: g["tipoff_at"]}
+    at_info = _record(upcoming, now=info, lines=lines, write=False)
+    assert at_info["errors"] == {} and at_info["forecasts"], at_info
+    # after the information time: a blowout result for the home team becomes available at 21:58
+    upcoming.execute("INSERT INTO games (game_id, season, season_type, tipoff_at, home_team_id, away_team_id, neutral_site, status, "
+                     "home_score, away_score, first_seen_at, result_first_seen_at, result_available_at, result_availability_basis, "
+                     "updated_at, last_seen_at, last_raw_id) VALUES ('nhl:2026029999', ?, ?, '2026-10-12T19:00:00Z', ?, ?, 0, 'final', "
+                     "9, 0, '2026-10-12T19:00:00Z', '2026-10-12T21:58:00Z', '2026-10-12T21:58:00Z', 'observed_retrieval', "
+                     "'2026-10-12T21:58:00Z', '2026-10-12T21:58:00Z', ?)",
+                     (g["season"], g["season_type"], g["home_team_id"], g["away_team_id"], g["last_raw_id"]))
+    upcoming.commit()
+    frozen = _record(upcoming, now=NOW, lines=lines, write=False, information_at=info, served=served)
+    unfrozen = _record(upcoming, now=NOW, lines=lines, write=False)
+    assert _probs(frozen) == _probs(at_info)                       # nothing after 21:50 reached the frozen candidate
+    assert _probs(unfrozen) != _probs(at_info)                     # ... although the planted result does change an unfrozen one
+    # a start moved after the information time: the served kick-off version no longer matches, so nothing is recorded
+    moved = _record(upcoming, now=NOW, lines=lines, write=False, information_at=info, served={GID: "2026-10-12T22:45:00Z"})
+    assert moved["forecasts"] == [] and "start changed after the information time" in moved["skipped"]["pool"][GID]
+    # a game the served model did not forecast at that time is never recorded
+    unserved = _record(upcoming, now=NOW, lines=lines, write=False, information_at=info, served={})
+    assert unserved["forecasts"] == [] and unserved["skipped"]["pool"][GID] == "not served at the information time"
+
+
+def test_a_line_whose_quote_was_retrieved_after_the_information_time_is_never_used():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE games (game_id TEXT, tipoff_at TEXT)")
+    c.execute("CREATE TABLE research_cohorts (cohort_id INTEGER, game_id TEXT, market TEXT, line REAL, line_source TEXT, "
+              "bookmaker TEXT, definition TEXT, generated_at TEXT, tipoff_at TEXT)")
+    c.execute("INSERT INTO games VALUES ('g', '2026-10-12T23:00:00Z')")
+    book = lambda at: json.dumps({"p": [0.5, 0, 0.5], "retrieved_at": at})          # noqa: E731
+    c.executemany("INSERT INTO research_cohorts VALUES (?,?,?,?,?,?,?,?,?)", [
+        (1, "g", "total", 6.5, "market", book("2026-10-12T21:40:00Z"), "d", "2026-10-12T21:45:00Z", "2026-10-12T23:00:00Z"),
+        (2, "g", "total", 5.5, "market", book("2026-10-12T21:57:00Z"), "d", "2026-10-12T21:58:00Z", "2026-10-12T23:00:00Z")])
+    unfrozen = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z")
+    frozen = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:50:00Z")
+    assert unfrozen[("g", "total")]["line"] == 5.5 and unfrozen[("g", "total")]["ref"] == "research_cohorts:2"
+    assert frozen[("g", "total")]["line"] == 6.5 and frozen[("g", "total")]["ref"] == "research_cohorts:1"
+    assert pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:30:00Z") == {}
