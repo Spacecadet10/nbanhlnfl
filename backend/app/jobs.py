@@ -529,7 +529,9 @@ def predict_now(conn: sqlite3.Connection, *, dry_run: bool = False, now: Optiona
             out["research"] = research_selection(conn, game_ids=accepted, winner_run={**run, "forecasts": winner},
                                                  history=collect, now=now, write=not dry_run)
             # Candidate pool (docs/CANDIDATE_POOL.md): after the cohorts, so line markets use the core cohort's exact line.
-            out["pool"] = candidate_pool(conn, game_ids=accepted, now=now, write=not dry_run)
+            # Inputs frozen at the served forecast's information time (owner decision 2026-11-23): the pool runs minutes
+            # later, and a candidate must never know more than the model it is compared with.
+            out["pool"] = candidate_pool(conn, game_ids=accepted, now=now, write=not dry_run, information_at=out.get("as_of"))
             # Pool selections: after the candidate forecasts of this cycle, under the pool decisions in force.
             out["pool_selection"] = pool_selection(conn, game_ids=accepted, now=now, write=not dry_run,
                                                    defn=(out["research"] or {}).get("definition"))

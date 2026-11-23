@@ -258,13 +258,16 @@ def _key(*parts) -> str:
 
 
 def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, lines: Optional[dict] = None,
-           write: bool = True, specs: Optional[list] = None) -> dict:
+           write: bool = True, specs: Optional[list] = None, information_at: Optional[str] = None) -> dict:
     """Two-hour candidate forecasts for eligible games. `lines` maps (game_id, market) -> {"line", "source", "ref"}: the
     exact line the core cohort used (default: read from the latest core cohort at `now`); a line market without one is
-    skipped (never a substitute line)."""
+    skipped (never a substitute line).
+    `information_at` (2026-11-23, owner decision): the information time of this cycle's served forecast. When given, every
+    input (results, box scores/shots, goalie listings, eligibility) is read as of that time, never later, so a candidate
+    knows nothing the served model could not; it is stored in each row's `inputs` and the row keeps its real write time."""
     out = {"status": "success", "created": 0, "already_recorded": 0, "skipped": {}, "errors": {}, "forecasts": []}
     try:
-        _record(conn, game_ids, now, lines, write, specs, out)
+        _record(conn, game_ids, now, lines, write, specs, out, information_at)
     except Exception as exc:         # never fails the caller's cycle
         out["status"] = "failed"
         out["errors"]["pool"] = f"{type(exc).__name__}: {exc}"
@@ -315,12 +318,16 @@ def core_lines(conn, game_ids, now: str) -> dict:
     return out
 
 
-def _record(conn, game_ids, now, lines, write, specs, out) -> None:
+def _record(conn, game_ids, now, lines, write, specs, out, information_at: Optional[str] = None) -> None:
     fixed = now is not None
     now = now or utc_now()
+    if information_at is not None and information_at > now:
+        raise ValueError(f"information time {information_at} is after the recording time {now}")
+    info = information_at or now        # every input is read as of this time (the served forecast's, when given)
+    out["information_at"] = info
     eng = live.engine(conn)
-    horizon = live._ts(_parse(now) + WINDOW)
-    rows = live.available_rows(conn, now)
+    horizon = live._ts(_parse(info) + WINDOW)
+    rows = live.available_rows(conn, info)
     known = {r.game.game_id: r for r in rows}
     types = eng.eligible_types
     schedule = [g for g in conn.execute(
@@ -328,16 +335,16 @@ def _record(conn, game_ids, now, lines, write, specs, out) -> None:
         f"AND season_type IN ({','.join('?' * len(types))}) ORDER BY tipoff_at, game_id", (horizon, *types))
         if g["game_id"] not in known]
     eligible = [g for g in schedule if g["status"] == "scheduled" and now < g["tipoff_at"] <= horizon
-                and (game_ids is None or g["game_id"] in game_ids)]
+                and info < g["tipoff_at"] and (game_ids is None or g["game_id"] in game_ids)]
     out["eligible_games"] = len(eligible)
     if not eligible:
         return
     ids = {g["game_id"] for g in eligible}
     if lines is None:
         lines = core_lines(conn, ids, now) if _has(conn, "research_cohorts") else {}
-    rec = _recorder(conn, eng, ids, now)
-    events = _events(conn, eng, rows, known, now)
-    walk = features.walk(rec, rows, events, deliver_until=now)
+    rec = _recorder(conn, eng, ids, info)
+    events = _events(conn, eng, rows, known, info)
+    walk = features.walk(rec, rows, events, deliver_until=info)
     history = list(walk.values())
     upcoming = {}
     for g in schedule:
@@ -345,7 +352,7 @@ def _record(conn, game_ids, now, lines, write, specs, out) -> None:
         rec.predict(game)
         if game.game_id in ids:
             row = rec.rows[game.game_id]
-            row.cutoff_at = now
+            row.cutoff_at = info
             upcoming[game.game_id] = (game, row)
     recent = {}
     for r in sorted(rows, key=lambda r: r.game.tipoff_at, reverse=True):
@@ -359,14 +366,14 @@ def _record(conn, game_ids, now, lines, write, specs, out) -> None:
             if not registry.available(spec) and not deep.is_deep(spec):
                 out["skipped"][spec.name] = {"all": f"optional dependency {spec.extra} not installed"}
                 continue
-            _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out)
+            _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out, info)
         except deep.DependencyMissing as exc:      # no stored artifact for this season and no library here: skipped, visible
             out["skipped"][spec.name] = {"all": str(exc)}
         except Exception as exc:
             out["errors"][spec.name] = f"{type(exc).__name__}: {exc}"
 
 
-def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out):
+def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fixed, write, dataset, table, out, info=None):
     mv = model_version(spec)
     by_season: dict = {}
     for gid, (game, row) in upcoming.items():
@@ -394,7 +401,7 @@ def _record_spec(conn, eng, spec, history, upcoming, recent, rec, lines, now, fi
         for (game, row), o in zip(todo, outputs):
             try:
                 _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, now, fixed, write, dataset,
-                             table, eng, out)
+                             table, eng, out, info)
             except Exception as exc:     # one game's failure (e.g. a start change mid-cycle) never withholds the others
                 conn.rollback()
                 out["errors"][f"{spec.name}:{game.game_id}"] = f"{type(exc).__name__}: {exc}"
@@ -410,7 +417,8 @@ def usable_goals(o: Optional[dict]) -> bool:
     return o is None or o["head"] != "goals" or usable_rates(o["lh"], o["la"])
 
 
-def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, now, fixed, write, dataset, table, eng, out):
+def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, now, fixed, write, dataset, table, eng, out,
+                 info=None):
     reason = _stale(eng, rec, game, recent)
     if reason is None and not engine.ready(o):
         reason = "not ready: no out-of-sample residual spread yet"
@@ -436,6 +444,8 @@ def _record_game(conn, spec, mv, art, fit_id, game, row, o, rec, recent, lines, 
         pb = round(1 - pa - pm, 9)
         params = {k: (round(v, 6) if isinstance(v, float) else v) for k, v in o.items()}
         inputs = {"feature_table": table, "features": {k: round(float(v), 6) for k, v in row.x.items()}, **row.meta}
+        if info is not None and info != now:
+            inputs["information_at"] = info        # inputs as of the served forecast's time (not in the idempotency key)
         # Same fit, same inputs and outputs for the same cohort line → the same row (a retry on the real clock is a
         # no-op); `dataset` is not in the key because its feature-table digest includes the cycle's cutoff time.
         key = _key(mv, game.game_id, market, line, ref, game.tipoff_at, art["artifact_sha256"], params,
