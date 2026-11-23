@@ -365,6 +365,12 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   `forecast_cutoff`, and pairs compare information times on both sides (bar ledger rows: their run time, an upper bound).
   Pool rows written before this change have no frozen time and never pair; NBA/NHL comparisons start with the first cycle
   after deployment.
+  Also frozen (owner review, same day): eligibility and the kick-off version (`served` = {game: start} of the served forecasts;
+  a game not served, or whose start changed since, is skipped with the reason), and the sportsbook line/quote (a core cohort is
+  used only if its bookmaker quote was retrieved at or before the information time; else the latest earlier qualifying cohort,
+  else the market is skipped). Replay test `test_replay_inputs_arriving_after_the_information_time_cannot_change_a_frozen_candidate`:
+  a result, a moved start and an unserved game planted after the information time leave the frozen forecasts identical to a run
+  made at the information time, while an unfrozen run does change. The real write time stays in `generated_at`.
   (e) The bar is named in advance: NBA winner `elo`, NBA lines `points_normal`; NHL winner `hockey_elo`, NHL 3-way and lines
   `goals_poisson` (the served primaries); other sports have one incumbent per market. (f) A candidate whose only forecasts came
   after start - 60 min is `as_of_late` (counted with unpaired), not `missing`. (g) Certainty is judged on every stored row of a candidate's

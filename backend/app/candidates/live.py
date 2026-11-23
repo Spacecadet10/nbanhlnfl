@@ -258,16 +258,20 @@ def _key(*parts) -> str:
 
 
 def record(conn, *, game_ids: Optional[list] = None, now: Optional[str] = None, lines: Optional[dict] = None,
-           write: bool = True, specs: Optional[list] = None, information_at: Optional[str] = None) -> dict:
+           write: bool = True, specs: Optional[list] = None, information_at: Optional[str] = None,
+           served: Optional[dict] = None) -> dict:
     """Two-hour candidate forecasts for eligible games. `lines` maps (game_id, market) -> {"line", "source", "ref"}: the
     exact line the core cohort used (default: read from the latest core cohort at `now`); a line market without one is
     skipped (never a substitute line).
     `information_at` (2026-11-23, owner decision): the information time of this cycle's served forecast. When given, every
     input (results, box scores/shots, goalie listings, eligibility) is read as of that time, never later, so a candidate
-    knows nothing the served model could not; it is stored in each row's `inputs` and the row keeps its real write time."""
+    knows nothing the served model could not; it is stored in each row's `inputs` and the row keeps its real write time.
+    `served` ({game_id: tipoff_at} of the served forecasts at that time) freezes eligibility and the kick-off version: only
+    those games, and only while their start is unchanged. With `information_at`, a line market uses the core cohort line only
+    when that cohort's bookmaker quote was retrieved at or before the information time (else the market is skipped)."""
     out = {"status": "success", "created": 0, "already_recorded": 0, "skipped": {}, "errors": {}, "forecasts": []}
     try:
-        _record(conn, game_ids, now, lines, write, specs, out, information_at)
+        _record(conn, game_ids, now, lines, write, specs, out, information_at, served)
     except Exception as exc:         # never fails the caller's cycle
         out["status"] = "failed"
         out["errors"]["pool"] = f"{type(exc).__name__}: {exc}"
@@ -303,22 +307,30 @@ def fit_deep_artifacts(conn, now: Optional[str] = None, write: bool = True) -> d
     return out
 
 
-def core_lines(conn, game_ids, now: str) -> dict:
+def core_lines(conn, game_ids, now: str, quotes_until: Optional[str] = None) -> dict:
     """(game_id, market) -> the exact line of the latest core research cohort generated at or before `now` (never the
     expanded experiment's), with its cohort id as the reference — for every market, so a winner/reg3 forecast also names
     the cohort it was made against (a new cohort gives a new candidate row). Used when the caller passes no lines."""
     out = {}
     for gid in game_ids:
-        for r in conn.execute("SELECT cohort_id, market, line, line_source FROM research_cohorts WHERE game_id=? "
+        for r in conn.execute("SELECT cohort_id, market, line, line_source, bookmaker FROM research_cohorts WHERE game_id=? "
                               "AND generated_at<=? AND definition NOT LIKE '%:expanded-v1' "
                               "AND tipoff_at = (SELECT tipoff_at FROM games WHERE game_id=?) ORDER BY generated_at, cohort_id",
                               (gid, now, gid)):
+            if quotes_until is not None and r["bookmaker"]:     # a quote retrieved after the information time: not usable
+                try:
+                    got = (json.loads(r["bookmaker"]) or {}).get("retrieved_at")
+                except ValueError:
+                    got = None
+                if got is None or got > quotes_until:
+                    continue                   # (an earlier cohort of this game may still qualify: latest qualifying wins)
             out[(gid, r["market"])] = {"line": r["line"], "source": f"core_cohort:{r['line_source']}" if r["line"] is not None
                                        else "none", "ref": f"research_cohorts:{r['cohort_id']}"}
     return out
 
 
-def _record(conn, game_ids, now, lines, write, specs, out, information_at: Optional[str] = None) -> None:
+def _record(conn, game_ids, now, lines, write, specs, out, information_at: Optional[str] = None,
+            served: Optional[dict] = None) -> None:
     fixed = now is not None
     now = now or utc_now()
     if information_at is not None and information_at > now:
@@ -336,12 +348,18 @@ def _record(conn, game_ids, now, lines, write, specs, out, information_at: Optio
         if g["game_id"] not in known]
     eligible = [g for g in schedule if g["status"] == "scheduled" and now < g["tipoff_at"] <= horizon
                 and info < g["tipoff_at"] and (game_ids is None or g["game_id"] in game_ids)]
+    if served is not None:              # eligibility and kick-off version as the served model saw them
+        for g in [g for g in eligible if g["game_id"] not in served or served[g["game_id"]] != g["tipoff_at"]]:
+            out["skipped"].setdefault("pool", {})[g["game_id"]] = (
+                "not served at the information time" if g["game_id"] not in served else
+                f"start changed after the information time ({served[g['game_id']]} -> {g['tipoff_at']})")
+        eligible = [g for g in eligible if served.get(g["game_id"]) == g["tipoff_at"]]
     out["eligible_games"] = len(eligible)
     if not eligible:
         return
     ids = {g["game_id"] for g in eligible}
     if lines is None:
-        lines = core_lines(conn, ids, now) if _has(conn, "research_cohorts") else {}
+        lines = core_lines(conn, ids, now, quotes_until=information_at) if _has(conn, "research_cohorts") else {}
     rec = _recorder(conn, eng, ids, info)
     events = _events(conn, eng, rows, known, info)
     walk = features.walk(rec, rows, events, deliver_until=info)
