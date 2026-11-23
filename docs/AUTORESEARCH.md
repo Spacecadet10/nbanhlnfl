@@ -352,12 +352,15 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   probability of 0 on a half-point line is required by the validator and is never flagged. (b) The latest definition is kept
   per model AND market (NHL goals_poisson writes winner rows to the agreement cohort and line rows as the primary). (c) Only
   games starting at or after the cut feed the recommendation: per-model metrics, calibration, sportsbook, the bar and the pairs;
-  earlier games are evaluated apart (`exploratory`). (d) The candidate run may be at most 5 min AFTER the current model's
-  (the same recording cycle: the research cohort writes candidates minutes after the primary, at the primary's line and quote)
-  and up to 10 min before; an earlier candidate run is preferred; pairs with the candidate later are counted and reported.
+  earlier games are evaluated apart (`exploratory`). (d) The candidate run may be up to 10 min before the current model's and
+  NEVER after it (first set to "at most 5 min after"; amended the same day, before the cut, on a STRUCTURAL finding of the
+  review, not on the Nov 21-22 counts: candidate features use data up to the candidate's own run time, and a candidate row's
+  `line_ref` links it to the research cohort, not to the primary it is compared with, so a later candidate run could know
+  more; any information edge now favours the current model). A bar that falls back from the named model is `bar_fallback`.
   (e) The bar is named in advance: NBA winner `elo`, NBA lines `points_normal`; NHL winner `hockey_elo`, NHL 3-way and lines
   `goals_poisson` (the served primaries); other sports have one incumbent per market. (f) A candidate whose only forecasts came
-  after start - 60 min is `as_of_late` (counted with unpaired), not `missing`.
+  after start - 60 min is `as_of_late` (counted with unpaired), not `missing`. (g) Certainty is judged on every stored row of a candidate's
+  current definition (before the cut and after the instant too): it stays barred until diagnosed.
   Pairing COUNTS on Nov 21-22 (exploratory, a copy of the data): against the named NBA primary 2-4 of 12 games per market did
   not pair (17-33%, above the 10% pairing criterion); every pair had the candidate 3-5 min later (same cycle). The rule was not
   tuned after seeing this; if it keeps NBA candidates unpairable, that is reported, not fixed by moving thresholds after a look.
