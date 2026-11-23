@@ -157,10 +157,10 @@ function Filters({ d, market, pickMarket, from, to, set, everywhere, competition
 const ORIGIN_LIVE = 'Live forecast';
 
 /** Live and recovered predictions in one dated list (NFL and Soccer History): every row says where it comes from. */
-function LedgerTable({ rows, live, titles }: { rows: TgRow[]; live: TgLive[]; titles: Record<string, string> }) {
+function LedgerTable({ rows, live, titles, page = 200 }: { rows: TgRow[]; live: TgLive[]; titles: Record<string, string>; page?: number }) {
   const carried = useCarriedSearch();
   const all = mergeByStart(live, (l) => l.start_at, rows);
-  const [limit, setLimit] = useState(200);
+  const [limit, setLimit] = useState(page);
   if (all.length === 0) return <Empty>No prediction matches these filters.</Empty>;
   return <>
     <div className="table-wrap"><table className="table history">
@@ -247,8 +247,8 @@ export function RecoveredPerformance({ league, market: fixed, competition, compe
             {market ? <ExactTable rows={r.exact_percentages} /> : r.markets.map((m) => <div key={m.market}><h3>{m.title}</h3><ExactTable rows={r.exact_percentages.filter((b) => b.market === m.market)} /></div>)}
             <p className="small muted">57.3% is not 57.4%. Live records join every live model version; a game in both records is counted once in the first column.</p>
           </details>
-          <details><summary><strong>Individual recovered predictions</strong> · {r.rows.length}</summary>
-            <LedgerTable key={`${market}|${from}|${to}|${comp}`} rows={r.rows} live={[]} titles={{}} /></details>
+          <details open><summary><strong>Individual recovered predictions</strong> · {r.rows.length}</summary>
+            <LedgerTable key={`${market}|${from}|${to}|${comp}`} rows={r.rows} live={[]} titles={{}} page={25} /></details>
           <Reconciliation d={r} />
         </>}
       </>}</AsyncView>

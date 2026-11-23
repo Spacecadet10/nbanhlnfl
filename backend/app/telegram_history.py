@@ -22,8 +22,10 @@ from . import threshold_overview as to
 
 LABEL = "Recovered Telegram prediction — model version unknown"
 NOTE = ("Predictions shown on the Telegram cards sent before each game, with their original percentages. The cards did not show "
-        "the model version or a price: these rows are unpriced and carry no profit or loss. One prediction per game and market: "
-        "where the live record holds the same game and market, the live forecast is the one counted and the card stays listed.")
+        "the model version or a price: these rows are unpriced and carry no profit or loss. Counting rule: one prediction per game "
+        "and market. The last card sent before the start is the recovered prediction; earlier cards of the same game stay listed as "
+        "its versions and are not counted. Where the live record holds the same game and market, the live forecast is the one "
+        "counted and the card stays listed. A card sent at or after the start is excluded. No result = unsettled, never a loss.")
 OVERLAP_STATES = ("same", "earlier_live_version", "different")
 SOCCER_MARKETS = ("1x2_regulation", "double_chance", "draw_no_bet")
 SOCCER_TITLES = {"1x2_regulation": "Match result (90 min)"}
