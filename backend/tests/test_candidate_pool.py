@@ -402,7 +402,7 @@ def test_the_cycle_passes_the_served_forecasts_time_to_the_pool():
     import inspect
     from app import jobs
     src = inspect.getsource(jobs.predict_now)
-    assert 'information_at=out.get("as_of")' in src and 'served={f["game_id"]: f["tipoff_at"] for f in out["forecasts"]}' in src
+    assert 'information_at=out.get("as_of")' in src and 'served={f.get("game_id"): f.get("tipoff_at") for f in out["forecasts"]}' in src
 
 
 def _probs(out):
@@ -473,3 +473,8 @@ def test_a_line_whose_quote_was_retrieved_after_the_information_time_is_never_us
     later = pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:40:00Z", rejected=rej)
     assert ("g", "team_total_home") not in later and ("g", "reg3") not in later        # 13 min after: another cycle
     assert rej["reg3"] == 1 and "cycle" in rej["reasons"]["reg3"]
+    for bad in ('"text"', "[1]", "{not json"):                    # unreadable bookmaker: this cohort is rejected, nothing raises
+        c.execute("INSERT INTO research_cohorts VALUES (9,'g','spread',-1.5,'market',?,'d','2026-10-12T21:40:00Z',"
+                  "'2026-10-12T23:00:00Z','2026-10-12T21:40:00Z')", (bad,))
+        assert ("g", "spread") not in pool_live.core_lines(c, ["g"], "2026-10-12T22:00:00Z", quotes_until="2026-10-12T21:50:00Z")
+        c.execute("DELETE FROM research_cohorts WHERE cohort_id = 9")
