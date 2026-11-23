@@ -1192,7 +1192,7 @@ def test_a_candidate_stating_certainty_is_suspect_never_kept_or_recommended_and_
         c.execute("INSERT INTO rf_runs (kind, sport, at, outcome, detail) VALUES ('grade','nba','t','waiting_for_results','')")
     c.close()
     summ = rs.forward_summary(p)["nba"]
-    assert summ["suspect_models"] == {"cand": 80} and summ["grading"].startswith("waiting for results")
+    assert summ["suspect_models"] == {"cand (candidate)": 80} and summ["grading"].startswith("waiting for results")
 
 
 def test_record_reports_suspect_candidate_rows():
@@ -1312,10 +1312,89 @@ def test_games_before_the_prospective_cut_are_exploratory_and_never_count(tmp_pa
     c.close()
     res = ar.forward_evaluate(p, fixture_adapter({"inc": []}), "p", record_look=False)
     fw = res["evaluation"]["markets"]["winner"]["comparisons"]["cand"]["vs_incumbent"]["forward"]
-    assert fw["paired_games"] == 150 and fw["exploratory_before_prospective_from"]["paired_games"] == 150
+    ex = res["exploratory"]["evaluation"]["markets"]["winner"]["comparisons"]["cand"]["vs_incumbent"]["forward"]
+    assert fw["paired_games"] == 150 and ex["paired_games"] == 150
     assert res["recommendation"]["candidates"]["cand"]["markets"]["winner"]["criteria"]["min_settled_forward"]["n"] == 150
+    assert res["evaluation"]["markets"]["winner"]["models"]["cand"]["n"] == 150                 # metrics: post-cut games only
 
 
 def test_real_prospective_cut_is_after_the_designs_inspection():
     src = open(ar.__file__).read()
     assert '"prospective_from": "2026-11-24T00:00:00Z"' in src          # fixed in code, after the Nov 21-22 count inspection
+
+
+
+def test_a_zero_push_probability_on_a_half_point_line_is_not_certainty():
+    assert not ar.degenerate({"probs": {"a": 0.55, "mid": 0.0, "b": 0.45}})      # NCAAB/NFL half lines: mid must be 0
+    assert ar.degenerate({"probs": {"a": 1.0, "mid": 0.0, "b": 0.0}})
+    assert ar.degenerate({"probs": {"a": 0.0, "mid": 0.3, "b": 0.7}})            # a side declared impossible
+    assert ar.degenerate({"probs": {"a": 0.0, "mid": 1.0, "b": 0.0}})
+    s = synthetic(n=200, seed=9, edge=0.0)
+    half = lambda recs: [dict(r, market="spread", line=-3.5, probs={**r["probs"], "mid": 0.0}) for r in recs]   # noqa: E731
+    ev = ar.evaluate_records(fixture_adapter({"inc": [], "cand": []}, markets={"spread": {"kind": "line", "settlement": "x"}}),
+                             {"inc": half(s["inc"]), "cand": half(s["cand"])})
+    assert ev["suspect"] == [] and ev["markets"]["spread"]["comparisons"]["cand"]["decision"] != "suspect_invalid"
+
+
+def test_one_model_name_from_two_ledgers_keeps_both_market_families(tmp_path):
+    p = tmp_path / "two.sqlite"
+    _put(p, "goals_poisson", "incumbent", _t(5, 8), 5.5, 0.5, market="total", version="goals_poisson-carry=0.75-policy=near_tipoff")
+    _put(p, "goals_poisson", "incumbent", _t(5, 8.003), None, 0.6, market="winner",
+         version="research-v2:goals_poisson:d6f4")                         # 10 s later, another ledger, another version
+    by, _ = ar.forward_records(p, "ncaab")
+    assert sorted(r["market"] for r in by["goals_poisson"]) == ["total", "winner"]
+
+
+def test_a_candidate_run_more_than_five_minutes_after_the_current_models_never_pairs(tmp_path):
+    p = tmp_path / "later.sqlite"
+    _put(p, "inc", "incumbent", _t(5, 9), 150.5, 0.5)
+    _put(p, "cand", "candidate", _t(5, 9 + 8 / 60), 150.5, 0.6)               # 8 min AFTER: not allowed
+    pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
+    assert pr["paired_games"] == 0 and pr["unpaired"] == ["g1"]
+    _put(p, "cand", "candidate", _t(5, 9 + 3 / 60), 150.5, 0.6)               # 3 min after (same cycle): allowed, reported
+    pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
+    assert pr["paired_games"] == 1 and pr["candidate_later_pairs"] == 1 and pr["max_candidate_later_minutes"] == pytest.approx(3.0)
+    _put(p, "cand", "candidate", _t(5, 9 - 6 / 60), 150.5, 0.6)               # 6 min before is preferred over 3 min after
+    pr = ar.forward_pairs(ar._forward_rows(p, "ncaab")[0], "cand", "inc", "total")
+    assert pr["candidate_later_pairs"] == 0 and pr["cand"][0]["forecast_at"] == _t(5, 9 - 6 / 60)
+
+
+def test_a_candidate_that_forecast_only_after_the_instant_is_labelled_as_of_late_not_missing(tmp_path):
+    p = tmp_path / "late.sqlite"
+    _put(p, "inc", "incumbent", _t(5, 9), 150.5, 0.5)
+    _put(p, "cand", "candidate", _t(5, 11.5), 150.5, 0.6)                    # 30 min before the start: after start - 60
+    rows = ar._forward_rows(p, "ncaab")[0]
+    raw = ar._forward_rows(p, "ncaab", as_of=False)[0]
+    late = {r["game_id"] for r in raw if r["model"] == "cand"} - {r["game_id"] for r in rows if r["model"] == "cand"}
+    pr = ar.forward_pairs(rows, "cand", "inc", "total", late=late)
+    assert pr["as_of_late"] == ["g1"] and pr["missing"] == []
+
+
+def test_with_the_real_cut_pre_cut_games_never_reach_calibration_the_bar_or_the_book(tmp_path, monkeypatch):
+    monkeypatch.setitem(ar.FORWARD_PAIRING, "prospective_from", _t(100))
+    p = tmp_path / "real.sqlite"
+    s = synthetic(n=200, seed=21, edge=0.5)
+    for i, (ri, rc) in enumerate(zip(s["inc"], s["cand"])):
+        start, at = _t(i, 12), _t(i, 8)
+        # before the cut a second member ("inc2") is far better and the candidate is wildly miscalibrated
+        if i < 100:
+            _put(p, "inc2", "incumbent", at, None, 0.99 if ri["outcome"] == "a" else 0.01, gid=ri["game_id"], start=start,
+                 market="winner", sport="nba")
+            _put(p, "cand", "candidate", at, None, 0.97, gid=ri["game_id"], start=start, market="winner", sport="nba")
+        else:
+            _put(p, "cand", "candidate", at, None, rc["probs"]["a"], gid=ri["game_id"], start=start, market="winner", sport="nba")
+        _put(p, "inc", "incumbent", at, None, ri["probs"]["a"], gid=ri["game_id"], start=start, market="winner", sport="nba")
+    c = ar.forward_connect(p)
+    with c:
+        for r in s["inc"]:
+            c.execute("INSERT INTO rf_grades (sport, game_id, market, line_key, outcome, graded_at) VALUES (?,?,?,?,?,?)",
+                      ("nba", r["game_id"], "winner", "", r["outcome"], "x"))
+    c.close()
+    res = ar.forward_evaluate(p, fixture_adapter({"inc": []}), "p", record_look=False)
+    w = res["evaluation"]["markets"]["winner"]
+    assert w["incumbent"] == "inc" and "inc2" not in w["models"]                     # the bar comes from post-cut games only
+    assert w["models"]["cand"]["n"] == 100
+    pre = res["exploratory"]["evaluation"]["markets"]["winner"]
+    assert pre["models"]["cand"]["calibration"] != w["models"]["cand"]["calibration"]
+    crit = res["recommendation"]["candidates"]["cand"]["markets"]["winner"]["criteria"]
+    assert crit["min_settled_forward"]["n"] == 100

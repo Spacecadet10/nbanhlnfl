@@ -1649,7 +1649,11 @@ def roi(recs: list, kind: str) -> dict:
 
 # --- Evaluator (pure: records in, metrics and decisions out) --------------------------------------------------------------
 def _choose_incumbent(adapter: dict, by_model: dict, market: str, kind: str) -> Optional[str]:
-    """The best existing member per market (lowest log loss among incumbents with the widest coverage): the bar, as in v2."""
+    """The best existing member per market (lowest log loss among incumbents with the widest coverage): the bar, as in v2.
+    A forward evaluation may name its bar per market in advance (`adapter["bar"]`, FORWARD_PAIRING): used when it has rows."""
+    named = (adapter.get("bar") or {}).get(market)
+    if named and any(r["market"] == market and _outcome_idx(r, kind) is not None for r in by_model.get(named, [])):
+        return named
     best = None
     rows = {}
     for n, m in adapter["models"].items():
@@ -1724,9 +1728,12 @@ DEGENERATE_EPS = 1e-6      # a probability this close to 0 or 1 is certainty: a 
 
 
 def degenerate(r: dict) -> bool:
-    """A record that states certainty (some outcome at <= 1e-6 or >= 1 - 1e-6). Scoring still clamps for the log (as for every
-    record), but the model is flagged suspect and can never be kept or recommended until a person has diagnosed it."""
-    return any(v is not None and (v <= DEGENERATE_EPS or v >= 1 - DEGENERATE_EPS) for v in (r.get("probs") or {}).values())
+    """A record that states certainty: side a or b at <= 1e-6, or any outcome at >= 1 - 1e-6. A push/draw probability of 0
+    (`mid` on a half-point line, which the validator requires) is not certainty and is never flagged. Scoring still clamps for
+    the log (as for every record), but the model is flagged suspect and can never be kept or recommended until diagnosed."""
+    p = r.get("probs") or {}
+    return any(p.get(k) is not None and p[k] <= DEGENERATE_EPS for k in ("a", "b")) or \
+        any(v is not None and v >= 1 - DEGENERATE_EPS for v in p.values())
 
 
 def evaluate_records(adapter: dict, by_model: dict, stages: tuple = ("search", "validation")) -> dict:
@@ -2946,10 +2953,20 @@ def grade(data_dir: Path, now: str, sport: str, adapters: Optional[dict] = None,
 FORWARD_PAIRING = {
     "as_of_minutes": 60,          # only forecasts made at or before start - 60 min are scored
     "max_gap_minutes": 10,        # a candidate and the current model are paired only from runs at most 10 min apart ...
+    "max_candidate_later_minutes": 5,   # ... and the candidate run at most 5 min AFTER the current model's (the same recording
+                                        # cycle: the research cohort writes candidates minutes after the primary, from the same
+                                        # line and quote); a pair with the candidate later is counted and reported
     "same_line": True,            # ... at the same line (and the market's fixed side a/b)
     "max_unpaired_share": 0.10,   # a promotion criterion: at most 10% of the current model's games unpaired (timing/line)
     "version": "the latest model_version of each model only (an earlier definition is never mixed into its series)",
-    "prospective_from": "2026-11-24T00:00:00Z"}   # games starting earlier: exploratory only
+    "prospective_from": "2026-11-24T00:00:00Z",   # games starting earlier: exploratory only
+    # The bar ("current model") named per market before the cut: for NBA/NHL the served primary (winner: the Elo member, whose
+    # agreement-cohort rows are the primary's model; lines and the 3-way: the primary line model). Other sports have one
+    # incumbent per market, chosen as before.
+    "bar": {"nba": {"winner": "elo", "spread": "points_normal", "total": "points_normal", "team_total_home": "points_normal",
+                    "team_total_away": "points_normal"},
+            "nhl": {"winner": "hockey_elo", "reg3": "goals_poisson", "spread": "goals_poisson", "total": "goals_poisson",
+                    "team_total_home": "goals_poisson", "team_total_away": "goals_poisson"}}}
 FORWARD_AS_OF_MINUTES = FORWARD_PAIRING["as_of_minutes"]
 
 
@@ -2961,9 +2978,12 @@ def forward_as_of(start_at: str) -> str:
     return (_ts_parse(start_at) - timedelta(minutes=FORWARD_AS_OF_MINUTES)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _forward_rows(path: Optional[Path], sport: str, protocol_id: Optional[str] = None) -> tuple:
-    """Stored forward rows joined to their grades, oldest first, restricted per model to its latest model_version and to
-    forecasts made at or before the game's evaluation instant (start - as_of_minutes). Returns (rows as dicts, info)."""
+def _forward_rows(path: Optional[Path], sport: str, protocol_id: Optional[str] = None, *, since: Optional[str] = None,
+                  until: Optional[str] = None, as_of: bool = True) -> tuple:
+    """Stored forward rows joined to their grades, oldest first, restricted per model AND market to the latest model_version
+    (one model name can come from two ledgers, e.g. NHL goals_poisson: winner from the agreement cohort, lines from the primary)
+    and, with `as_of`, to forecasts made at or before the game's evaluation instant (start - as_of_minutes). `since`/`until`
+    keep games starting at or after / before a time (the prospective cut). Returns (rows as dicts, info)."""
     conn = forward_connect(path)
     try:
         q = ("SELECT f.*, g.outcome, g.point_actual FROM rf_forecasts f LEFT JOIN rf_grades g ON g.sport=f.sport AND "
@@ -2973,11 +2993,13 @@ def _forward_rows(path: Optional[Path], sport: str, protocol_id: Optional[str] =
     finally:
         conn.close()
     latest_version, info = {}, {}
-    for r in rows:                                       # oldest first: the last version seen is the model's current one
-        latest_version[r["model"]] = r["model_version"]
+    for r in rows:                                       # oldest first: the last version seen is the current one
+        latest_version[(r["model"], r["market"])] = r["model_version"]
         info[r["model"]] = {"role": r["role"], "version": r["model_version"], "description": "forward forecasts",
                             "data_version": r["data_version"]}
-    rows = [r for r in rows if r["model_version"] == latest_version[r["model"]] and r["forecasted_at"] <= forward_as_of(r["start_at"])]
+    rows = [r for r in rows if r["model_version"] == latest_version[(r["model"], r["market"])]
+            and (not as_of or r["forecasted_at"] <= forward_as_of(r["start_at"]))
+            and (since is None or r["start_at"] >= since) and (until is None or r["start_at"] < until)]
     return rows, info
 
 
@@ -2992,14 +3014,15 @@ def _forward_rec(r: dict) -> dict:
     return rec
 
 
-def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str] = None) -> tuple:
+def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str] = None, *, since: Optional[str] = None,
+                    until: Optional[str] = None) -> tuple:
     """(by_model records with outcomes, {model: {role, version}}) for per-model metrics. Selection rule (FORWARD_PAIRING), fixed
     before any forward result and blind to results: per model, its latest definition only; per game, market and model only the
     forecasts of that model's LAST run at or before start - 60 min. Later forecasts and earlier runs stay stored (append-only)
     but are not scored. A line that moved between runs therefore counts once; a run that forecasts several fixed lines at once
     (Soccer's goal and corner ladders) keeps each of them. Candidate-vs-current-model comparisons do NOT use this independent
     selection: they use `forward_pairs` (same run time within max_gap_minutes, same line)."""
-    rows, info = _forward_rows(path, sport, protocol_id)
+    rows, info = _forward_rows(path, sport, protocol_id, since=since, until=until)
     last_run = {}
     for r in rows:
         last_run[(r["model"], r["game_id"], r["market"])] = r["forecasted_at"]
@@ -3013,7 +3036,7 @@ def forward_records(path: Optional[Path], sport: str, protocol_id: Optional[str]
     return by_model, info
 
 
-def forward_pairs(rows: list, cand: str, inc: str, market: str) -> dict:
+def forward_pairs(rows: list, cand: str, inc: str, market: str, late: Optional[set] = None) -> dict:
     """Candidate vs current-model pairs for one market. Per game: walk the current model's runs (at or before the evaluation
     instant) from the latest back; take the first one for which the candidate has a run at most max_gap_minutes away with at
     least one common line; both sides' rows of those two runs at the common lines form the pair (a ladder pairs line by line).
@@ -3027,18 +3050,20 @@ def forward_pairs(rows: list, cand: str, inc: str, market: str) -> dict:
                 out.setdefault(r["game_id"], {}).setdefault(r["forecasted_at"], {})[r["line_key"]] = r
         return out
     ci, cc = runs(inc), runs(cand)
-    gap = timedelta(minutes=FORWARD_PAIRING["max_gap_minutes"])
-    c_recs, i_recs, gaps, missing, unpaired = [], [], [], [], []
+    before = timedelta(minutes=FORWARD_PAIRING["max_gap_minutes"])
+    after = timedelta(minutes=FORWARD_PAIRING["max_candidate_later_minutes"])
+    c_recs, i_recs, gaps, missing, unpaired, as_of_late = [], [], [], [], [], []
     for gid, inc_runs in ci.items():
         cand_runs = cc.get(gid)
         if not cand_runs:
-            missing.append(gid)
+            (as_of_late if late and gid in late else missing).append(gid)
             continue
         found = None
         for ti in sorted(inc_runs, reverse=True):
-            near = [tc for tc in cand_runs if abs(_ts_parse(tc) - _ts_parse(ti)) <= gap and set(cand_runs[tc]) & set(inc_runs[ti])]
-            if near:
-                tc = min(near, key=lambda t: (abs(_ts_parse(t) - _ts_parse(ti)), t))
+            near = [tc for tc in cand_runs if -before <= _ts_parse(tc) - _ts_parse(ti) <= after
+                    and set(cand_runs[tc]) & set(inc_runs[ti])]
+            if near:                     # prefer the candidate run at or before the current model's, then the closest
+                tc = min(near, key=lambda t: (_ts_parse(t) > _ts_parse(ti), abs(_ts_parse(t) - _ts_parse(ti)), t))
                 found = (ti, tc)
                 break
         if found is None:
@@ -3048,9 +3073,11 @@ def forward_pairs(rows: list, cand: str, inc: str, market: str) -> dict:
         for lk in sorted(set(cand_runs[tc]) & set(inc_runs[ti])):
             c_recs.append(_forward_rec(cand_runs[tc][lk]))
             i_recs.append(_forward_rec(inc_runs[ti][lk]))
-        gaps.append(abs((_ts_parse(tc) - _ts_parse(ti)).total_seconds()) / 60)
+        gaps.append((_ts_parse(tc) - _ts_parse(ti)).total_seconds() / 60)     # signed: > 0 = candidate later
     return {"cand": c_recs, "inc": i_recs, "games": len(ci), "paired_games": len(gaps), "missing": missing,
-            "unpaired": unpaired, "max_gap_minutes": max(gaps) if gaps else None}
+            "unpaired": unpaired, "as_of_late": as_of_late, "max_gap_minutes": max((abs(g) for g in gaps), default=None),
+            "candidate_later_pairs": sum(1 for g in gaps if g > 1 / 60),
+            "max_candidate_later_minutes": max((g for g in gaps if g > 0), default=0.0)}
 
 
 def min_forward(sport: str) -> int:
@@ -3063,7 +3090,7 @@ def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] =
     prior_looks = prior_looks or {}
     cands = ev.get("candidates") or []
     out = {"protocol": PROTOCOL_V3["name"], "sport": sport, "never_promotes": True, "manual_decision_required": True,
-           "criteria_version": PROMOTION, "candidates": {}}
+           "criteria_version": PROMOTION, "forward_pairing": FORWARD_PAIRING, "candidates": {}}
     if not cands:
         return out | {"status": "no_candidates", "reason": "no candidate forecasts exist: there is nothing to recommend "
                                                            "(this is not a successful search)"}
@@ -3134,22 +3161,21 @@ def promotion_recommendation(sport: str, ev: dict, prior_looks: Optional[dict] =
     return out
 
 
-def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[str] = None, record_look: bool = True) -> dict:
-    """Evaluates the stored forward forecasts with the same evaluator (stage `forward`) and builds the promotion
-    recommendation. Each call is a look: logged; only the first look at a market's minimum count is confirmatory."""
-    by_model, info = forward_records(path, adapter["sport"], protocol_id)
+def _forward_stage(path, adapter: dict, protocol_id, *, since=None, until=None) -> Optional[dict]:
+    """One forward evaluation over games starting in [since, until): per-model metrics on each model's own as-of rows, the bar
+    named in advance (FORWARD_PAIRING["bar"]) or chosen within this window only, and every candidate re-decided on
+    time-and-line pairs from this window only. None when the window has no rows."""
+    sport = adapter["sport"]
+    by_model, info = forward_records(path, sport, protocol_id, since=since, until=until)
     if not by_model:
-        return {"status": "no_forward_forecasts", "recommendation": promotion_recommendation(
-            adapter["sport"], {"candidates": [], "markets": {}})}
+        return None
     seasons = sorted({r["season"] for recs in by_model.values() for r in recs})
     fw = {**adapter, "models": {n: {"role": i["role"], "version": i["version"], "description": i["description"]}
-                                for n, i in info.items()}, "periods": {"forward": seasons}}
+                                for n, i in info.items()}, "periods": {"forward": seasons},
+          "bar": FORWARD_PAIRING["bar"].get(sport, {})}
     ev = evaluate_records(fw, by_model, stages=("forward",))
-    # Candidate vs current model: re-decided on time-and-line pairs (FORWARD_PAIRING), never on independently selected rows.
-    all_rows, _ = _forward_rows(path, adapter["sport"], protocol_id)
-    cut = FORWARD_PAIRING["prospective_from"]
-    rows = [r for r in all_rows if r["start_at"] >= cut]             # confirmatory: games starting at or after the cut only
-    early = [r for r in all_rows if r["start_at"] < cut]
+    rows, _ = _forward_rows(path, sport, protocol_id, since=since, until=until)
+    raw, _ = _forward_rows(path, sport, protocol_id, since=since, until=until, as_of=False)
     for market, e in ev["markets"].items():
         if e.get("status") != "evaluated":
             continue
@@ -3157,23 +3183,40 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
         for c, cmp_ in e.get("comparisons", {}).items():
             if c == e["incumbent"] or "vs_incumbent" not in cmp_:
                 continue
-            pr = forward_pairs(rows, c, e["incumbent"], market)
+            have = {r["game_id"] for r in rows if r["model"] == c and r["market"] == market}
+            late = {r["game_id"] for r in raw if r["model"] == c and r["market"] == market} - have
+            pr = forward_pairs(rows, c, e["incumbent"], market, late=late)
             dec = decide_candidate(pr["cand"], pr["inc"], kind)
             scored = [r for r in pr["inc"] if _outcome_idx(r, kind) is not None]
             cohort = pr["games"]
-            dec |= {"forecast": len(scored), "pairing": FORWARD_PAIRING, "games": cohort, "paired_games": pr["paired_games"],
-                    "missing_games": len(pr["missing"]), "unpaired_games": len(pr["unpaired"]),
-                    "unpaired_share": (len(pr["unpaired"]) / cohort) if cohort else 0.0,
-                    "max_gap_minutes": pr["max_gap_minutes"],
+            dec |= {"forecast": len(scored), "pairing": FORWARD_PAIRING, "bar": e["incumbent"], "games": cohort,
+                    "paired_games": pr["paired_games"], "missing_games": len(pr["missing"]),
+                    "as_of_late_games": len(pr["as_of_late"]), "unpaired_games": len(pr["unpaired"]),
+                    "unpaired_share": ((len(pr["unpaired"]) + len(pr["as_of_late"])) / cohort) if cohort else 0.0,
+                    "max_gap_minutes": pr["max_gap_minutes"], "candidate_later_pairs": pr["candidate_later_pairs"],
+                    "max_candidate_later_minutes": pr["max_candidate_later_minutes"],
                     "coverage": ((cohort - len(pr["missing"])) / cohort) if cohort else 0.0}
-            ex = forward_pairs(early, c, e["incumbent"], market)
-            dec["exploratory_before_prospective_from"] = {
-                "paired_games": ex["paired_games"], "games": ex["games"],
-                "note": f"games starting before {cut}: the pairing rule was designed after these were graded elsewhere; "
-                        "reported for information, never counted toward a promotion criterion"}
             cmp_["vs_incumbent"] = {"forward": dec}
             if cmp_.get("decision") != "suspect_invalid":
                 cmp_["decision"], cmp_["reason"] = dec["decision"], dec.get("reason")
+    return ev
+
+
+def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[str] = None, record_look: bool = True) -> dict:
+    """Evaluates the stored forward forecasts with the same evaluator (stage `forward`) and builds the promotion
+    recommendation. Each call is a look: logged; only the first look at a market's minimum count is confirmatory.
+    Only games starting at or after FORWARD_PAIRING["prospective_from"] feed the recommendation (metrics, calibration,
+    sportsbook, the bar and the pairs); earlier games are evaluated apart as `exploratory` and never reach a criterion."""
+    cut = FORWARD_PAIRING["prospective_from"]
+    ev = _forward_stage(path, adapter, protocol_id, since=cut)
+    early = _forward_stage(path, adapter, protocol_id, until=cut)
+    exploratory = None if early is None else {
+        "note": f"games starting before {cut}: the pairing rule was designed after these were graded elsewhere; reported for "
+                "information only, never counted toward a promotion criterion",
+        "evaluation": early}
+    if ev is None:
+        return {"status": "no_forward_forecasts", "exploratory": exploratory,
+                "recommendation": promotion_recommendation(adapter["sport"], {"candidates": [], "markets": {}})}
     conn = forward_connect(path)
     try:
         prior = {}
@@ -3192,7 +3235,8 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
             conn.commit()
     finally:
         conn.close()
-    return {"status": "evaluated", "evaluation": ev, "recommendation": rec,
+    by_model, _ = forward_records(path, adapter["sport"], protocol_id, since=cut)
+    return {"status": "evaluated", "evaluation": ev, "recommendation": rec, "exploratory": exploratory,
             "graded": sum(1 for recs in by_model.values() for r in recs if r["outcome"] is not None),
             "ungraded": sum(1 for recs in by_model.values() for r in recs if r["outcome"] is None)}
 

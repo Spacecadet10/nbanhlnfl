@@ -211,10 +211,11 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
                         "AND g.game_id = c.game_id AND g.market = c.market AND g.line_key = c.line_key "
                         "WHERE c.role = 'candidate' GROUP BY c.sport"):
                     out.setdefault(r["sport"], {})["paired_graded_items"] = r["n"]
-            for r in conn.execute("SELECT sport, model, COUNT(*) n FROM rf_forecasts WHERE role = 'candidate' AND (p_a <= ? OR p_a >= ? "
-                                  "OR p_b <= ? OR p_b >= ? OR (p_mid IS NOT NULL AND (p_mid <= ? OR p_mid >= ?))) GROUP BY sport, model",
-                                  (1e-6, 1 - 1e-6) * 3):
-                out.setdefault(r["sport"], {}).setdefault("suspect_models", {})[r["model"]] = r["n"]
+            # certainty (autoresearch.degenerate): side a or b <= 1e-6, or any outcome >= 1 - 1e-6; a zero push/draw is fine
+            for r in conn.execute("SELECT sport, model, role, COUNT(*) n FROM rf_forecasts WHERE p_a <= ? OR p_a >= ? OR p_b <= ? "
+                                  "OR p_b >= ? OR (p_mid IS NOT NULL AND p_mid >= ?) GROUP BY sport, model, role",
+                                  (1e-6, 1 - 1e-6, 1e-6, 1 - 1e-6, 1 - 1e-6)):
+                out.setdefault(r["sport"], {}).setdefault("suspect_models", {})[f"{r['model']} ({r['role']})"] = r["n"]
     except sqlite3.Error as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
     finally:
