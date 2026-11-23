@@ -153,10 +153,10 @@ def verify(pin, sports, prepare):
         raise Refuse("the pinned backend is not a checkout of its own")
     if git(top, "rev-parse", "HEAD").strip() != a["commit"]:
         raise Refuse("the pinned checkout is not at %s" % a["commit"][:12])
-    if git(top, "status", "--porcelain").strip():
+    if [x for x in git(top, "status", "--porcelain").splitlines() if Path(x[3:]).name != ".DS_Store"]:      # Finder's, never read
         raise Refuse("the pinned checkout has uncommitted changes")
     ignored = [x[3:] for x in git(top, "status", "--porcelain", "--ignored").splitlines() if x.startswith("!! ")]
-    ignored = [x for x in ignored if "__pycache__" not in x and not x.split("/")[0].startswith(".omc") and "/.omc" not in x]
+    ignored = [x for x in ignored if "__pycache__" not in x and Path(x).name != ".DS_Store" and not x.split("/")[0].startswith(".omc") and "/.omc" not in x]
     if ignored:
         raise Refuse("the pinned checkout holds ignored files: %s" % ", ".join(ignored[:3]))
     if app_files(a["backend"]) != a["files"]:
@@ -317,6 +317,10 @@ def main(argv):
     prepare, args = (str(ws), argv[1:]) if own else (argv[0], argv[1:])
     if Path(prepare).resolve() != ws.resolve():
         raise Refuse("%s is not the workspace's prepare.py" % prepare)
+    prepare = str(ws)                       # absolute: the study starts in another directory
+    if argv[0] == "prepare-cache" and (len(args) % 2 or any(x != "--sport" for x in args[::2]) or not args
+                                       or any(x not in V2_SPORTS for x in args[1::2])):
+        raise Refuse("prepare-cache takes --sport nba and/or --sport nhl only")
     if args[:1] == ["stop"]:                # the kill switch works whatever else is wrong
         return subprocess.run([sys.executable, "-I", prepare, *args], cwd=constants(prepare)["BACKEND"], env=clean_env(None)).returncode
     if not own and args[:1] and args[0] not in COMMANDS or not own and not args:

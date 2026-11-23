@@ -292,6 +292,35 @@ def test_the_kill_switch_works_without_a_pin(lab):
     assert run(lab, lab["prepare"], "stop").returncode == 0
 
 
+def test_the_kill_switch_takes_a_relative_path_and_prepare_cache_takes_only_nba_and_nhl(lab):
+    assert run(lab, "prepare.py", "stop", cwd=lab["home"] / "workspace").returncode == 0
+    for args in (["--sport", "nfl"], ["--sport", "nba", "--exp-root", "/tmp/x"], [], ["--sport"]):
+        r = run(lab, "prepare-cache", *args)
+        assert r.returncode == 2 and "prepare-cache takes" in r.stderr
+
+
+def test_a_finder_file_in_the_pinned_checkout_does_not_stop_research(lab):
+    (lab["pinned"] / "backend" / ".DS_Store").write_text("x")
+    try:
+        assert daily(lab)[0].returncode == 0
+    finally:
+        (lab["pinned"] / "backend" / ".DS_Store").unlink()
+
+
+@pytest.mark.parametrize("name", ["PY", "BACKEND", "SNAPSHOT"])
+def test_prepare_and_the_pin_must_name_the_same_paths(lab, name):
+    pinfile = lab["home"] / "PIN.json"
+    pinfile.chmod(0o644)
+    pin = json.loads(pinfile.read_text())
+    text = lab["prepare"].read_text()
+    line = next(x for x in text.splitlines() if x.startswith(name + " = "))
+    lab["prepare"].write_text(text.replace(line, f'{name} = "/elsewhere"'))
+    pin["workspace"]["prepare_sha256"] = hashlib.sha256(lab["prepare"].read_bytes()).hexdigest()      # only the paths disagree
+    pinfile.write_text(json.dumps(pin))
+    r, got = daily(lab)
+    assert r.returncode == 2 and got is None and "other paths than the pin" in r.stderr
+
+
 def test_a_check_that_cannot_be_made_is_a_logged_refusal(lab):
     (lab["snap"]).chmod(0o755)
     (lab["snap"] / "IDENTITY.json").chmod(0o644)

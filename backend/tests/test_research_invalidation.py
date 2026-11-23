@@ -207,6 +207,11 @@ def test_the_last_sweep_and_the_combined_outcome_never_show_the_invalid_keep_or_
                                                    "kept": ["c:winner"], "forward_candidates": ["c"], "evaluation": {"winner": {"status": "evaluated"}}})
     b = client.get("/api/research/autoresearch").json()
     assert "nhl:reg3" in b["last_daily"]["outcome"] and b["v3"]["last_daily"]["combined"]["nhl"]["outcome"] == "refused"
+    _w(exp / "p-bad" / "nhl" / "trials.jsonl", [{"trial_id": "t-keep"}])
+    _w(exp / "reports" / "daily-2026-11-23T110755Z.json", {"outcome": "kept vs incumbent: nhl:reg3", "sports": {"nhl": {"protocol_id": "p-bad"}},
+                                                         "trials": [{"trial_id": "t-keep", "sport": "nhl"}]})
+    ra.append(exp, status="invalid", protocol_id="p-bad", sport="nhl", trial_id="t-keep", reason=WHY)       # one trial of the sweep
+    assert "reg3" not in client.get("/api/research/autoresearch").json()["last_daily"]["outcome"]
     ra.append(exp, status="invalid", protocol_id="p-bad", sport="nhl", reason=WHY)
     b = client.get("/api/research/autoresearch").json()
     assert "reg3" not in b["last_daily"]["outcome"] and WHY in b["last_daily"]["outcome"]

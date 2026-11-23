@@ -156,6 +156,8 @@ def status(recent: int = 12) -> dict:
     if last_daily:                 # a sweep of blocked studies is never shown as a result
         bad = [f"{s}: {research_audit.why(e)}" for s, v in (last_daily.get("sports") or {}).items()
                if (e := research_audit.verdict(entries, (v or {}).get("protocol_id") or "", s))]
+        bad += [f"{t.get('sport')}: {why}" for t in last_daily.get("trials") or []
+                if (why := _blocked(entries, ((last_daily.get("sports") or {}).get(t.get("sport")) or {}).get("protocol_id") or "", t.get("sport"), t))]
         if audit_error or bad:
             last_daily = last_daily | {"outcome": "not usable: " + (audit_error or "; ".join(bad))}
     return {"configured": True, "note": NOTE,
