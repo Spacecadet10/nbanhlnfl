@@ -2,12 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Scheduled autoresearch EVALUATION of all five sports (nba nhl ncaab nfl soccer), three local-time slots: 06:00, 11:10 and 13:10.
-	     scripts/autoresearch_daily.sh runs one guarded step per sport (`prepare.py daily` with the sport name, 3 trials / 12 minutes per sport,
-	     100 minutes in all). `daily` never starts an agent and never spends money: it only re-scores existing commits.
-	     The 11:10 and 13:10 slots are same-day retries: only a sport that was `refused` (game window or forecasting guard) or skipped for the
-	     total wall cap is run again; evaluated, no_candidates and failed sports print outcome=done_today, and at most 3 attempts per sport per
-	     local day. They sit between adaptive-train's 09:30 and 15:30 heavy-lock runs; app.learning_run still decides per sport.
+	<!-- Scheduled autoresearch EVALUATION of all five sports (nba nhl ncaab nfl soccer), four local-time slots: 04:00, 05:00, 06:00 and 07:30.
+	     scripts/autoresearch_daily.sh runs guarded, resumable chunks (`prepare.py daily` with the sport name; no item or trial cap, a soft
+	     15 minutes per chunk with a 30-minute stuck-process margin) in round-robin passes over the sports until none has work left or the
+	     run window ends (170 minutes, and at 08:55 local at the latest so the heavy lock is free for adaptive-train's 09:30 start).
+	     `daily` never starts an agent and never spends money: it only re-scores existing commits.
+	     The later slots are same-day retries: a sport that is `refused` (game window or forecasting guard) or `pending` (work remains,
+	     progress stored) is run again, there is no attempt cap; evaluated (complete), no_candidates and failed sports print
+	     outcome=done_today. The slots sit before adaptive-train's 09:30 heavy-lock run, where the games-in-progress guard is open
+	     (a 14-day simulation: a 04:00-07:00 start is open on 12-14 of 14 days, late-morning and afternoon starts almost never); app.learning_run still decides per chunk.
 	     NOT installed. Opt-in: the wrapper refuses (exit 78) unless ~/autoresearch-sports/SCHEDULE_DAILY_ENABLED exists.
 	     NBA_DATA_DIR here is only the guard's lock, log and read-only schedule lookup; prepare.py points the evaluator at its own
 	     read-only snapshot. Log: data/research/autoresearch-daily.log; the status page reads daily-state.tsv in ~/autoresearch-sports. -->
@@ -41,21 +44,27 @@
 	<array>
 		<dict>
 			<key>Hour</key>
+			<integer>4</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
+			<integer>5</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Hour</key>
 			<integer>6</integer>
 			<key>Minute</key>
 			<integer>0</integer>
 		</dict>
 		<dict>
 			<key>Hour</key>
-			<integer>11</integer>
+			<integer>7</integer>
 			<key>Minute</key>
-			<integer>10</integer>
-		</dict>
-		<dict>
-			<key>Hour</key>
-			<integer>13</integer>
-			<key>Minute</key>
-			<integer>10</integer>
+			<integer>30</integer>
 		</dict>
 	</array>
 	<key>StandardErrorPath</key>

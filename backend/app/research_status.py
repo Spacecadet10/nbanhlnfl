@@ -183,7 +183,9 @@ V3_NOTE = ("Protocol v3 evaluates research candidates for NBA, NHL, NFL, Soccer 
 
 
 def daily_state(path: Optional[Path] = None) -> Optional[list]:
-    """The wrapper's per-sport status file (sport, last_attempt_utc, last_outcome, last_success_utc, last_reason), read only."""
+    """The wrapper's per-sport status file (sport, last_attempt_utc, last_outcome, last_success_utc, last_reason), read only.
+    last_outcome is one of evaluated | pending (work remains, progress stored) | no_candidates | refused | failed | skipped; only
+    a complete `evaluated` sets last_success_utc. A 6th column (`<local date>:<n>`, chunks started that day) is not read here."""
     p = path or Path(os.environ.get("AUTORESEARCH_HOME") or os.environ.get("NBA_AUTORESEARCH_HOME") or Path.home() / "autoresearch-sports") / "daily-state.tsv"
     try:
         lines = p.read_text(errors="replace").splitlines()
