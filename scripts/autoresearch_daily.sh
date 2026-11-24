@@ -82,7 +82,7 @@ ALL="nba,nhl,ncaab,nfl,soccer"
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 today=$(date +%F)
 # local calendar date of a stored UTC stamp (TZ env or the system zone); empty if unparsable
-local_date() { python3 -c 'import sys; from datetime import datetime, timezone
+local_date() { "$PY" -c 'import sys; from datetime import datetime, timezone
 print(datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone().strftime("%Y-%m-%d"))' "$1" 2>/dev/null; }
 field() { awk -F'\t' -v s="$1" -v n="$2" '$1==s {print $n}' "$STATE" 2>/dev/null | head -1; }
 # quiet-period rule for local HH:MM $1 (stop) and $2 (resume): prints `before <seconds to stop>`, `quiet` or `after`; exit 1 when either
