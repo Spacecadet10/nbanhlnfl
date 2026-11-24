@@ -10,7 +10,7 @@
 #     (started within AUTORESEARCH_GLOBAL_LOOKBACK_HOURS, default 4, and not final) -- 2026-11-23: live jobs run during games;
 #   - no item or trial count cap (AUTORESEARCH_TRIALS default 100000); a chunk is bounded by time: soft AUTORESEARCH_MINUTES (15)
 #     passed as --max-minutes, guard hard limit = soft + AUTORESEARCH_HARD_MARGIN_MINUTES (30; NBA/NHL/NCAAB items are atomic, time is
-#     only checked between items); per-trial --timeout; --max-rss-gb 6;
+#     only checked between items; NBA/NHL add the v2 queue's soft budget and one trial timeout); per-trial --timeout; --max-rss-gb 6;
 #   - the per-RUN window: AUTORESEARCH_TOTAL_MINUTES (170), shortened to AUTORESEARCH_STOP_AT (local HH:MM, default 08:55, empty = off)
 #     when the run starts before it on the same local date (release the heavy lock before adaptive-train's 09:30 start). A chunk
 #     starts only if >= AUTORESEARCH_MIN_START_SECONDS (360) remain.
@@ -161,12 +161,15 @@ set_row() {   # $1 sport; uses at, OUT_, LS_, reason, CNT_
 
 # one guarded chunk for sport $1
 run_chunk() {
-  local s=$1 mins remaining win rc wall t1 stated outcome pr have remain adv sig next line prevn
+  local s=$1 mins remaining win rc wall t1 stated outcome pr have remain adv sig next line prevn hard
   at=$(now); remaining=$(window_left); reason=""
   mins=$(( remaining / 60 - 4 )); [ "$mins" -gt "$PER_MIN" ] && mins=$PER_MIN; [ "$mins" -lt 1 ] && mins=1
   if [ "$s" = soccer ]; then win=(--defer-hours 0.75 --lookback-hours 0); else win=(--defer-hours 2.5); fi
+  # stuck-process limit (never a work limit): soft budget + margin; NBA/NHL then run the v2 queue with its own soft budget, whose
+  # last trial may run to its --timeout
+  hard=$((mins + MARGIN_MIN)); case "$s" in nba|nhl) hard=$((hard + mins + (TIMEOUT + 59) / 60)) ;; esac
   setv CNT "$s" $(( $(getv CNT "$s") + 1 )); prevn=$(getv NCH "$s"); setv NCH "$s" $((prevn + 1)); t1=$(date +%s)
-  "${LEARNING_PYTHON:-python3}" -m app.learning_run --name "autoresearch-daily-$s" --max-minutes $((mins + MARGIN_MIN)) --max-rss-gb 6 \
+  "${LEARNING_PYTHON:-python3}" -m app.learning_run --name "autoresearch-daily-$s" --max-minutes "$hard" --max-rss-gb 6 \
     --defer-sports "$s" "${win[@]}" --global-sports "$ALL" --global-hours 0.5 --global-lookback-hours "${AUTORESEARCH_GLOBAL_LOOKBACK_HOURS:-4}" -- \
     "${RUN[@]}" "$PREPARE" daily --sport "$s" --max-trials "$TRIALS" --max-minutes "$mins" \
     --timeout "$TIMEOUT" >"$tmp" 2>&1

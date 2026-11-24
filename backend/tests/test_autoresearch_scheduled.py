@@ -898,3 +898,16 @@ def test_a_report_whose_queue_did_not_move_is_stuck_and_names_the_next_item(home
         del os.environ["REPORT_DIR"]
     row = state(home)["ncaab"]
     assert len(calls) == 2 and row[2] == "failed" and "no progress in a full chunk at cand9" in row[4], r.stdout
+
+
+def test_the_stuck_process_limit_covers_both_queues_of_nba_and_nhl(home, tmp_path):
+    """The guard's hard limit is a stuck-process timeout, never a work limit: NBA/NHL run the v3 queue (soft budget, atomic items)
+    and then the v2 queue with its own soft budget, whose last trial may run to its --timeout. A limit of soft + margin alone could
+    kill a healthy chunk in the v2 queue (and `failed` is final for the day)."""
+    on(home)
+    r, calls = run(DAILY, home, tmp_path)
+    assert r.returncode == 0, r.stderr
+    ev = [json.loads(x) for x in (tmp_path / "data" / "research" / "learning-runs.jsonl").read_text().splitlines()]
+    limit = {e["name"].rsplit("-", 1)[1]: e["max_minutes"] for e in ev if e["event"] == "start"}
+    assert limit["ncaab"] == limit["nfl"] == limit["soccer"] == 15 + 30
+    assert limit["nba"] == limit["nhl"] == 15 + 30 + 15 + 10          # + the v2 queue's soft budget + one trial timeout (600 s)
