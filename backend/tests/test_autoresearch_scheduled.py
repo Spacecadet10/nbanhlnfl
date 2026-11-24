@@ -713,8 +713,7 @@ def chunk_lines(r):
     return [dict(p.split("=", 1) for p in x.split()[1:4]) for x in r.stdout.splitlines() if x.startswith("autoresearch-daily: sport=") and " rc=" in x]
 
 
-@pytest.mark.parametrize("reason", ["item budget reached", "time budget reached (partial progress stored)",
-                                    "2 of 9 candidates pending", "incumbent scoring incomplete"])
+@pytest.mark.parametrize("reason", ["item budget reached", "time budget reached (partial progress stored)"])
 def test_a_skipped_sport_with_work_left_earlier_today_is_retried_not_done_today(home, tmp_path, monkeypatch, reason):
     seed(home, "ncaab", "skipped", reason, n=1)
     r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
@@ -722,20 +721,22 @@ def test_a_skipped_sport_with_work_left_earlier_today_is_retried_not_done_today(
     assert state(home)["ncaab"][2] == "evaluated" and state(home)["ncaab"][5] == f"{LOCAL_TODAY}:2"
 
 
+@pytest.mark.parametrize("reason", ["2 of 9 candidates pending", "incumbent scoring incomplete"])
+def test_only_the_old_wrappers_work_left_skips_are_retried_by_the_gate(home, tmp_path, monkeypatch, reason):
+    seed(home, "ncaab", "skipped", reason, n=1)
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    assert calls == [] and "sport=ncaab outcome=done_today reason=skipped" in r.stdout
+
+
 def test_evaluated_with_queued_work_is_pending_sets_no_last_success_and_is_retried_the_same_day(home, tmp_path, monkeypatch):
     stub(home, "print('sport-outcome: ' + s + ' evaluated v3=evaluated (2 of 9 candidates scored; 3 queued; next x)')\n")
-    monkeypatch.setenv("AUTORESEARCH_SPORTS", "ncaab")
-    on(home)
-    monkeypatch.setenv("AUTORESEARCH_TOTAL_SECONDS", "30")
-    monkeypatch.setenv("AUTORESEARCH_MIN_START_SECONDS", "5")
-    r, calls = run(DAILY, home, tmp_path)
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    assert [c["outcome"] for c in chunk_lines(r)] == ["pending", "failed"] and len(calls) == 2, r.stdout     # the identical line twice is stuck
     row = state(home)["ncaab"]
-    assert row[2] in ("pending", "failed") and row[3] == ""                       # identical line twice: stuck, never a success
-    seed_row = f"ncaab\t{stamp(timedelta(0))}\tevaluated\t{stamp(timedelta(0))}\t2 of 9 candidates scored; 3 queued; next x\t{LOCAL_TODAY}:1\n"
-    (home / "daily-state.tsv").write_text(seed_row)
-    os.remove(tmp_path / "calls.jsonl")
-    r, calls = run(DAILY, home, tmp_path)
-    assert len(calls) >= 1 and "outcome=done_today" not in r.stdout                      # a legacy `evaluated` with queued work is retried too
+    assert row[2] == "failed" and row[3] == "" and "no progress in a full chunk" in row[4]
+    (home / "daily-state.tsv").write_text(f"ncaab\t{stamp(timedelta(0))}\tevaluated\t{stamp(timedelta(0))}\t2 of 9 candidates scored; 3 queued; next x\t{LOCAL_TODAY}:1\n")
+    r, calls = run(DAILY, home, tmp_path)                                    # a legacy `evaluated` row with queued work is retried too
+    assert len(calls) == 4 and "outcome=done_today" not in r.stdout
 
 
 def test_a_run_pending_after_one_chunk_is_recorded_pending_with_no_last_success(home, tmp_path, monkeypatch):
@@ -775,7 +776,7 @@ def test_an_identical_pending_result_twice_is_failed_for_no_progress_and_the_run
     row = state(home)["ncaab"]
     assert row[2] == "failed" and "no progress in a full chunk at " in row[4] and "one item needs longer than a chunk" in row[4]
     r, calls = daily(home, tmp_path, monkeypatch, "ncaab")                          # failed stays final for the day
-    assert len(calls) == 2 and "done_today reason=failed" in r.stdout or "outcome=done_today" in r.stdout
+    assert len(calls) == 2 and "sport=ncaab outcome=done_today reason=failed" in r.stdout
 
 
 def test_a_sport_that_was_refused_only_on_a_later_chunk_stays_pending(home, tmp_path, monkeypatch):
@@ -842,62 +843,181 @@ def test_stop_at_shortens_the_window_only_when_it_is_still_ahead_today(home, tmp
     if soon.date() != datetime.now().date() or past.date() != datetime.now().date():
         pytest.skip("too close to local midnight")
     monkeypatch.setenv("AUTORESEARCH_STOP_AT", soon.strftime("%H:%M"))
+    monkeypatch.setenv("AUTORESEARCH_RESUME_AT", "23:59")
     r, _ = daily(home, tmp_path, monkeypatch, "nba")
     assert 0 < window_of(r) <= 125
-    monkeypatch.setenv("AUTORESEARCH_STOP_AT", past.strftime("%H:%M"))
-    r, _ = run(DAILY, home, tmp_path)
-    assert window_of(r) == 170 * 60
     monkeypatch.setenv("AUTORESEARCH_STOP_AT", "")
     r, _ = run(DAILY, home, tmp_path)
     assert window_of(r) == 170 * 60
 
 
-def report_stub(home, tmp_path, sport_body):
-    """chunk 1 reports work left (`sport_body` = python for the report dict `rep`), chunk 2 a finished queue."""
+def report_stub(home, tmp_path, monkeypatch, body, tail=""):
+    """The stub writes a report file (`rep`, edited by `body`; k = chunk number, s = sport, exp = experiment root) and prints the
+    evaluator's final JSON line naming it. Default: chunk 1 has 4 items left, later chunks none."""
     stub(home, "rep = {'sports': {s: {'queue': {'done': k, 'remaining': 4 if k == 1 else 0, 'next_item': 'cand' + str(k)}}},\n"
-               "       'v2': {'stopped': 'queue empty', 'trials': []}}\n" + sport_body +
+               "       'v2': {'stopped': 'queue empty', 'trials': []}}\nexp = os.path.dirname(os.environ['REPORT_DIR'])\n" + body +
                "rf = os.path.join(os.environ['REPORT_DIR'], 'r%d.json' % k)\njson.dump(rep, open(rf, 'w'))\n"
-               "print('sport-outcome: ' + s + ' evaluated v3=evaluated (done)')\nprint(json.dumps({'outcomes': {s: 'evaluated'}, 'report_file': rf}))\n")
+               "print('sport-outcome: ' + s + ' evaluated v3=evaluated (done)')\nprint(json.dumps({'outcomes': {s: 'evaluated'}, 'report_file': rf}))\n" + tail)
     (tmp_path / "reports").mkdir(exist_ok=True)
-    os.environ["REPORT_DIR"] = str(tmp_path / "reports")
+    monkeypatch.setenv("REPORT_DIR", str(tmp_path / "reports"))
+
+
+def outcomes(r):
+    return [c["outcome"] for c in chunk_lines(r)]
 
 
 def test_the_report_file_decides_pending_v3_queue_remaining(home, tmp_path, monkeypatch):
-    report_stub(home, tmp_path, "")
-    try:
-        r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
-    finally:
-        del os.environ["REPORT_DIR"]
-    assert [c["outcome"] for c in chunk_lines(r)] == ["pending", "evaluated"] and len(calls) == 2, r.stdout
+    report_stub(home, tmp_path, monkeypatch, "")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    assert outcomes(r) == ["pending", "evaluated"] and len(calls) == 2, r.stdout
     assert state(home)["ncaab"][2] == "evaluated"
 
 
 def test_the_report_file_decides_pending_v2_budget_stop_for_nba(home, tmp_path, monkeypatch):
-    report_stub(home, tmp_path, "rep['sports'][s]['queue']['remaining'] = 0\nrep['v2'] = {'stopped': 'time budget reached' if k == 1 else 'queue empty', 'trials': [{}]}\n")
-    try:
-        r, calls = daily(home, tmp_path, monkeypatch, "nba")
-    finally:
-        del os.environ["REPORT_DIR"]
-    assert [c["outcome"] for c in chunk_lines(r)] == ["pending", "evaluated"], r.stdout
+    report_stub(home, tmp_path, monkeypatch, "rep['sports'][s]['queue']['remaining'] = 0\nrep['v2'] = {'stopped': 'time budget reached' if k == 1 else 'queue empty', 'trials': [{}]}\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert outcomes(r) == ["pending", "evaluated"], r.stdout
 
 
 def test_a_finished_report_is_evaluated_in_one_chunk(home, tmp_path, monkeypatch):
-    report_stub(home, tmp_path, "rep['sports'][s]['queue']['remaining'] = 0\n")
-    try:
-        r, calls = daily(home, tmp_path, monkeypatch, "nba")
-    finally:
-        del os.environ["REPORT_DIR"]
-    assert len(calls) == 1 and chunk_lines(r)[0]["outcome"] == "evaluated" and state(home)["nba"][3]
+    report_stub(home, tmp_path, monkeypatch, "rep['sports'][s]['queue']['remaining'] = 0\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert len(calls) == 1 and outcomes(r) == ["evaluated"] and state(home)["nba"][3]
 
 
 def test_a_report_whose_queue_did_not_move_is_stuck_and_names_the_next_item(home, tmp_path, monkeypatch):
-    report_stub(home, tmp_path, "rep['sports'][s]['queue'] = {'done': 1, 'remaining': 4, 'next_item': 'cand9'}\n")
-    try:
-        r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
-    finally:
-        del os.environ["REPORT_DIR"]
+    report_stub(home, tmp_path, monkeypatch, "rep['sports'][s]['queue'] = {'done': 1, 'remaining': 4, 'next_item': 'cand9'}\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
     row = state(home)["ncaab"]
     assert len(calls) == 2 and row[2] == "failed" and "no progress in a full chunk at cand9" in row[4], r.stdout
+
+
+def test_a_failed_item_retry_that_only_grows_items_jsonl_is_progress_not_stuck(home, tmp_path, monkeypatch):
+    """The evaluator logs an item that raised as item_failed in items.jsonl; it stays in queue.remaining until it has failed 3 times."""
+    report_stub(home, tmp_path, monkeypatch,
+                "rep['sports'][s] = {'protocol_id': 'P1', 'queue': {'done': 1, 'remaining': 0 if k >= 3 else 4, 'next_item': 'x'}}\n"
+                "d = os.path.join(exp, 'v3', 'P1', s); os.makedirs(d, exist_ok=True)\n"
+                "open(os.path.join(d, 'items.jsonl'), 'a').write('{\"event\": \"item_failed\"}\\n')\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    assert outcomes(r) == ["pending", "pending", "evaluated"], r.stdout
+    assert state(home)["ncaab"][2] == "evaluated" and state(home)["ncaab"][3]
+
+
+def test_a_soccer_walk_that_only_grows_its_partial_file_is_progress(home, tmp_path, monkeypatch):
+    report_stub(home, tmp_path, monkeypatch,
+                "rep['sports'][s] = {'protocol_id': 'P1', 'queue': {'done': 2, 'remaining': 0 if k >= 4 else 4, 'next_item': 'walk'}}\n"
+                "d = os.path.join(exp, 'v3', 'P1', s, 'items'); os.makedirs(d, exist_ok=True)\n"
+                "open(os.path.join(d, 'walk.partial.json'), 'w').write('x' * (100 * k))\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "soccer")
+    assert outcomes(r) == ["pending", "pending", "pending", "evaluated"], r.stdout
+    assert state(home)["soccer"][3]
+
+
+def test_nba_with_v3_done_and_v2_running_trials_each_chunk_is_pending_until_the_v2_queue_is_empty(home, tmp_path, monkeypatch):
+    report_stub(home, tmp_path, monkeypatch,
+                "rep['sports'][s]['queue']['remaining'] = 0\nrep['sports'][s]['queue']['done'] = 5\n"
+                "rep['v2'] = {'stopped': 'time budget reached' if k < 4 else 'queue empty', 'trials': [{}, {}]}\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert outcomes(r) == ["pending", "pending", "pending", "evaluated"], r.stdout
+    assert state(home)["nba"][2] == "evaluated" and state(home)["nba"][3]
+
+
+def test_a_report_file_that_cannot_be_read_is_failed_not_a_guess(home, tmp_path, monkeypatch):
+    stub(home, "print('sport-outcome: ' + s + ' evaluated v3=evaluated (done)')\n"
+               "print(json.dumps({'outcomes': {s: 'evaluated'}, 'report_file': '/nonexistent/dir/r.json'}))\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    row = state(home)["ncaab"]
+    assert len(calls) == 1 and row[2] == "failed" and row[3] == "" and "the evaluator's report file could not be read: /nonexistent/dir/r.json" in row[4]
+
+
+def test_a_stray_brace_line_after_the_report_line_does_not_hide_it(home, tmp_path, monkeypatch):
+    report_stub(home, tmp_path, monkeypatch, "", tail="print('{\"progress\": 1}')\nprint('{ not json')\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    assert outcomes(r) == ["pending", "evaluated"], r.stdout
+
+
+def test_a_nonzero_rc_after_an_evaluated_line_without_a_report_is_failed(home, tmp_path, monkeypatch):
+    stub(home, "print('sport-outcome: ' + s + ' evaluated v3=evaluated (done)')\nsys.exit(3)\n")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    row = state(home)["ncaab"]
+    assert row[2] == "failed" and row[3] == "" and "rc 3 after an evaluated line without a report" in row[4]
+
+
+def test_an_earlier_last_success_survives_a_later_pending_row(home, tmp_path, monkeypatch):
+    old = stamp(timedelta(days=-2))
+    seed(home, "ncaab", "evaluated", day=LOCAL_YESTERDAY, at=old)
+    stub(home, "import time; time.sleep(1)\n" + staged(99))
+    monkeypatch.setenv("AUTORESEARCH_TOTAL_SECONDS", "8")
+    monkeypatch.setenv("AUTORESEARCH_MIN_START_SECONDS", "5")
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    row = state(home)["ncaab"]
+    assert row[2] == "pending" and row[3] == old, r.stdout
+
+
+def minutes_of(call):
+    return call[call.index("--max-minutes") + 1]
+
+
+def test_nba_and_nhl_soft_budget_is_halved_for_the_v2_queue_and_needs_a_timeout_of_room(home, tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTORESEARCH_TOTAL_SECONDS", "1500")
+    r, calls = daily(home, tmp_path, monkeypatch, "nba ncaab")
+    by = {c[c.index("--sport") + 1]: minutes_of(c) for c in calls}
+    assert by == {"nba": "5", "ncaab": "15"}, (by, r.stdout)       # (24 - 4 - 10) / 2 = 5
+
+
+def test_an_nba_chunk_is_not_started_without_the_minimum_plus_a_trial_timeout_but_other_sports_run(home, tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTORESEARCH_TOTAL_SECONDS", "900")
+    r, calls = daily(home, tmp_path, monkeypatch, "nba ncaab")
+    assert sport_args(calls) == ["ncaab"], r.stdout
+    row = state(home)["nba"]
+    assert row[2] == "skipped" and row[4].startswith("total wall cap reached") and state(home)["ncaab"][2] == "evaluated"
+    monkeypatch.delenv("AUTORESEARCH_TOTAL_SECONDS")
+    r, calls = run(DAILY, home, tmp_path)                                     # retryable the same day
+    assert sport_args(calls) == ["ncaab", "nba"]
+
+
+def test_a_short_chunk_with_no_progress_stays_pending_and_is_not_retried_in_this_run(home, tmp_path, monkeypatch):
+    stub(home, "print('sport-outcome: ' + s + ' skipped v3=skipped (time budget reached; resumes with item1)')\n")
+    monkeypatch.setenv("AUTORESEARCH_TOTAL_SECONDS", "600")             # window 10 min: soft budget 6 min < the full 15
+    r, calls = daily(home, tmp_path, monkeypatch, "ncaab")
+    row = state(home)["ncaab"]
+    assert len(calls) == 2 and row[2] == "pending", r.stdout
+    assert "no progress in a short chunk (6 min); not retried in this run" in row[4] and r.returncode == 0
+
+
+def window_clock(minus=0, plus=0):
+    n = datetime.now()
+    a, b = n - timedelta(minutes=minus), n + timedelta(minutes=plus)
+    if a.date() != n.date() or b.date() != n.date():
+        pytest.skip("too close to local midnight")
+    return a.strftime("%H:%M"), b.strftime("%H:%M")
+
+
+def test_inside_the_quiet_period_nothing_starts_and_the_state_is_untouched(home, tmp_path, monkeypatch):
+    stop, resume = window_clock(minus=1)[0], window_clock(plus=3)[1]
+    monkeypatch.setenv("AUTORESEARCH_STOP_AT", stop)
+    monkeypatch.setenv("AUTORESEARCH_RESUME_AT", resume)
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert r.returncode == 0 and calls == [] and f"autoresearch-daily: quiet period {stop}-{resume} local: nothing started" in r.stdout
+    assert not (home / "daily-state.tsv").exists()
+
+
+def test_after_resume_at_the_window_is_the_full_total(home, tmp_path, monkeypatch):
+    stop, resume = window_clock(minus=5)[0], window_clock(minus=1)[0]
+    monkeypatch.setenv("AUTORESEARCH_STOP_AT", stop)
+    monkeypatch.setenv("AUTORESEARCH_RESUME_AT", resume)
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert window_of(r) == 170 * 60 and sport_args(calls) == ["nba"]
+
+
+@pytest.mark.parametrize("stop,resume", [("25:00", "16:30"), ("8:5x", "16:30"), ("abc", "16:30"), ("08:60", "16:30"),
+                                         ("08:55", "24:00"), ("08:55", "soon"), ("08:55", ""), ("16:30", "08:55")])
+def test_a_malformed_quiet_period_refuses_loudly_and_starts_nothing(home, tmp_path, monkeypatch, stop, resume):
+    monkeypatch.setenv("AUTORESEARCH_STOP_AT", stop)
+    monkeypatch.setenv("AUTORESEARCH_RESUME_AT", resume)
+    r, calls = daily(home, tmp_path, monkeypatch, "nba")
+    assert r.returncode == 78 and calls == [] and "AUTORESEARCH_STOP_AT" in r.stdout + r.stderr
+    assert not (home / "daily-state.tsv").exists()
 
 
 def test_the_stuck_process_limit_covers_both_queues_of_nba_and_nhl(home, tmp_path):

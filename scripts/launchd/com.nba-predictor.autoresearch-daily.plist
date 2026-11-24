@@ -5,7 +5,9 @@
 	<!-- Scheduled autoresearch EVALUATION of all five sports (nba nhl ncaab nfl soccer), four local-time slots: 04:00, 05:00, 06:00 and 07:30.
 	     scripts/autoresearch_daily.sh runs guarded, resumable chunks (`prepare.py daily` with the sport name; no item or trial cap, a soft
 	     15 minutes per chunk with a 30-minute stuck-process margin) in round-robin passes over the sports until none has work left or the
-	     run window ends (170 minutes, and at 08:55 local at the latest so the heavy lock is free for adaptive-train's 09:30 start).
+	     run window ends (170 minutes; a run that starts before 08:55 local stops starting chunks at 08:55 and sizes them to end by then, so the
+	     heavy lock is likely free for adaptive-train's 09:30 start, though one atomic item can still overrun; from 08:55 to 16:30 a run
+	     starts nothing). NBA/NHL: the stuck-process limit adds the v2 queue's soft budget and one trial timeout.
 	     `daily` never starts an agent and never spends money: it only re-scores existing commits.
 	     The later slots are same-day retries: a sport that is `refused` (game window or forecasting guard) or `pending` (work remains,
 	     progress stored) is run again, there is no attempt cap; evaluated (complete), no_candidates and failed sports print

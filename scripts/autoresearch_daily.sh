@@ -9,11 +9,16 @@
 #   - global live-load guard: no start within 0.5 h before ANY sport's tip-off, nor while ANY sport's game is in progress
 #     (started within AUTORESEARCH_GLOBAL_LOOKBACK_HOURS, default 4, and not final) -- 2026-11-23: live jobs run during games;
 #   - no item or trial count cap (AUTORESEARCH_TRIALS default 100000); a chunk is bounded by time: soft AUTORESEARCH_MINUTES (15)
-#     passed as --max-minutes, guard hard limit = soft + AUTORESEARCH_HARD_MARGIN_MINUTES (30; NBA/NHL/NCAAB items are atomic, time is
-#     only checked between items; NBA/NHL add the v2 queue's soft budget and one trial timeout); per-trial --timeout; --max-rss-gb 6;
-#   - the per-RUN window: AUTORESEARCH_TOTAL_MINUTES (170), shortened to AUTORESEARCH_STOP_AT (local HH:MM, default 08:55, empty = off)
-#     when the run starts before it on the same local date (release the heavy lock before adaptive-train's 09:30 start). A chunk
-#     starts only if >= AUTORESEARCH_MIN_START_SECONDS (360) remain.
+#     passed as --max-minutes (NBA/NHL use it twice, v3 queue then v2 queue, so their soft budget is (minutes left - 4 - one trial
+#     timeout) / 2); guard hard limit = soft + AUTORESEARCH_HARD_MARGIN_MINUTES (30) for every sport, plus for NBA/NHL the v2 queue's soft
+#     budget and one trial timeout. It is a stuck-process limit, not a work limit: NBA/NHL/NCAAB items are atomic, time is only checked
+#     between items. Per-trial --timeout; --max-rss-gb 6;
+#   - the per-RUN window: AUTORESEARCH_TOTAL_MINUTES (170). Quiet period, local HH:MM: from AUTORESEARCH_STOP_AT (08:55) to
+#     AUTORESEARCH_RESUME_AT (16:30) a run starts nothing (prints it, exit 0, state untouched); a run that starts before STOP_AT the same
+#     day gets min(TOTAL, time to STOP_AT); from RESUME_AT the full TOTAL. STOP_AT empty turns the rule off; a malformed STOP_AT/RESUME_AT
+#     (or RESUME_AT not later than STOP_AT) refuses with exit 78. The run only stops STARTING chunks, and a healthy chunk is sized to end
+#     by STOP_AT, so that the heavy lock is likely free for adaptive-train's 09:30 start; one atomic item can still overrun (no guarantee).
+#     A chunk starts only if >= AUTORESEARCH_MIN_START_SECONDS (360) remain (NBA/NHL: plus one trial timeout).
 # Resumable queue: prepare.py only scores what has no record (Soccer's walk stores a .partial.json), so work left by a chunk is picked
 # up by the next one. Round-robin passes: pass 1 runs one chunk for every sport that is not done today (longest since last success
 # first); further passes run one more chunk for each sport whose outcome is `pending`, until none is pending or the window ends.
@@ -23,8 +28,9 @@
 # `sport-outcome: <sport> <combined> v3=.. [v2=..]`; without that line nothing counts as evaluated (rc 0 alone is `failed`).
 # `pending` = work remains and progress is stored. Decided from the report file named on the evaluator's last stdout line
 # (`sports.<s>.queue.remaining > 0`; nba/nhl `v2.stopped` = trial/time budget reached); without a readable report, from the reason
-# (skipped: "budget reached", "candidates pending", "incumbent scoring incomplete"; evaluated: "; N queued"). A chunk that ends
-# pending although nothing advanced since the previous chunk is `failed` (stuck), so nothing can loop. A later chunk refused by the
+# (skipped: "budget reached", "candidates pending", "incumbent scoring incomplete"; evaluated: "; N queued"; the same-day gate only matches "total wall cap reached" and "budget reached"). A chunk that ends
+# pending although nothing advanced since the previous chunk (queue.done, v2 trials, items.jsonl and partial-file sizes) is `failed` (stuck)
+# if it had the full soft budget, else stays `pending` and is not retried in this run, so nothing can loop. An unreadable report file is `failed`. A later chunk refused by the
 # guard leaves the sport `pending` (not retried again in this run).
 # last_success is set ONLY by a complete `evaluated`; `no_candidates` is kept as last_outcome and is not counted as scored.
 # State (read by the status page, columns 1-5 by position): $AUTORESEARCH_HOME/daily-state.tsv, one row per sport, rewritten after
@@ -68,6 +74,8 @@ MARGIN_MIN="${AUTORESEARCH_HARD_MARGIN_MINUTES:-30}"
 TIMEOUT="${AUTORESEARCH_TRIAL_TIMEOUT:-600}"
 TOTAL_S="${AUTORESEARCH_TOTAL_SECONDS:-$(( ${AUTORESEARCH_TOTAL_MINUTES:-170} * 60 ))}"
 STOP_AT="${AUTORESEARCH_STOP_AT-08:55}"
+RESUME_AT="${AUTORESEARCH_RESUME_AT-16:30}"
+PY="${LEARNING_PYTHON:-python3}"
 MIN_START_S="${AUTORESEARCH_MIN_START_SECONDS:-360}"
 STATE="$HOME_AR/daily-state.tsv"
 ALL="nba,nhl,ncaab,nfl,soccer"
@@ -77,32 +85,45 @@ today=$(date +%F)
 local_date() { python3 -c 'import sys; from datetime import datetime, timezone
 print(datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone().strftime("%Y-%m-%d"))' "$1" 2>/dev/null; }
 field() { awk -F'\t' -v s="$1" -v n="$2" '$1==s {print $n}' "$STATE" 2>/dev/null | head -1; }
-# seconds from now until local HH:MM today; empty when it is not a valid HH:MM or has already passed
-secs_until() { python3 -c 'import sys; from datetime import datetime
-h, m = sys.argv[1].split(":"); n = datetime.now()
-d = (n.replace(hour=int(h), minute=int(m), second=0, microsecond=0) - n).total_seconds()
-print(int(d) if d > 0 else "")' "$1" 2>/dev/null; }
+# quiet-period rule for local HH:MM $1 (stop) and $2 (resume): prints `before <seconds to stop>`, `quiet` or `after`; exit 1 when either
+# is not a valid HH:MM or resume is not later than stop (the caller refuses: fail closed, never a silently missing stop)
+window_rule() { "$PY" -c 'import re, sys; from datetime import datetime
+def m(x):
+    g = re.fullmatch(r"([0-9]{1,2}):([0-9]{2})", x)
+    if not g or int(g[1]) > 23 or int(g[2]) > 59: raise ValueError(x)
+    return int(g[1]) * 60 + int(g[2])
+try:
+    a, b = m(sys.argv[1]), m(sys.argv[2])
+    if b <= a: raise ValueError("resume")
+except ValueError: sys.exit(1)
+n = datetime.now(); cur = n.hour * 60 + n.minute + n.second / 60
+print("before %d" % max(int((a - cur) * 60), 1) if cur < a else ("quiet" if cur < b else "after"))' "$1" "$2"; }
 # per-sport values live in variables NAME_<sport> (bash 3.2: no associative arrays)
 setv() { printf -v "$1_$2" '%s' "$3"; }
 getv() { local n="$1_$2"; printf '%s' "${!n}"; }
-# What the chunk's report file says (the evaluator's last stdout line is JSON naming it): `have|remain|adv|sig|next_item`.
-# have=0 when no report is readable; remain=1 when v3 queue.remaining > 0 or the v2 queue stopped on a budget; adv=1 when v2 ran trials;
-# sig = queue.done + size/mtime of the v3 items/*.partial.json files (a change means progress since the previous chunk).
-probe() { python3 - "$1" "$2" <<'PY' 2>/dev/null || echo "0|0|0||"
+# What the chunk's report file says (the evaluator's last JSON stdout line names it): `state|remain|adv|sig|next_item`.
+# state 1 = report read; 0 = no JSON line naming a report (only test stubs); 2 = a line names a report that cannot be read (next_item = its path).
+# remain=1 when v3 queue.remaining > 0 or the v2 queue stopped on a budget; adv=1 when v2 ran trials; sig = queue.done + size of the
+# sport's items.jsonl (a failed item is retried and logged there) + size/mtime of the v3 items/*.partial.json files: a change = progress.
+probe() { "$PY" - "$1" "$2" <<'PY' 2>/dev/null || echo "2|0|0||probe helper failed"
 import glob, hashlib, json, os, sys
 tmp, s = sys.argv[1:3]
 rf = None
 for ln in reversed(open(tmp, errors="replace").read().splitlines()):
-    if ln.strip().startswith("{"):
-        try:
-            d = json.loads(ln)
-            rf = d["report_file"]
-            rep = json.load(open(rf))
-        except Exception:
-            rf = None
+    try:
+        d = json.loads(ln)
+    except ValueError:
+        continue
+    if isinstance(d, dict) and "report_file" in d:
+        rf = str(d["report_file"])
         break
-if rf is None or not isinstance(rep, dict):
+if rf is None:
     print("0|0|0||"); sys.exit()
+try:
+    rep = json.load(open(rf))
+    assert isinstance(rep, dict)
+except Exception:
+    print("2|0|0||" + rf); sys.exit()
 sp = (rep.get("sports") or {}).get(s) or {}
 q = sp.get("queue") or {}
 v2 = rep.get("v2") or {}
@@ -112,10 +133,11 @@ remain = 1 if ((q.get("remaining") or 0) > 0 or (s in ("nba", "nhl") and v2.get(
 parts = []
 pid = sp.get("protocol_id")
 if pid:
-    exp = os.path.dirname(os.path.dirname(rf))
-    for f in sorted(glob.glob(os.path.join(exp, "v3", pid, s, "items", "*.partial.json"))):
+    base = os.path.join(os.path.dirname(os.path.dirname(rf)), "v3", pid, s)
+    files = sorted(glob.glob(os.path.join(base, "items", "*.partial.json"))) + [os.path.join(base, "items.jsonl")]
+    for f in files:
         try:
-            st = os.stat(f); parts.append((os.path.basename(f), st.st_size, st.st_mtime_ns))
+            st = os.stat(f); parts.append((os.path.basename(f), st.st_size, st.st_mtime_ns if f.endswith(".partial.json") else 0))
         except OSError:
             pass
 sig = hashlib.md5(repr((q.get("done"), parts)).encode()).hexdigest()
@@ -131,13 +153,20 @@ remains_by_reason() {   # $1 outcome, $2 reason
   return 1
 }
 
-# the run window: TOTAL, or until STOP_AT when the run starts before it on this local date
+# the run window: TOTAL; before STOP_AT the same local day it ends there (adaptive-train's heavy-lock run starts at 09:30); between
+# STOP_AT and RESUME_AT nothing starts. STOP_AT empty turns the rule off; a malformed value refuses (nothing started).
 WIN_S=$TOTAL_S
 if [ -n "$STOP_AT" ]; then
-  u=$(secs_until "$STOP_AT"); case "$u" in ''|*[!0-9]*) ;; *) [ "$u" -lt "$WIN_S" ] && WIN_S=$u ;; esac
+  rule=$(window_rule "$STOP_AT" "$RESUME_AT") || { echo "refused: AUTORESEARCH_STOP_AT='$STOP_AT' / AUTORESEARCH_RESUME_AT='$RESUME_AT' must be local HH:MM with resume later than stop"; exit 78; }
+  case "$rule" in
+    quiet) echo "autoresearch-daily: quiet period $STOP_AT-$RESUME_AT local: nothing started"; exit 0 ;;
+    before\ *) u=${rule#before }; [ "$u" -lt "$WIN_S" ] && WIN_S=$u ;;
+  esac
 fi
 T0=$(date +%s)
 window_left() { echo $(( WIN_S - ($(date +%s) - T0) )); }
+# room a chunk needs: NBA/NHL also run the v2 queue, whose last trial may run to its --timeout
+need_s() { case "$1" in nba|nhl) echo $((MIN_START_S + TIMEOUT)) ;; *) echo "$MIN_START_S" ;; esac; }
 echo "autoresearch-daily: window_s=$WIN_S total_s=$TOTAL_S stop_at=${STOP_AT:--}"
 
 ORDER=$(i=0; for s in $SPORTS; do i=$((i + 1)); ls=$(field "$s" 4); echo "${ls:-0} $i $s"; done | sort | awk '{print $3}')
@@ -163,7 +192,9 @@ set_row() {   # $1 sport; uses at, OUT_, LS_, reason, CNT_
 run_chunk() {
   local s=$1 mins remaining win rc wall t1 stated outcome pr have remain adv sig next line prevn hard
   at=$(now); remaining=$(window_left); reason=""
-  mins=$(( remaining / 60 - 4 )); [ "$mins" -gt "$PER_MIN" ] && mins=$PER_MIN; [ "$mins" -lt 1 ] && mins=1
+  mins=$(( remaining / 60 - 4 ))
+  case "$s" in nba|nhl) mins=$(( (mins - (TIMEOUT + 59) / 60) / 2 )) ;; esac     # the soft budget is used twice: v3 queue, then v2 queue
+  [ "$mins" -gt "$PER_MIN" ] && mins=$PER_MIN; [ "$mins" -lt 1 ] && mins=1
   if [ "$s" = soccer ]; then win=(--defer-hours 0.75 --lookback-hours 0); else win=(--defer-hours 2.5); fi
   # stuck-process limit (never a work limit): soft budget + margin; NBA/NHL then run the v2 queue with its own soft budget, whose
   # last trial may run to its --timeout
@@ -203,12 +234,18 @@ run_chunk() {
     IFS='|' read -r have remain adv sig next <<EOP
 $(probe "$tmp" "$s")
 EOP
-    if [ "$have" = 1 ]; then [ "$remain" = 1 ] && outcome=pending
+    if [ "$have" = 2 ]; then outcome=failed; reason="the evaluator's report file could not be read: $next"
+    elif [ "$have" = 1 ]; then [ "$remain" = 1 ] && outcome=pending
+    elif [ "$outcome" = evaluated ] && [ "$rc" != 0 ]; then outcome=failed; reason="rc $rc after an evaluated line without a report"
     elif remains_by_reason "$outcome" "$reason"; then outcome=pending; fi
-    if [ "$outcome" = pending ]; then
-      # no progress in a full chunk: the report's queue/partial signature (or v2 trials) did not move, or (no report) the same line twice
-      if [ "$prevn" -gt 0 ] && { { [ "$have" = 1 ] && [ "$adv" = 0 ] && [ "$sig" = "$(getv SIG "$s")" ]; } || { [ "$have" = 0 ] && [ -n "$line" ] && [ "$line" = "$(getv LINE "$s")" ]; }; }; then
-        outcome=failed; reason="no progress in a full chunk at ${next:-the next item} (stuck, or one item needs longer than a chunk)"
+    if [ "$outcome" = pending ] && [ "$prevn" -gt 0 ]; then
+      # no progress since the previous chunk: the report's signature (or v2 trials) did not move, or (no report) the same line twice
+      if { [ "$have" = 1 ] && [ "$adv" = 0 ] && [ "$sig" = "$(getv SIG "$s")" ]; } || { [ "$have" = 0 ] && [ -n "$line" ] && [ "$line" = "$(getv LINE "$s")" ]; }; then
+        if [ "$mins" -ge "$PER_MIN" ]; then
+          outcome=failed; reason="no progress in a full chunk at ${next:-the next item} (stuck, or one item needs longer than a chunk)"
+        else      # a short last chunk may stop on its time budget before any item runs: not a verdict
+          reason="no progress in a short chunk ($mins min); not retried in this run"; setv BLK "$s" 1
+        fi
       fi
     fi
   elif [ "$rc" = 75 ] && [ "$prevn" -gt 0 ]; then
@@ -230,7 +267,7 @@ for s in $ORDER; do
   if [ "$prev" -gt 0 ] && [ -n "$last_at" ] && [ "$(local_date "$last_at")" = "$today" ]; then
     case "$last_out" in
       refused|pending) ;;
-      skipped) case "$last_reason" in "total wall cap reached"*|*"budget reached"*|*"candidates pending"*|*"incumbent scoring incomplete"*) ;; *) done_why="$last_out" ;; esac ;;
+      skipped) case "$last_reason" in "total wall cap reached"*|*"budget reached"*) ;; *) done_why="$last_out" ;; esac ;;
       evaluated) remains_by_reason evaluated "$last_reason" || done_why="$last_out" ;;
       *) done_why="$last_out" ;;
     esac
@@ -241,9 +278,9 @@ for s in $ORDER; do
     continue
   fi
   N=$((N + 1))
-  setv CNT "$s" "$prev"; setv NCH "$s" 0; setv SIG "$s" ""; setv LINE "$s" ""; setv BLK "$s" ""; setv LS "$s" "$(field "$s" 4)"
+  setv CNT "$s" "$prev"; setv NCH "$s" 0; setv SIG "$s" ""; setv LINE "$s" ""; setv BLK "$s" ""; setv WOV "$s" ""; setv LS "$s" "$(field "$s" 4)"
   left=$(window_left)
-  if [ "$left" -lt "$MIN_START_S" ]; then
+  if [ "$left" -lt "$(need_s "$s")" ]; then
     at=$(now); reason="total wall cap reached (${left}s left)"; setv OUT "$s" skipped      # never started: not a chunk
     echo "autoresearch-daily: sport=$s outcome=skipped rc=0 wall_s=0 reason=$reason"
     set_row "$s"
@@ -252,25 +289,22 @@ for s in $ORDER; do
   fi
 done
 
-# further passes: one more chunk for each pending sport, until none is pending or the window ends
-window_over=0
-while [ "$window_over" = 0 ]; do
+# further passes: one more chunk for each pending sport, until none is pending or can still start in the window
+while :; do
   anyp=0
   for s in $RAN; do
     [ "$(getv OUT "$s")" = pending ] && [ -z "$(getv BLK "$s")" ] || continue
-    if [ "$(window_left)" -lt "$MIN_START_S" ]; then window_over=1; break; fi
+    if [ "$(window_left)" -lt "$(need_s "$s")" ]; then setv BLK "$s" 1; setv WOV "$s" 1; continue; fi
     anyp=1; run_chunk "$s"
   done
   [ "$anyp" = 0 ] && break
 done
-if [ "$window_over" = 1 ]; then
-  for s in $RAN; do
-    if [ "$(getv OUT "$s")" = pending ] && [ -z "$(getv BLK "$s")" ]; then
-      at=$(now); reason="run window ended ($(( $(date +%s) - T0 ))s of ${WIN_S}s) with work remaining: $(getv ROW "$s" | cut -f5)"
-      set_row "$s"; echo "autoresearch-daily: sport=$s outcome=pending reason=$reason"
-    fi
-  done
-fi
+for s in $RAN; do
+  if [ "$(getv OUT "$s")" = pending ] && [ -n "$(getv WOV "$s")" ]; then
+    at=$(now); reason="run window ended ($(( $(date +%s) - T0 ))s of ${WIN_S}s) with work remaining: $(getv ROW "$s" | cut -f5)"
+    set_row "$s"; echo "autoresearch-daily: sport=$s outcome=pending reason=$reason"
+  fi
+done
 
 NRUN=0; NNC=0; NREF=0; NFAIL=0; NPEND=0
 for s in $RAN; do
