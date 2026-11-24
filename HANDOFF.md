@@ -1,3 +1,57 @@
+## Resumable research runs + five-sport completion — branch research-resume 0097440, RELEASED to delivery (2026-11-24 ~03:00Z) — Claude Fable 5.2 (lead)
+- RESULT (verified 2026-11-24 07:30Z, `python3 -I <evidence>/verify_results.py` -> PROBLEMS: 0; output in evidence/after/verify_results.txt):
+  all five v3 studies `evaluated`, queue.remaining 0, no failed item, no item scored twice; pinned code in every run (runner-runs.jsonl:
+  app-23df530, files fac8c6988092dff4, rc 0, no `problem`). No candidate kept in any sport; nothing promoted.
+  - NBA (label "recovery of 2026-11-23 06:00", 07:14Z, 49 s): v3 8732ea3dca99 20/20 (14 new, the 6 of Nov 22 kept), 10 candidates, none kept.
+    v2 e49eae253e6a: queue empty, 0 new trials (its one train.py version was tried Nov 22: discard) = no improvement found.
+  - NHL (same label, 07:15Z, 64 s): v3 7caea41a88ae 12/12 (all new), 5 candidates, none kept. v2 ba9372fa1e0f registered by this run (the id
+    PIN.json already named): 1 trial, `keep` on reg3 only (log loss 1.0315 vs goals_draw 1.0349; exploratory, one version searched, NOT a
+    promotion). The invalid Nov 23 trial (9cb21e25c613) was not reused.
+  - NCAAB (label "resume of 2026-11-23 06:00 budget-limited runs", 07:16Z, 122 s): v3 df7a114fb452 7/7 (4 new, the 3 of Nov 23 kept), 3
+    candidates, none kept; 12 "reference-line beat(s) need human review" (3 candidates x spread/total/team totals, graded at the market-free
+    reference line because no bookmaker history exists: never a bookmaker result, never auto-kept). Winner market: no keep.
+  - Soccer (same label, 07:18Z, 697 s): v3 36f6ce89df68 12/12 (10 new, the 2 of Nov 23 kept; corners_nb_sealed finished from its stored
+    partial in 11 s), 4 candidates, none kept.
+  - NFL: unchanged since 2026-11-23 11:15Z (6/6, 2 candidates, none kept); not rerun.
+  - Unchanged (sha256 before = after): both study-cache files, audit.jsonl (12 entries) + audit.head, PIN.json, workspace/prepare.py;
+    app-23df530 clean at 23df530; the earlier items.jsonl lines are a byte-identical prefix of the new files (NBA 6, NCAAB 3, NFL 6, Soccer 2).
+- Why NCAAB/Soccer never finished before (verified in the wrapper): it passed `--max-trials 3` and recorded the evaluator's budget stop
+  (`skipped: item budget reached` / `time budget reached`) and `evaluated ...; N queued` as done for the day. Evaluator untouched (it already
+  scores each item once and resumes); no study identity, pin, cache or audit entry changed.
+- Change (scripts/autoresearch_daily.sh only, + template, tests, docs, one docstring): outcome `pending` when the report says work remains
+  (never done_today, never last_success); no item cap (AUTORESEARCH_TRIALS 100000) and no daily attempt cap (column 6 is a chunk counter);
+  round-robin guarded chunks (soft AUTORESEARCH_MINUTES 15; the guard is asked again before every chunk); stuck-process limit = soft + 30 min
+  (NBA/NHL: twice the soft budget + the v2 trial timeout) - a kill limit, not a work limit; per-run window 170 min, nothing starts
+  08:55-16:30 local (adaptive-train 09:30/15:30; malformed times exit 78); full chunk without progress -> `failed` with the item named,
+  short chunk -> stays pending; unreadable named report -> `failed`. Memory limit (6 GB), heavy lock, game windows and live-forecast
+  priority are unchanged and still enforced by app.learning_run.
+- Schedule INSTALLED 2026-11-24 ~07:35Z: 04:00, 05:00, 06:00, 07:30 local (was 06:00, 11:10, 13:10). `plutil -p` diff installed vs template
+  showed only the start times; installed file == delivery template; bootout + bootstrap of that one job; launchctl print lists the four
+  slots. Before/after plists in evidence. First run on the new slots not yet observed when this entry was written.
+- Recovery loop: evidence recovery2.sh (asked the guard first, then the released wrapper); guard refused 03:04Z-07:14Z (games), then both
+  phases ran once; `all four final 2026-11-24T07:30:21Z`. Log: ~/nba-predictor-research-data/pin-repair-2026-11-23/recovery.log.
+- Review: one independent Opus review of e8b9250+96554ec: REQUEST CHANGES (high: an item failure retried by the evaluator was marked
+  `failed`; medium: NBA/NHL budget used twice, a late start ran into 09:30, a short last chunk failed a healthy sport; low: unreadable
+  report, gate text, weak assertions, docs) -> all fixed test-first in 26d3201 -> re-review APPROVE. 0097440 (the reviewer's last low item,
+  one line) was not re-reviewed.
+- Tests: targeted `pytest tests/test_autoresearch_scheduled.py tests/test_research_status.py -q` (worktree backend): 228 passed. Full
+  backend suite once at 0097440 (6 chunks, evidence/test-output): 3,353 = 3,344 passed + 1 skipped + 8 FAILED (test_deep_study, the known
+  torch/keras environment failures of the last release; NOT rerun in the nba-predictor-deep env this time). Not fully green. Frontend
+  not rerun (no frontend change).
+- Live: every sport finished inside its first chunk, so the multi-chunk `pending` path ran in tests only (three-chunk run, round-robin,
+  item-failure retry, soccer partial growth, guard refusal mid-run), not on real data.
+- NOT DONE: no entry in data/reports/weekly_report_review.json for 0097440 or for this notes commit: no independent recorder review was made.
+  Static facts for whoever writes it: diff 5ded396..0097440 = the 5 files above; backend/app/research_status.py is AST-identical apart from
+  one docstring; best_pick_record.py sha256 7cc3e6e1 unchanged. Until an entry exists, rows recorded at these commits do not count.
+- OPEN: (1) 20 other scripts/launchd templates still point at nba-predictor-sprint1 - separate, unresolved; do not install without a diff.
+  (2) NCAAB 12 reference-line flags need a human look. (3) A soccer walk that rewrites its partial forever would stay pending (bounded by the
+  run window, no verdict). (4) `today` is fixed at run start (a run crossing local midnight counts as the old day). (5) probe-helper failure
+  reports "report file could not be read". (6) The heavy lock is likely, not guaranteed, free at 09:30 (one atomic item can overrun).
+  (7) Two wrappers at once (a manual run during a scheduled slot) are serialised only by the heavy lock: rows may alternate
+  refused/pending; no single-instance lock.
+- ROLLBACK: schedule: copy evidence/before/com.nba-predictor.autoresearch-daily.plist back, bootout + bootstrap. Wrapper: checkout 5ded396 +
+  pin (old caps return; study progress is unaffected either way). Evidence: ~/nba-predictor-research-data/research-resume-2026-11-23/.
+
 ## Research pin repair + audit + research-6 — branch pin-repair 16de9b8, RELEASED to delivery (2026-11-23 ~15:50Z) — Claude Opus 5.5 (lead)
 - What broke (verified): 2026-11-23 06:00 the research run loaded the LIVE checkout (dd11fb6, app 63922174) not the pin (23df530, fac8c698):
   prepare.py sets PYTHONPATH, `python -m` puts the cwd (delivery/backend) first. NBA/NHL v3 refused (cache keyed by the app), v2 ran one trial
