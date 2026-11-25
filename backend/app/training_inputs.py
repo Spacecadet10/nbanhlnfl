@@ -5,8 +5,8 @@ and checks it; `adaptive-train` (weekly, then `--cadence daily`) refuses unless 
 forecasts with the fits in force; the nightly jobs settle; the status panel reports.
 
 Why the check gates training. Some inputs retire a fitted member when they arrive after its fit:
-- NHL player boxes: the NHL injury member's guard digests the whole box folder (nhl_player_ratings input_mismatch), so a box
-  added after a fit retires the member until the next fit. Boxes are therefore collected here, last, only once every other
+- NHL player boxes: the NHL injury member's guard digests the boxes of the results its fit was offered (nhl_player_ratings
+  input_mismatch), so a box arriving after the fit for one of those retires the member until the next fit. Boxes are therefore collected here, last, only once every other
   gate has passed (a run that defers training adds none), right before training, and nowhere in the two-hour cycle. They
   never gate training: once one has arrived the member is retired until the next fit anyway, and training is how it comes
   back (without a missing box only that team's games lack it). A box collection that fails marks the run failed (visible)
@@ -230,8 +230,12 @@ def collect_boxes(conn) -> dict:
     folder = nhl_injuries.root() / "boxes"
     quarantined = _quarantine_unreadable_boxes(folder) if folder.is_dir() else []
     out = nhl_box_collect.collect(conn, season, season, delay=1.)
-    broken = out["failed"] or out["missing"]
-    return {"status": ("partial" if out["stored"] else "failed") if broken else "success", **out, "errors": out["errors"][:10],
+    # A game the source itself has no complete box for stops alarming once it is older than RECENT (check reports it on); a
+    # request that failed always counts, whatever the game's age.
+    old = set(out.get("unavailable") or ()) - _recent(conn, _now())
+    errors = [e for e in out["errors"] if e.get("game_id") not in old]
+    broken = errors or out["missing"] > len(old)
+    return {"status": ("partial" if out["stored"] else "failed") if broken else "success", **out, "errors": errors[:10],
             "quarantined": quarantined}
 
 
@@ -285,7 +289,10 @@ def run(conn, now: Optional[str] = None, collect: bool = True) -> dict:
         c = check(conn, now)
     except Exception as exc:
         c = {"ready": False, "blocking": {"check": f"{type(exc).__name__}: {exc}"}, "report": {}}
-    failed = sorted(k for k, v in steps.items() if _incomplete(v))
+    report = c.get("report") or {}         # what is still missing after steps that called themselves skipped or successful
+    still = {"nhl_shots": (report.get("nhl_shots") or {}).get("given_up"),
+             "nba_team_boxes": (report.get("nba_team_boxes") or {}).get("recent_missing")}
+    failed = sorted({k for k, v in steps.items() if _incomplete(v)} | {k for k, v in still.items() if v})
     detail = {"steps": {k: (v.get("status") if isinstance(v, dict) else v) for k, v in steps.items()}, "failed_steps": failed,
               "check": c}
     # 'failed' when training must wait OR a collector failed (visible on the panel); `ready` alone decides training.

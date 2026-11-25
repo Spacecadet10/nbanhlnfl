@@ -860,19 +860,24 @@ def _player_box_refresh(folder, season: int, get) -> dict:
 COLLECTION_STEPS = ("refresh", "boxscores", "player_box", "nhl_pbp")
 
 
-def _attention(out: dict) -> dict:
+REFRESH_STALE = timedelta(hours=26)
+
+
+def _attention(conn: sqlite3.Connection, out: dict) -> dict:
     """What a nightly run must not pass over in silence although nothing in it failed outright (cli exits PARTIAL): a step that
-    got only part of its data, results refresh that has gone stale, or training inputs whose last collection failed or is old.
-    Stale odds are normal while no game is near; they are not listed."""
+    got only part of its data, a results refresh that keeps failing or is old (its last SUCCESS: a skipped run proves nothing),
+    or training inputs whose last collection failed or is old. Old odds are normal while no game is near; they are not listed."""
     found = [{"input": k, "reason": "part of the data could not be collected"} for k in COLLECTION_STEPS
              if isinstance(out.get(k), dict) and (out[k].get("status") == "partial" or out[k].get("errors"))]
-    for name in ("refresh", "training_inputs"):
-        i = (out.get("training_check") or {}).get("inputs", {}).get(name) or {}
-        failure = i.get("last_failure") if name == "training_inputs" else None
-        if failure:
-            found.append({"input": name, "reason": failure.get("reason"), "at": failure.get("at"), "last_success": i.get("last_success")})
-        elif i.get("stale"):
-            found.append({"input": name, "reason": "stale", "last_success": i.get("last_success")})
+    r = out.get("refresh") or {}
+    failures, last = (r.get("policy") or {}).get("failures") or 0, last_success(conn, "refresh")
+    if r.get("status") != "success" and (failures or last is None or _parse(last) < datetime.now(timezone.utc) - REFRESH_STALE):
+        found.append({"input": "refresh", "reason": f"{failures} failed refresh(es) since the last success" if failures else "stale",
+                      "last_success": last})
+    i = (out.get("training_check") or {}).get("inputs", {}).get("training_inputs") or {}
+    if i.get("last_failure") or i.get("stale"):
+        found.append({"input": "training_inputs", "reason": (i.get("last_failure") or {}).get("reason", "stale"),
+                      "at": (i.get("last_failure") or {}).get("at"), "last_success": i.get("last_success")})
     return {**out, "attention": found, "outcome": "attention" if found else "success"}
 
 
@@ -902,7 +907,7 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
         out["adaptive_train"] = {"status": "not_defined", "reason": "NCAAB has no adaptive or research forecasts"}
         return _attention(out)
     out["adaptive_train"] = adaptive_train(conn) if research_live.enabled() else {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
-    return _attention(out)
+    return _attention(conn, out)
 
 
 def recover_missed(conn: sqlite3.Connection) -> dict:
