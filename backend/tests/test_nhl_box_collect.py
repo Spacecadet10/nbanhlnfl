@@ -101,13 +101,52 @@ def test_one_game_the_source_does_not_have_yet_never_stops_the_others(tmp_path, 
     api["absent"] = {2026020345}
     out = nhl_box_collect.collect(games_db(6), 2027, 2027, directory=tmp_path)
     assert (out["stored"], out["failed"], out["missing"]) == (5, 1, 1)
-    assert [e["game_id"] for e in out["errors"]] == ["nhl:2026020345"]
+    assert [e["game_id"] for e in out["errors"]] == out["unavailable"] == ["nhl:2026020345"]
 
 
 def test_a_network_error_on_one_batch_never_stops_the_others(tmp_path, api):
     api["raise"] = {2026020344}
     out = nhl_box_collect.collect(games_db(6), 2027, 2027, directory=tmp_path)
     assert (out["stored"], out["failed"], out["missing"]) == (4, 2, 2), out
+
+
+@pytest.mark.parametrize("how", ["raise", 503])
+def test_an_outage_stops_after_two_failed_requests_in_a_row(tmp_path, api, how):
+    """The collector holds the store lock: 21 timeouts in a row would cost the two-hour forecasts."""
+    ids = range(2026020344, 2026020400)
+    api.update({"raise": set(ids)} if how == "raise" else {"status": dict.fromkeys(ids, how)})
+    out = nhl_box_collect.collect(games_db(42), 2027, 2027, directory=tmp_path)
+    assert len(api["requests"]) == 2 and (out["failed"], out["not_requested"], out["missing"]) == (4, 38, 42), out
+
+
+def test_a_slow_source_stops_at_the_time_limit(tmp_path, api, monkeypatch):
+    clock = iter(range(0, 10000, 100))
+    monkeypatch.setattr(nhl_box_collect.time, "monotonic", lambda: next(clock))
+    out = nhl_box_collect.collect(games_db(42), 2027, 2027, directory=tmp_path, max_seconds=250)
+    assert 0 < out["stored"] < 42 and out["not_requested"] == 42 - out["stored"] == out["missing"], out
+
+
+def test_a_torn_raw_file_under_the_right_name_is_replaced_by_the_right_bytes(tmp_path, api):
+    conn, boxes = games_db(2), tmp_path / "boxes"
+    nhl_box_collect.collect(conn, 2027, 2027, directory=boxes)
+    for p in boxes.glob("2026*.json"):
+        p.unlink()
+    raw = next(boxes.glob("bulk-skater-*.raw"))
+    raw.write_bytes(b"{torn")
+    assert nhl_box_collect.collect(conn, 2027, 2027, directory=boxes)["stored"] == 2
+    assert len(pr.Inputs(tmp_path).boxes) == 2
+
+
+def test_a_file_another_run_wrote_meanwhile_is_kept_and_not_counted(tmp_path, api, monkeypatch):
+    real = nhl_box_collect._fetch
+
+    def meanwhile(client, batch, delay):
+        (tmp_path / "2026020344.json").write_text("theirs")
+        return real(client, batch, delay)
+    monkeypatch.setattr(nhl_box_collect, "_fetch", meanwhile)
+    out = nhl_box_collect.collect(games_db(2), 2027, 2027, directory=tmp_path)
+    assert (out["stored"], out["failed"], out["missing"]) == (1, 0, 0)
+    assert (tmp_path / "2026020344.json").read_text() == "theirs"
 
 
 @pytest.mark.parametrize("code", [403, 429])
@@ -152,7 +191,7 @@ def ready(store, monkeypatch):
 
 
 def boxes(monkeypatch, **kw):
-    out = {"stored": 0, "cached": 0, "failed": 0, "missing": 0, "not_requested": 0, "errors": [], **kw}
+    out = {"stored": 0, "cached": 0, "failed": 0, "missing": 0, "not_requested": 0, "errors": [], "unavailable": [], **kw}
     monkeypatch.setattr(nhl_box_collect, "collect", lambda conn, a, b, **k: out)
 
 
@@ -168,6 +207,28 @@ def test_a_failed_required_step_exits_3_and_names_itself(ready, monkeypatch, cap
     assert out["steps"]["nhl_player_boxes"]["status"] == step
     from app import training_monitor
     assert "nhl_player_boxes" in training_monitor.status(ready)["inputs"]["training_inputs"]["last_failure"]["reason"]
+
+
+@pytest.mark.parametrize("recent, code", [(True, 3), (False, 0)])
+def test_a_box_the_source_never_publishes_stops_alarming_when_it_is_old(ready, monkeypatch, capsys, recent, code):
+    """A request failure always shows; a game the source itself lacks shows while recent, then stays in the check's report."""
+    boxes(monkeypatch, stored=2, failed=1, missing=1, unavailable=["nhl:1"], errors=[{"game_id": "nhl:1", "error": "y"}])
+    monkeypatch.setattr(training_inputs, "_recent", lambda conn, now: {"nhl:1"} if recent else set())
+    assert cli.main(["--sport", "nhl", "training-inputs"]) == code
+    step = json.loads(capsys.readouterr().out)["steps"]["nhl_player_boxes"]
+    assert step["status"] == ("partial" if recent else "success") and step["unavailable"] == ["nhl:1"]
+
+
+@pytest.mark.parametrize("report, expect", [
+    ({"nhl_shots": {"given_up": ["nhl:1"]}}, ["nhl_shots"]),
+    ({"nba_team_boxes": {"recent_missing": 2}}, ["nba_team_boxes"]),
+    ({"nhl_shots": {"given_up": []}, "nba_team_boxes": {"recent_missing": 0}}, [])])
+def test_recent_inputs_still_missing_after_a_quiet_collection_are_named(ready, monkeypatch, capsys, report, expect):
+    """A step that waited for the network or gave up calls itself skipped or success; the check sees what is still missing."""
+    boxes(monkeypatch)
+    monkeypatch.setattr(training_inputs, "check", lambda conn, now=None: {"ready": True, "blocking": {}, "report": report})
+    assert cli.main(["--sport", "nhl", "training-inputs"]) == (3 if expect else 0)
+    assert json.loads(capsys.readouterr().out)["failed_steps"] == expect
 
 
 def test_a_complete_collection_exits_0(ready, monkeypatch, capsys):
@@ -189,31 +250,55 @@ def test_not_ready_still_exits_1(ready, monkeypatch, capsys):
     assert cli.main(["--sport", "nhl", "training-inputs"]) == 1
 
 
-def _daily(monkeypatch, inputs, **steps):
+def _daily(monkeypatch, store, inputs, pbp=None, refreshed_hours_ago=1, failures=0):
+    from datetime import datetime, timedelta, timezone
     from app import training_monitor
-    monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "skipped"})
-    monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: steps.get("pbp", {"status": "skipped", "errors": {}}))
-    monkeypatch.setattr(training_monitor, "status", lambda conn, now=None: {"inputs": inputs})
+    at = (datetime.now(timezone.utc) - timedelta(hours=refreshed_hours_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    store.execute("DELETE FROM job_runs WHERE job='refresh'")
+    store.execute("INSERT INTO job_runs (job, started_at, finished_at, status) VALUES ('refresh', ?, ?, 'success')", (at, at))
+    store.commit()
+
+    def backed_off(conn, **kw):
+        return jobs._finish(conn, jobs._start(conn, "refresh"), "skipped", 0, {"policy": {"failures": failures}})
+    monkeypatch.setattr(jobs, "refresh", backed_off)
+    monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: pbp or {"status": "skipped", "errors": {}})
+    if inputs is not None:
+        monkeypatch.setattr(training_monitor, "status", lambda conn, now=None: {"inputs": inputs})
+
+
+def _run_daily(capsys):
+    code = cli.main(["--sport", "nhl", "daily"])
+    out = json.loads(capsys.readouterr().out)
+    expect = [a["input"] for a in out["attention"]]
+    assert out["outcome"] == ("attention" if expect else "success") and code == (3 if expect else 0)
+    return expect
 
 
 OK = {"stale": False, "last_failure": None}
 
 
 @pytest.mark.parametrize("inputs, pbp, expect", [
-    ({"refresh": OK, "odds": OK, "training_inputs": OK}, None, []),
+    ({"training_inputs": OK}, None, []),
     ({"training_inputs": {"stale": False, "last_failure": {"at": "t", "reason": "collection step(s) failed: nhl_player_boxes"}}},
      None, ["training_inputs"]),
     ({"training_inputs": {"stale": True, "last_failure": None, "last_success": "2026-11-18T20:30:02Z"}}, None, ["training_inputs"]),
-    ({"refresh": {"stale": True, "last_failure": None}}, None, ["refresh"]),
     ({"odds": {"stale": True, "last_failure": None}}, None, []),                       # no game near: odds may rest
     ({}, {"status": "success", "imported": 2, "errors": {"nhl:1": "x"}}, ["nhl_pbp"])])
 def test_daily_names_what_needs_attention_and_never_exits_0_with_it(store, monkeypatch, capsys, inputs, pbp, expect):
-    _daily(monkeypatch, inputs, **({"pbp": pbp} if pbp else {}))
-    code = cli.main(["--sport", "nhl", "daily"])
-    out = json.loads(capsys.readouterr().out)
-    assert [a["input"] for a in out["attention"]] == expect
-    assert out["outcome"] == ("attention" if expect else "success")
-    assert code == (3 if expect else 0)
+    _daily(monkeypatch, store, inputs, pbp)
+    assert _run_daily(capsys) == expect
+
+
+def test_a_dead_results_refresh_never_passes_as_success(store, monkeypatch, capsys):
+    """After failures the plan backs off and `daily`'s own refresh is 'skipped': the training monitor counts that as a check, so
+    three dead days looked fresh. Real job_runs rows, the real monitor."""
+    _daily(monkeypatch, store, None, refreshed_hours_ago=72)
+    assert "refresh" in _run_daily(capsys)
+
+
+def test_a_refresh_that_is_backing_off_after_failures_is_named(store, monkeypatch, capsys):
+    _daily(monkeypatch, store, {"training_inputs": OK}, failures=2)
+    assert _run_daily(capsys) == ["refresh"]
 
 
 # --- the scheduled commands (the templates' own shell text, run with a stub interpreter) ------------------------------
