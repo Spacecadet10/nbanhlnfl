@@ -69,10 +69,12 @@ function Reconciliation({ d }: { d: PcReport }) {
     ...Object.entries(c.unknown_reasons).map(([k, n]): [string, React.ReactNode] => [`Unknown: ${UNKNOWN_LABEL[k] ?? k}`, n]),
     ['Recovered Nov 2–16 cards without a live forecast (colour unknown)', `${c.recovered_only.predictions}: ${tallyText(c.recovered_only)}`],
     ['All predictions, each counted once', c.combined_predictions],
-    ['Confirmed Telegram sends, last card before the start per game and market', c.sent],
+    ['Published picks in the Telegram ledger', c.sent_ledger_rows],
+    ['Confirmed Telegram sends, last card before the start per game and market', `${c.sent}${c.sent_confirmed_by_export ? ` (${c.sent_confirmed_by_export} confirmed by the owner’s Telegram export)` : ''}`],
     ...Object.entries(c.sent_excluded).map(([k, n]): [string, React.ReactNode] => [`Sends not counted: ${k.replace(/_/g, ' ')}`, n]),
+    ...Object.entries(c.sent_unknown_reasons).map(([k, n]): [string, React.ReactNode] => [`Sends with colour unknown: ${UNKNOWN_LABEL[k] ?? k}`, n]),
     ['Saved picks not started yet', c.upcoming_saved],
-    ['Every group adds up', c.adds_up ? 'Yes' : 'NO'],
+    ['Every group adds up', c.adds_up && c.sent_adds_up ? 'Yes' : 'NO'],
   ];
   return <details className="small"><summary>Reconciliation ({sportName(d.sport)}, every market and date; filters do not change it)</summary>
     <div className="table-wrap"><table className="table compare"><tbody>{lines.map(([k, v]) => <tr key={k}><th scope="row">{k}</th><td>{v}</td></tr>)}</tbody></table></div>

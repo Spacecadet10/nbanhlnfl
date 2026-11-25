@@ -1327,4 +1327,4 @@ export interface PcReport { sport: string; view: string; record: string; as_of: 
   by_market: { sport: string; market: string; title: string; all: PcTally; groups: Record<string, PcTally> }[]; by_percentage: { percentage: string; all: PcTally; groups: Record<string, PcTally> }[];
   views: Record<string, PcTally>; rows: PcRow[]; rows_total: number;
   reconciliation: { live_forecasts: PcTally; known_colour: number; unknown_colour: number; unknown_reasons: Record<string, number>; observed_live: number; observed_card_text: number; recovered_only: PcTally;
-    combined_predictions: number; recovered_note: string; sent: number; sent_excluded: Record<string, number>; upcoming_saved: number; adds_up: boolean } }
+    combined_predictions: number; recovered_note: string; sent: number; sent_excluded: Record<string, number>; sent_ledger_rows: number; sent_unknown_reasons: Record<string, number>; sent_confirmed_by_export: number; sent_adds_up: boolean; upcoming_saved: number; adds_up: boolean } }

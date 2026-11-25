@@ -17,7 +17,7 @@ def hist(sport="nba", market="winner", pct="60.0", w=3, l=1, p=0, v=0, side="a",
             "line_source": src, "wins": w, "losses": l, "pushes": p, "voids": v, "settled": w + l, "colour": to.bucket_colour(w, l),
             "colour_rule": to.COLOUR_RULE, "small_sample": True, "as_of": "2026-11-25T20:00:00Z",
             "history": {"wins": 1, "losses": 5, "colour": "red"},
-            "telegram": {"available": tg_ok, "reason": None if tg_ok else "no_rows_for_sport", "wins": tg[0] if tg_ok else None,
+            "telegram": {"available": tg_ok, "reason": None if tg_ok else "no_rows_for_sport", "no_history": (not any(tg)) if tg_ok else None, "wins": tg[0] if tg_ok else None,
                          "losses": tg[1] if tg_ok else None, "pushes": tg[2] if tg_ok else None, "voids": tg[3] if tg_ok else None,
                          "colour": to.bucket_colour(tg[0], tg[1]), "period": {"from": "2026-11-02", "to": "2026-11-16"}}}
 
@@ -384,7 +384,8 @@ def test_card_text_proves_the_colour_and_both_records():
 
 def test_a_neutral_block_is_proven_by_its_printed_record():
     e, _ = evidence(published("total", .57, "b", "2", line=220.5))
-    assert (e["colour"], e["wins"], e["losses"], e["recovered_colour"], e["recovered_wins"], e["recommended"]) == ("neutral", 2, 2, "neutral", 0, 0)
+    assert (e["colour"], e["wins"], e["losses"], e["recovered_colour"], e["recovered_wins"], e["recommended"]) == ("neutral", 2, 2, None, None, 0)
+    assert e["recovered_reason"] == "no_history" and ps.recovered_colour(e) == "no_record"
     e, _ = evidence(published("team_total_home", .51, "a", "3", line=109.5))
     assert (e["colour"], e["wins"], e["losses"], e["recovered_colour"]) == ("neutral", 0, 0, None)     # no recovered line on the card: not known
 
@@ -416,3 +417,79 @@ def test_the_backfill_is_repeatable_labelled_and_never_replaces_a_live_row(tmp_p
     assert first["written"] == 1 and again["written"] == 0
     assert [(r["event"], r["basis"], r["colour"]) for r in rows()] == [("seen", "live", "red"), ("sent", "card_text", "green")]
     assert ps.tracking_start(rows()) == "2026-11-25T20:00:00Z"
+
+
+# --- Independent review (Nov 25) ---------------------------------------------------------------------------------------
+def test_a_bucket_without_recovered_rows_is_no_record_never_0_0():
+    ps.observe("nba", rep(pick(h=hist(tg=(0, 0, 0, 0)))), T)
+    r, = rows()
+    assert (r["recovered_colour"], r["recovered_wins"], r["recovered_losses"], r["recovered_reason"]) == (None, None, None, "no_history")
+    assert ps.recovered_colour(r) == "no_record" and r["colour"] == "green"
+
+
+def test_a_recovered_bucket_with_only_pushes_is_a_neutral_record():
+    ps.observe("nba", rep(pick(h=hist(tg=(0, 0, 2, 0)))), T)
+    r, = rows()
+    assert (r["recovered_colour"], r["recovered_pushes"]) == ("neutral", 2)
+
+
+def test_a_price_at_a_line_the_book_has_left_is_not_executable():
+    ps.observe("nba", rep(total()), T, store=quotes(q(1, 220.5, "2026-11-25T19:50:00Z"), q(2, 219.5, "2026-11-25T19:58:00Z")))
+    r, = rows()
+    assert r["price_american"] is None and r["price_reason"] == "line_moved"
+
+
+def test_another_book_still_at_the_line_is_the_price():
+    other = list(q(1, 220.5, "2026-11-25T19:49:00Z", b=-102))
+    other[3] = "FanDuel"
+    ps.observe("nba", rep(total()), T, store=quotes(tuple(other), q(2, 220.5, "2026-11-25T19:50:00Z"), q(3, 219.5, "2026-11-25T19:58:00Z")))
+    r, = rows()
+    assert (r["price_provider"], r["price_american"]) == ("FanDuel", -102)
+
+
+def test_one_malformed_pick_never_stops_the_others_and_is_reported():
+    bad = pick("bad", fid=9)
+    bad["percentage_history"] = {"sport": "nba"}
+    none = pick("none", fid=8)
+    none["probability"] = None
+    assert ps.observe("nba", rep(bad, pick("good", fid=1), none), T) == -1            # visible as a failure
+    assert [r["game_id"] for r in rows()] == ["good"]
+
+
+def test_a_recommendation_that_cannot_be_read_is_unknown_not_no(monkeypatch):
+    from app import tickets
+    monkeypatch.setattr(tickets, "card_choice", lambda *a: (_ for _ in ()).throw(KeyError("x")))
+    ps.observe("nba", rep(pick()), T)
+    assert rows()[0]["recommended"] is None
+
+
+def test_a_sent_row_without_a_saved_colour_is_labelled_as_published():
+    pub = [dict(published(market="total", prob=.55, side="b", fid="5", line=113.5), published_id=1)]
+    it = item(market="total", fid="6", side="a", pick="PHX over 113.5")
+    out = ps.classify("nba", [it], [], pub, lambda s, i: "win", starts={"g1": START}, label=lambda p: "PHX under 113.5")
+    assert (out["sent"][0]["pick"], out["sent"][0]["side"], out["sent"][0]["grade"]) == ("PHX under 113.5", "b", "win")
+    assert ps.classify("nba", [it], [], pub, lambda s, i: "win", starts={"g1": START})["sent"][0]["pick"] is None
+
+
+def test_unconfirmed_sends_are_counted_as_excluded_and_every_ledger_row_is_accounted_for():
+    pub = [published(), dict(published(key="k2", market="total"), basis="uncertain_resolved_message_id_gap")]
+    out = ps.classify("nba", [item()], [], pub, lambda s, i: "win", starts={"g1": START})
+    assert len(out["sent"]) == 1 and out["excluded"] == {"delivery_not_confirmed": 1}
+
+
+def test_at_most_one_recommended_pick_per_game_the_last_one_before_the_start():
+    ps.observe("nba", rep(pick(fid=1)), T)                                                         # winner is recommended
+    a = pick(fid=1)
+    b = pick(fid=2, market="total", line=220.5, h=hist(market="total", src="bookmaker", w=9, l=0), gen="2026-11-25T20:10:00Z")
+    b["percentage_history"].update(rank=1, ranked=1)
+    ps.observe("nba", rep(a, b), T + timedelta(minutes=15))                                         # now the total is
+    last = {r["market"]: r["recommended"] for r in rows()}
+    out = classify([item(), item(market="total", fid="2", line=220.5)])
+    assert last == {"winner": 0, "total": 1} and [r["market"] for r in out["recommended"]] == ["total"]
+    assert out["all"][0]["colour"] == "green"                                                       # its colour is still the first one
+
+
+def test_a_forecast_first_seen_after_a_start_that_moved_earlier_says_so():
+    ps.observe("nba", rep(pick()), T)
+    got, = classify([item(start="2026-11-25T19:45:00Z")])["all"]
+    assert (got["colour"], got["unknown_reason"], got["recommended"]) == ("unknown", "saved_after_the_moved_start", None)

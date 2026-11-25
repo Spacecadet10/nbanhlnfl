@@ -28,7 +28,7 @@ def test_the_filters_narrow_rows_and_totals_but_never_the_reconciliation(monkeyp
     ps.observe("nba", rep(pick("g1"), pick("g2", fid=2, pct=0.57, h=hist(pct="57.0", w=0, l=2)), pick("g3", fid=3)), T)
     from test_pick_snapshots import item
     items = [item("g1"), item("g2", fid="2", grade="loss", pct="57.0"), item("g3", fid="3", grade="push")]
-    built = {"views": ps.classify("nba", items, ps.load("nba"), [], lambda s, i: i["grade"]), "recovered_only": [], "upcoming": 0,
+    built = {"as_of": "2026-11-26T05:00:00Z", "ledger_rows": 0, "views": ps.classify("nba", items, ps.load("nba"), [], lambda s, i: i["grade"]), "recovered_only": [], "upcoming": 0,
              "tracking_start": "2026-11-25T20:00:00Z", "backfilled_from": None}
     monkeypatch.setattr(pc, "build", lambda sport, now: built)
     full = pc.report(sport="nba")

@@ -3,7 +3,6 @@
 Reads app/pick_snapshots.py (the saved colours) beside the forecast of record of every started game and market and the delivery
 ledger's confirmed sends, all read-only. Grades are made on read from the saved side and line. It measures the colour rule; it
 does not show that green picks are profitable, and no colour here is ever recomputed from today's record."""
-import os
 import sqlite3
 import threading
 import time
@@ -20,7 +19,7 @@ NOTE = ("Each pick's colour is the one saved before its start, from the record i
         "colour was not saved before the start is unknown. Telegram sends: the last confirmed card before the start, graded as that card "
         "published it. Returns use a stored sportsbook price of the same side and line, at most 20 minutes old when saved; everything else "
         "is unpriced. This measures the colours; it does not show that green picks are profitable.")
-CACHE_SECONDS = 45
+CACHE_SECONDS = 60
 _cache: dict = {}
 _turns = {s: threading.Lock() for s in SPORTS}     # one build per sport at a time; a slow sport never holds up another
 
@@ -48,8 +47,7 @@ def _published(sport: str) -> list:
     try:
         if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'published_picks'").fetchone():
             return []
-        return [dict(r) for r in conn.execute("SELECT * FROM published_picks WHERE sport = ? AND basis <> ? ORDER BY published_id",
-                                              (sport, pp.UNCONFIRMED_BASIS))]
+        return [dict(r) for r in conn.execute("SELECT * FROM published_picks WHERE sport = ? ORDER BY published_id", (sport,))]
     finally:
         conn.close()
 
@@ -82,6 +80,24 @@ def _regrade(conn, sport: str, now: str):
             return "unscorable"
         return pp.grade(conn, sport, row, games[gid], now)
     return go
+
+
+def _labeller(conn, sport: str):
+    """(published row) -> the label of the pick that card published, or None when it cannot be named."""
+    from . import markets, tickets
+    teams = th.soccer_teams(conn) if sport == "soccer" else th.point_teams(conn)
+
+    def label(p):
+        t = teams.get(p["game_id"])
+        try:
+            if sport != "soccer":
+                return markets.side_labels(p["market"], p["line"], t["home"], t["away"])[("a", "mid", "b").index(p["side"])]
+            if p["market"] == "1x2_regulation":
+                return ("Draw" if p["side"] == "draw" else f"{t[p['side']]} win") + " (90 min)"
+            return tickets._soccer_label(p["market"], p["side"], p["line"], t["home"], t["away"])
+        except (KeyError, TypeError, ValueError, IndexError):
+            return None
+    return label
 
 
 def _items(conn, sport: str, now: str) -> tuple:
@@ -129,16 +145,17 @@ def build(sport: str, now: str) -> Optional[dict]:
         for it in items:
             it.update(sport=sport, market_title=_title(sport, it["market"]))
         snaps = ps.load(sport)
-        views = ps.classify(sport, items, snaps, _published(sport), _regrade(conn, sport, now), starts=starts(conn, sport), now=now)
+        published = _published(sport)
+        views = ps.classify(sport, items, snaps, published, _regrade(conn, sport, now), starts=starts(conn, sport), now=now,
+                            label=_labeller(conn, sport))
         for r in views["sent"]:
             r.setdefault("market_title", _title(sport, r["market"]))
-            r.setdefault("pick", None)
             r.setdefault("matchup", None)
             r.setdefault("final_score", None)
         body, why = th.load()
         rows = [] if body is None else [r for r in body["rows"] if r["sport"] == sport]
         recovered_only = [{**r, "price": None} for r in th.combine(sport, rows, live)["rows"] if r["counted"]] if rows else []
-        return {"views": views, "recovered_only": [{"game_id": r["game_id"], "market": r["market"], "grade": r["grade"], "price": None}
+        return {"as_of": now, "views": views, "ledger_rows": len(published), "recovered_only": [{"game_id": r["game_id"], "market": r["market"], "grade": r["grade"], "price": None}
                                                    for r in recovered_only],
                 "recovered_file": why, "upcoming": len({(s["game_id"], s["market"]) for s in snaps if s["event"] == "seen" and s["start_at"] > now}),
                 "tracking_start": ps.tracking_start(snaps),
@@ -147,28 +164,18 @@ def build(sport: str, now: str) -> Optional[dict]:
         conn.close()
 
 
-def _stamp(sport: str) -> tuple:
-    out = []
-    for p in (config.db_path(sport), ps.path(), config.telegram_ledger_path(), to.telegram_history_path()):
-        for f in (str(p), f"{p}-wal"):
-            try:
-                out.append((f, os.stat(f).st_mtime_ns))
-            except OSError:
-                out.append((f, None))
-    return tuple(out)
-
-
 def _built(sport: str, now: Optional[str]) -> Optional[dict]:
-    """`build`, kept while nothing it reads has changed and at most CACHE_SECONDS (a start can pass without a write)."""
+    """`build`, kept for CACHE_SECONDS (the stores change every minute; a soccer build reads every quote and takes seconds). The
+    report's as_of is the build's time."""
     if now is not None:
         return build(sport, now)
     with _turns[sport]:
-        stamp, at = _stamp(sport), time.monotonic()
+        key, at = (str(config.db_path(sport)), str(ps.path()), str(config.telegram_ledger_path())), time.monotonic()
         hit = _cache.get(sport)
-        if hit and hit[0] == stamp and at - hit[1] < CACHE_SECONDS:
+        if hit and hit[0] == key and at - hit[1] < CACHE_SECONDS:
             return hit[2]
         body = build(sport, datetime.now(timezone.utc).strftime(ps.FMT))
-        _cache[sport] = (stamp, at, body)
+        _cache[sport] = (key, time.monotonic(), body)
         return body
 
 
@@ -216,9 +223,11 @@ def report(sport: str = "all", view: str = "all", record: str = "live", market: 
         mine = [r for r in scope if r["percentage"] == p]
         by_pct.append({"percentage": p, "all": ps.tally(mine), "groups": _groups(mine, record)})
     reasons = Counter(r["unknown_reason"] for r in everything["all"] if r["colour"] == "unknown")
-    whole = ps.summarise(everything["all"])
+    whole, whole_sent = ps.summarise(everything["all"]), ps.summarise(everything["sent"])
+    sent_reasons = Counter(r["unknown_reason"] for r in everything["sent"] if r["colour"] == "unknown")
+    ledger_rows = sum(b["ledger_rows"] for b in states.values() if b)
     return {
-        "sport": sport, "view": view, "record": record, "as_of": now or datetime.now(timezone.utc).strftime(ps.FMT), "note": NOTE,
+        "sport": sport, "view": view, "record": record, "as_of": min((b["as_of"] for b in states.values() if b), default=now or datetime.now(timezone.utc).strftime(ps.FMT)), "note": NOTE,
         "colour_rule": to.COLOUR_RULE, "legend": to.COLOUR_LEGEND, "rule_live_since": ps.RULE_LIVE_SINCE,
         "tracking_start": min((x["tracking_start"] for x in sports_out if x["tracking_start"]), default=None),
         "backfilled_from": min((x["backfilled_from"] for x in sports_out if x["backfilled_from"]), default=None),
@@ -233,5 +242,8 @@ def report(sport: str = "all", view: str = "all", record: str = "live", market: 
             "observed_card_text": sum(1 for r in everything["all"] if r["support"] and r["support"]["basis"] == "card_text"),
             "recovered_only": ps.tally(recovered_only), "combined_predictions": len(everything["all"]) + len(recovered_only),
             "recovered_note": "Recovered Nov 2-16 cards without a live forecast: colour unknown under this rule, listed in History, counted once.",
-            "sent": len(everything["sent"]), "sent_excluded": dict(excluded),
+            "sent": len(everything["sent"]), "sent_excluded": dict(excluded), "sent_ledger_rows": ledger_rows,
+            "sent_unknown_reasons": dict(sent_reasons),
+            "sent_confirmed_by_export": sum(1 for r in everything["sent"] if r["sent_basis"] == "uncertain_resolved_export_record"),
+            "sent_adds_up": whole_sent["adds_up"] and len(everything["sent"]) + sum(excluded.values()) == ledger_rows,
             "upcoming_saved": sum(x["upcoming"] for x in sports_out), "adds_up": whole["adds_up"]}}

@@ -9,6 +9,7 @@ export const UNKNOWN_LABEL: Record<string, string> = {
   before_colour_rule: 'before this colour rule went live',
   before_tracking: 'before colours were saved, and no saved card proves it',
   later_forecast_not_saved: 'the forecast that counts replaced the one on the saved card',
+  saved_after_the_moved_start: 'first saved after the start, which moved earlier',
   not_recorded: 'not saved before the start (recorder gap)',
   no_exact_record_shown: 'no exact-% record was shown',
 };
@@ -31,7 +32,7 @@ export function returnsText(t: PcTally): string {
 const n1 = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}`;
 
 export const recordOf = (w: number | null, l: number | null, p?: number | null, v?: number | null) =>
-  w == null || l == null ? 'no record' : `${w}–${l}${p ? ` · ${p} push${p === 1 ? '' : 'es'}` : ''}${v ? ` · ${v} void` : ''}`;
+  w == null || l == null ? 'no record' : `${w + l === 0 ? 'no settled result' : `${w}–${l}`}${p ? ` · ${p} push${p === 1 ? '' : 'es'}` : ''}${v ? ` · ${v} void` : ''}`;
 
 export function supportText(r: PcRow): string {
   const s = r.support;

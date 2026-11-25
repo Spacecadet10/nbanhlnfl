@@ -28,6 +28,7 @@ from html import unescape
 from typing import Callable, Optional
 
 from . import config, published_picks as pp, threshold_overview as to
+from .coverage import et_date
 
 RULE_LIVE_SINCE = "2026-11-22T17:15:41Z"     # the first card carrying bucket-record-v1's legend; earlier marks used another rule
 PRICE_MAX_AGE = timedelta(minutes=20)        # the cards' own "odds unavailable" limit (telegram.STALE_ODDS)
@@ -138,7 +139,8 @@ def forecast_key(sport: str, pick_or_id) -> str:
 
 
 def _recommended(report: dict, picks: list) -> dict:
-    """{game_id: the forecast_id its card recommends or None} for the games that have a card now (the card's own rule and order)."""
+    """{game_id: (market, forecast_id) its card recommends, ('none',) without one} for the games that have a card now (the card's own
+    rule and order). A game whose choice cannot be read is absent."""
     from . import sports, tickets
     sport, out, games = report["sport"], {}, {}
     for p in picks:
@@ -146,8 +148,11 @@ def _recommended(report: dict, picks: list) -> dict:
     for gid, ps in games.items():
         order = (list(dict.fromkeys(p["market"] for p in ps)) if sport == "soccer" else list(sports.store(sport).markets))
         ps = sorted(ps, key=lambda p: order.index(p["market"]) if p["market"] in order else len(order))
-        chosen = tickets.card_choice(sport, ps)["pick"]
-        out[gid] = None if chosen is None else (chosen["market"], str(chosen["forecast_id"]))
+        try:
+            chosen = tickets.card_choice(sport, ps)["pick"]
+            out[gid] = ("none",) if chosen is None else (chosen["market"], str(chosen["forecast_id"]))
+        except Exception:
+            pass                               # not known: saved as NULL, never as "not recommended"
     return out
 
 
@@ -175,7 +180,15 @@ def price_at(store, sport: str, pick: dict, side: str, line: Optional[float], at
             found = q and q["price_label"] == "current" and (q["price_home"] if side == "a" else q["price_away"], q["provider"], q["quote_id"],
                                                              q["retrieved_at"])
         else:
-            q = odds.forecast_quote(store, gid, market, line, at, start)
+            newest: dict = {}                  # each book's newest price by `at`: a line it has left is no longer on offer
+            listed = False
+            for q in store.execute("SELECT * FROM market_quotes WHERE game_id = ? AND market = ? AND price_label = 'current' AND retrieved_at <= ? "
+                                   f"AND retrieved_at < ? ORDER BY {odds._BOOK_ORDER}", (gid, market, at, start, None)):
+                listed = listed or q["line"] == line
+                newest.setdefault(odds.provider_key(q["provider"]), q)
+            q = next((q for q in newest.values() if q["line"] == line), None)
+            if q is None and listed:
+                return {**out, "price_reason": "line_moved"}
             found = q is not None and ({"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]}.get(side), q["provider"], q["quote_id"],
                                        q["retrieved_at"])
     except (sqlite3.Error, KeyError, IndexError, TypeError):
@@ -193,7 +206,8 @@ def _row(sport: str, pick: dict, store, at: str, on_card: bool, recommended: Opt
         return None
     h = _dump(pick.get("percentage_history")) or {}
     tg, past = h.get("telegram") or {}, h.get("history") or {}
-    has, rec = bool(h), bool(tg) and tg.get("available") is not False
+    has = bool(h)
+    rec = bool(tg) and tg.get("available") is not False and not tg.get("no_history")      # no rows in this bucket is no record, not 0-0
     return {
         "sport": sport, "game_id": pick["game_id"], "market": pick["market"], "forecast_key": forecast_key(sport, pick),
         "forecast_id": f["forecast_id"], "observed_at": at, "start_at": pick["tipoff"], "generated_at": pick["generated_at"],
@@ -203,16 +217,17 @@ def _row(sport: str, pick: dict, store, at: str, on_card: bool, recommended: Opt
         "colour": to.bucket_colour(h["wins"], h["losses"]) if has else None, "colour_rule": to.COLOUR_RULE,
         "wins": h.get("wins"), "losses": h.get("losses"), "pushes": h.get("pushes", 0) if has else None, "voids": h.get("voids", 0) if has else None,
         "recovered_colour": to.bucket_colour(tg["wins"], tg["losses"]) if rec else None,
-        "recovered_reason": None if rec else (tg.get("reason") or "not_shown"), "recovered_source": tg.get("source") if rec else None,
+        "recovered_reason": None if rec else (tg.get("reason") or ("no_history" if tg.get("no_history") else "not_shown")), "recovered_source": tg.get("source") if rec else None,
         "recovered_wins": tg.get("wins") if rec else None, "recovered_losses": tg.get("losses") if rec else None,
         "recovered_pushes": tg.get("pushes") if rec else None, "recovered_voids": tg.get("voids") if rec else None,
         "past_colour": past.get("colour"), "past_wins": past.get("wins"), "past_losses": past.get("losses"),
-        "on_card": int(on_card), "recommended": int(recommended == (pick["market"], str(pick["forecast_id"]))),
-        "basis": "live", "provenance": None, "code_commit": _commit()}
+        "on_card": int(on_card),
+        "recommended": (None if on_card else 0) if recommended is None else int(recommended == (pick["market"], str(pick["forecast_id"]))),
+        "basis": "live", "provenance": None}
 
 
 def _insert(conn, row: dict) -> None:
-    row = {**row, "recorded_at": datetime.now(timezone.utc).strftime(FMT)}
+    row = {**row, "code_commit": _commit(), "recorded_at": datetime.now(timezone.utc).strftime(FMT)}
     conn.execute(f"INSERT INTO pick_snapshots ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", tuple(row.values()))
 
 
@@ -244,14 +259,20 @@ def observe(sport: str, report: dict, now: datetime, store=None) -> int:
         rep = {**report, "sport": sport}
         cards = [p for gid in dict.fromkeys(p["game_id"] for p in picks) for p in pp.on_card(rep, gid, now)]
         named, shown = _recommended(rep, cards), {id(p) for p in cards}
-        fresh = []
+        fresh, broken = [], 0
         for p in picks:
-            r = _row(sport, p, store, at, id(p) in shown, named.get(p["game_id"]) if id(p) in shown else None)
+            try:                               # one malformed pick never stops the others; the run is still reported as failed
+                r = _row(sport, p, store, at, id(p) in shown, named.get(p["game_id"]) if id(p) in shown else None)
+            except Exception as exc:
+                broken += 1
+                print(f"pick-snapshots recorder (cards unaffected): {sport} {p.get('game_id')} {p.get('market')}: {type(exc).__name__}",
+                      file=sys.stderr, flush=True)
+                continue
             last = r and _latest(conn, r)
             if r is not None and (last is None or any(last[k] != r[k] for k in VERSIONED)):
                 fresh.append((p, r))
         if not fresh:
-            return 0
+            return -1 if broken else 0
         written = 0
         conn.execute("BEGIN IMMEDIATE")
         try:
@@ -266,7 +287,7 @@ def observe(sport: str, report: dict, now: datetime, store=None) -> int:
             conn.execute("ROLLBACK")
             raise
         conn.execute("COMMIT")
-        return written
+        return -1 if broken else written
     except Exception as exc:
         print(f"pick-snapshots recorder (cards unaffected): {sport}: {type(exc).__name__}", file=sys.stderr, flush=True)
         return -1
@@ -335,7 +356,9 @@ def _recovered(block: list) -> dict:
     body = line.split(": ", 1)[1] if ": " in line else ""
     if body.startswith("recovered history unavailable"):
         return {**none, "recovered_reason": "file_missing" if "file missing" in body else "unreadable"}
-    c = _counts(body, "no recovered history at this exact %") or _counts(body, "no settled result at this exact %")
+    if body.startswith("no recovered history at this exact %"):
+        return {**none, "recovered_reason": "no_history"}
+    c = _counts(body, "no settled result at this exact %")
     if c is None:
         return {**none, "recovered_reason": "not_on_card"}
     colour = to.bucket_colour(c["wins"], c["losses"])
@@ -420,7 +443,7 @@ def backfill(ledger, sport: str, starts: dict, apply: bool = False, store=None) 
                             (pub["delivery_key"], pub["market"])).fetchone():
                 out["already_saved"] += 1
                 continue
-            _insert(conn, {"event": "sent", **row, "code_commit": _commit(),
+            _insert(conn, {"event": "sent", **row,
                            **price_at(store, sport, {"game_id": row["game_id"], "market": row["market"], "tipoff": start}, row["side"],
                                       row["line"], row["observed_at"])})
             out["written"] += 1
@@ -431,7 +454,7 @@ def backfill(ledger, sport: str, starts: dict, apply: bool = False, store=None) 
 
 
 # --- Counting ------------------------------------------------------------------------------------------------------------
-NO_RECORD = ("no_rows_for_sport", "file_missing", "unreadable")      # the recovered file had nothing to say: not a neutral record
+NO_RECORD = ("no_history", "no_rows_for_sport", "file_missing", "unreadable")      # the recovered file had nothing to say: not a neutral record
 
 
 def original(snaps: list) -> dict:
@@ -463,16 +486,17 @@ def _version(s: dict) -> dict:
 
 
 def classify(sport: str, items: list, snaps: list, published: list, regrade: Callable, starts: Optional[dict] = None,
-             now: Optional[str] = None) -> dict:
+             now: Optional[str] = None, label: Optional[Callable] = None) -> dict:
     """{'all', 'recommended', 'sent', 'excluded'}. `items`: the forecast of record per started game and market (one each).
-    `regrade(row, item)` -> the grade of the saved side and line. `published`: the ledger's confirmed sends."""
+    `regrade(row, item)` -> the grade of the saved side and line. `published`: the ledger's sends, unconfirmed ones
+    included (they are only counted as excluded). `label(published row)` -> its pick label, for a send whose colour was not saved."""
     first, began = original(snaps), tracking_start(snaps)
     by_gm: dict = {}
     for r in snaps:
         by_gm.setdefault((r["game_id"], r["market"]), []).append(r)
 
-    def unknown(item: dict, at: str, saved: bool) -> dict:
-        reason = ("before_colour_rule" if at < RULE_LIVE_SINCE else "later_forecast_not_saved" if saved else
+    def unknown(item: dict, at: str, saved: bool, late: bool = False) -> dict:
+        reason = ("saved_after_the_moved_start" if late else "before_colour_rule" if at < RULE_LIVE_SINCE else "later_forecast_not_saved" if saved else
                   "before_tracking" if began is None or at < began else "not_recorded")
         return {**item, "colour": "unknown", "recovered_colour": "unknown", "unknown_reason": reason, "support": None, "price": None,
                 "recommended": None, "selection_differs": False}
@@ -492,14 +516,14 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         gm = (it["game_id"], it["market"])
         by_item[gm] = it
         mine = by_gm.get(gm, [])
+        before = [v for v in mine if v["observed_at"] < it["start_at"]]     # a start that moved earlier: later sights are not pregame evidence
         s = first.get((*gm, it["forecast_key"]))
-        if s is not None and it["start_at"] <= s["observed_at"]:       # the start moved to before what we saw: not pregame evidence
-            s = None
-        row = known(it, s) if s is not None else unknown(it, it["start_at"], bool(mine))
+        late = s is not None and s not in before
+        row = known(it, s) if s is not None and not late else unknown(it, it["start_at"], bool(before), late)
         row["versions"] = [_version(v) for v in mine]
-        if s is not None:
-            carded = next((v for v in mine if v["forecast_key"] == it["forecast_key"] and v["on_card"]), None)
-            row["recommended"] = bool(carded and carded["recommended"])
+        if s is not None and not late:         # the card's recommendation as it last stood before the start: at most one per game
+            carded = [v for v in before if v["forecast_key"] == it["forecast_key"] and v["on_card"]]
+            row["recommended"] = bool(carded and carded[-1]["recommended"])
         out["all"].append(row)
         if row["recommended"]:
             out["recommended"].append(row)
@@ -508,7 +532,9 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
     last: dict = {}
     for p in sorted(published, key=lambda p: (p["sent_at"], p.get("published_id") or 0)):
         start = (starts or {}).get(p["game_id"])
-        if start is None:
+        if p["basis"] == pp.UNCONFIRMED_BASIS:
+            out["excluded"]["delivery_not_confirmed"] += 1
+        elif start is None:
             out["excluded"]["start_unknown"] += 1
         elif not p["sent_at"] < start:
             out["excluded"]["sent_at_or_after_start"] += 1
@@ -523,8 +549,8 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         base = {**(it or {}), "sport": sport, "game_id": gm[0], "market": gm[1], "forecast_id": str(p["forecast_id"]),
                 "forecast_key": forecast_key(sport, p["forecast_id"]), "side": p["side"], "line": p["line"], "start_at": start,
                 "percentage": to.displayed_percentage(p["probability"]), "model_version": p["model_version"],
-                "generated_at": p["generated_at"]}
-        base.setdefault("game_date", start[:10])
+                "generated_at": p["generated_at"], "pick": label(p) if label else None}
+        base.setdefault("game_date", et_date(start))
         s = sent_rows.get((p["delivery_key"], p["market"]))
         row = known(base, s) if s is not None else {**unknown(base, p["sent_at"], False), "grade": regrade(p, it) or "unresolved"}
         row.update(delivery_key=p["delivery_key"], message_id=p["message_id"], sent_at=p["sent_at"], sent_basis=p["basis"],

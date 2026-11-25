@@ -22,6 +22,8 @@ test('the saved support shows both records apart, and a missing one is never 0�
   assert.equal(supportText({ support: s }), 'Live record then: 3–1 · 1 push · recovered record then: none (no rows for sport)');
   assert.equal(supportText({ support: null, unknown_reason: 'before_colour_rule' }), 'Colour unknown: before this colour rule went live');
   assert.equal(recordOf(null, null), 'no record');
+  assert.equal(recordOf(0, 0), 'no settled result');
+  assert.equal(recordOf(0, 0, 2), 'no settled result · 2 pushes');
 });
 
 test('all three performance pages show the saved colours, with its filters in the URL', () => {
