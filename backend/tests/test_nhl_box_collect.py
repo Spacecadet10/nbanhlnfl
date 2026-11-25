@@ -231,6 +231,27 @@ def test_recent_inputs_still_missing_after_a_quiet_collection_are_named(ready, m
     assert json.loads(capsys.readouterr().out)["failed_steps"] == expect
 
 
+@pytest.mark.parametrize("missing, code", [(0, 0), (4, 1)])
+def test_a_manual_backfill_has_no_time_limit_and_never_exits_0_with_games_missing(store, monkeypatch, capsys, missing, code):
+    seen = {}
+    monkeypatch.setattr(nhl_box_collect, "collect", lambda conn, a, b, **kw: seen.update(kw) or {"failed": 0, "missing": missing})
+    assert cli.main(["--sport", "nhl", "nhl-player-inputs", "--from-season", "2027", "--to-season", "2027", "--kind", "boxes"]) == code
+    assert seen["max_seconds"] == float("inf")
+
+
+def test_finals_the_box_job_never_fetches_are_not_reported_missing():
+    """Preseason and All-Star finals are not in jobs.box_refresh_plan: they would make every run partial until 3 days old."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript("CREATE TABLE games(game_id,season_type,status,result_available_at); CREATE TABLE team_game_stats(game_id);"
+                       "CREATE TABLE job_runs(job,status,finished_at);"
+                       "INSERT INTO games VALUES ('a','preseason','final','2026-10-12T03:00:00Z'),('b','regular','final','2026-10-12T03:00:00Z');")
+    import unittest.mock as m
+    with m.patch.object(jobs, "sport", lambda c: "nba"):
+        r = training_inputs.check(conn, "2026-10-12T20:40:00Z")["report"]["nba_team_boxes"]
+    assert r == {"recent_missing": 1, "first": ["b"]}
+
+
 def test_a_complete_collection_exits_0(ready, monkeypatch, capsys):
     boxes(monkeypatch, stored=3)
     assert cli.main(["--sport", "nhl", "training-inputs"]) == 0
