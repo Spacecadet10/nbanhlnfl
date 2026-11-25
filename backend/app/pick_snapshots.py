@@ -157,6 +157,15 @@ def _recommended(report: dict, picks: list) -> dict:
 
 
 def price_at(store, sport: str, pick: dict, side: str, line: Optional[float], at: str) -> dict:
+    """`_price_at`, where any problem reading a quote leaves the pick unpriced and costs it nothing else."""
+    try:
+        return _price_at(store, sport, pick, side, line, at)
+    except Exception:
+        return {"price_american": None, "price_provider": None, "price_quote_id": None, "price_retrieved_at": None,
+                "price_reason": "quotes_unreadable"}
+
+
+def _price_at(store, sport: str, pick: dict, side: str, line: Optional[float], at: str) -> dict:
     """The price of exactly this side and line that could be taken at `at`: a stored sportsbook price, 'current', retrieved at or
     before `at` and at most 20 minutes earlier, before the start. Derived prices (DC/DNB from 1X2) are never prices."""
     out = {"price_american": None, "price_provider": None, "price_quote_id": None, "price_retrieved_at": None, "price_reason": None}
@@ -164,35 +173,32 @@ def price_at(store, sport: str, pick: dict, side: str, line: Optional[float], at
         return {**out, "price_reason": "store_unavailable"}
     from . import odds, soccer_book, soccer_markets_live as sml
     gid, market, start = pick["game_id"], pick["market"], pick["tipoff"]
-    try:
-        if sport == "soccer":
-            if market == "1x2_regulation":
-                q = soccer_book.latest_1x2(store, gid, at, start)
-                found = q and (q["price"][side], q["provider"], q["quote_id"], q["side_retrieved_at"][side])
-            elif market == "goals_total":
-                qs = [q for q in sml.quotes(store, gid, at) if q["market"] == "total_goals" and q["side"] == side and q["line"] == line]
-                q = max(qs, key=lambda x: (x["retrieved_at"], x["quote_id"]), default=None)
-                found = q and (q["american"], q["provider"], q["quote_id"], q["retrieved_at"])
-            else:
-                return {**out, "price_reason": "no_price_is_collected_for_this_market"}
-        elif sport == "nba" and market == "winner":
-            q = odds.winner_quote(store, sport, gid, at)
-            found = q and q["price_label"] == "current" and (q["price_home"] if side == "a" else q["price_away"], q["provider"], q["quote_id"],
-                                                             q["retrieved_at"])
+    if sport == "soccer":
+        if market == "1x2_regulation":
+            q = soccer_book.latest_1x2(store, gid, at, start)
+            found = q and (q["price"][side], q["provider"], q["quote_id"], q["side_retrieved_at"][side])
+        elif market == "goals_total":
+            qs = [q for q in sml.quotes(store, gid, at) if q["market"] == "total_goals" and q["side"] == side and q["line"] == line]
+            q = max(qs, key=lambda x: (x["retrieved_at"], x["quote_id"]), default=None)
+            found = q and (q["american"], q["provider"], q["quote_id"], q["retrieved_at"])
         else:
-            newest: dict = {}                  # each book's newest price by `at`: a line it has left is no longer on offer
-            listed = False
-            for q in store.execute("SELECT * FROM market_quotes WHERE game_id = ? AND market = ? AND price_label = 'current' AND retrieved_at <= ? "
-                                   f"AND retrieved_at < ? ORDER BY {odds._BOOK_ORDER}", (gid, market, at, start, None)):
-                listed = listed or q["line"] == line
-                newest.setdefault(odds.provider_key(q["provider"]), q)
-            q = next((q for q in newest.values() if q["line"] == line), None)
-            if q is None and listed:
-                return {**out, "price_reason": "line_moved"}
-            found = q is not None and ({"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]}.get(side), q["provider"], q["quote_id"],
-                                       q["retrieved_at"])
-    except Exception:                          # a price problem never costs the pick its saved colour
-        return {**out, "price_reason": "quotes_unreadable"}
+            return {**out, "price_reason": "no_price_is_collected_for_this_market"}
+    elif sport == "nba" and market == "winner":
+        q = odds.winner_quote(store, sport, gid, at)
+        found = q and q["price_label"] == "current" and (q["price_home"] if side == "a" else q["price_away"], q["provider"], q["quote_id"],
+                                                         q["retrieved_at"])
+    else:
+        newest: dict = {}                  # each book's newest price by `at`: a line it has left is no longer on offer
+        listed = False
+        for q in store.execute("SELECT * FROM market_quotes WHERE game_id = ? AND market = ? AND price_label = 'current' AND retrieved_at <= ? "
+                               f"AND retrieved_at < ? ORDER BY {odds._BOOK_ORDER}", (gid, market, at, start, None)):
+            listed = listed or q["line"] == line
+            newest.setdefault(odds.provider_key(q["provider"]), q)
+        q = next((q for q in newest.values() if q["line"] == line), None)
+        if q is None and listed:
+            return {**out, "price_reason": "line_moved"}
+        found = q is not None and ({"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]}.get(side), q["provider"], q["quote_id"],
+                                   q["retrieved_at"])
     if not found or found[0] is None or abs(found[0]) < 100 or not found[3] < start:
         return {**out, "price_reason": "no_quote_at_this_line"}
     if _t(at) - _t(found[3]) > PRICE_MAX_AGE:
@@ -287,6 +293,8 @@ def observe(sport: str, report: dict, now: datetime, store=None) -> int:
                 r = _row(sport, p, store, at, id(p) in shown, named.get(p["game_id"]) if id(p) in shown else None)
                 if r is not None and _changed(_latest(conn, r), r):
                     fresh.append((p, {**r, **price_at(store, sport, p, r["side"], r["line"], at)}))
+            except sqlite3.OperationalError:       # our own file is locked: give up once, never wait again per pick
+                raise
             except Exception as exc:
                 failed(p, exc)
         if not fresh:
@@ -302,7 +310,7 @@ def observe(sport: str, report: dict, now: datetime, store=None) -> int:
                 try:
                     _insert(conn, {"event": "seen", "version_no": 1 if last is None else last["version_no"] + 1, "code_commit": commit, **r})
                     written += 1
-                except (sqlite3.Error, ValueError, TypeError) as exc:
+                except (sqlite3.Error, ValueError, TypeError, OverflowError) as exc:
                     if not conn.in_transaction:     # the whole transaction is gone (disk, corruption): nothing to keep
                         raise
                     failed(p, exc)

@@ -541,3 +541,28 @@ def test_git_is_never_asked_while_the_write_lock_is_held(monkeypatch):
         return "abc"
     monkeypatch.setattr(ps, "_commit", commit)
     assert ps.observe("nba", rep(pick()), T) == 1 and asked and rows()[0]["code_commit"] == "abc"
+
+
+def test_a_locked_file_delays_a_run_once_not_once_per_pick(monkeypatch):
+    import time
+    ps.observe("nba", rep(pick("g0")), T)
+    real, holder = ps._recommended, []
+
+    def lock(*a):                                                  # taken after the recorder connected
+        c = sqlite3.connect(ps.path(), isolation_level=None)
+        c.execute("BEGIN EXCLUSIVE")
+        holder.append(c)
+        return real(*a)
+    monkeypatch.setattr(ps, "_recommended", lock)
+    began = time.monotonic()
+    assert ps.observe("nba", rep(*[pick(f"g{i}", fid=i) for i in range(1, 6)]), T) == -1
+    assert time.monotonic() - began < 4
+    holder[0].execute("ROLLBACK")
+
+
+def test_an_unstorable_number_or_a_text_price_costs_only_itself():
+    bad = {**pick("bad", fid=9), "line": 2 ** 70}
+    assert ps.observe("nba", rep(bad, pick("good", fid=1)), T) == -1
+    assert [r["game_id"] for r in rows()] == ["good"]
+    assert ps.observe("nba", rep({**total(), "game_id": "g1", "forecast_id": 5}), T, store=quotes(q(a="x", b="y"))) == 1
+    assert rows()[-1]["price_reason"] == "quotes_unreadable"
