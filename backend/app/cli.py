@@ -539,12 +539,13 @@ def main(argv=None) -> int:
                                                      limit=args.limit, delay=args.sleep)
         if args.kind in ("boxes", "both"):
             with db.connect_readonly("nhl") as conn:
-                report["boxes"] = (nhl_box_collect.collect(conn, args.from_season, args.to_season, delay=args.sleep)
+                report["boxes"] = (nhl_box_collect.collect(conn, args.from_season, args.to_season, delay=args.sleep,
+                                                           max_seconds=float("inf"))     # no store lock here
                                    if args.limit is None else
                                    nhl_player_ratings.collect_boxes(conn, args.from_season, args.to_season,
                                                                     limit=args.limit, delay=args.sleep))
         print(json.dumps(report, indent=2))
-        return 1 if any(r.get("failed") for r in report.values()) else 0
+        return 1 if any(r.get("failed") or r.get("missing") for r in report.values()) else 0
 
     if args.cmd == "tuning-evaluate":
         from pathlib import Path

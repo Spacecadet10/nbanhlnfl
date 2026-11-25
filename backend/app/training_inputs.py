@@ -120,9 +120,11 @@ def check(conn, now: Optional[str] = None) -> dict:
                                                   "member stays missing (stale inputs)")
     else:
         since = _fmt(_parse(now) - RECENT)
+        from .live import ELIGIBLE_TYPES            # the finals jobs.box_refresh_plan fetches
         missing_box = [r[0] for r in conn.execute(
-            "SELECT game_id FROM games g WHERE status='final' AND result_available_at > ? AND result_available_at <= ? AND NOT "
-            "EXISTS (SELECT 1 FROM team_game_stats s WHERE s.game_id = g.game_id)", (since, now))]
+            "SELECT game_id FROM games g WHERE status='final' AND result_available_at > ? AND result_available_at <= ? AND "
+            f"season_type IN ({','.join('?' * len(ELIGIBLE_TYPES))}) AND NOT "
+            "EXISTS (SELECT 1 FROM team_game_stats s WHERE s.game_id = g.game_id)", (since, now, *ELIGIBLE_TYPES))]
         report["nba_team_boxes"] = {"recent_missing": len(missing_box), "first": missing_box[:5]}
         from . import availability
         files = sorted((availability.research_dir() / "player_box").glob("player_box_*.csv"))
