@@ -196,7 +196,7 @@ def test_daily_runs_shadow_steps_only_when_enabled(sealed, monkeypatch):
     monkeypatch.delenv("NBA_SHADOW_RECORDING", raising=False)
     out = jobs.daily(sealed, fetch=lambda _m: empty, sleep=lambda _s: None)
     assert list(out) == ["refresh", "player_box", "score", "two_hour_score", "market_score", "forecast_policy", "training_check",
-                         "adaptive_train"]
+                         "adaptive_train", "attention", "outcome"]
     assert out["player_box"]["status"] == "disabled"                    # opt-in (NBA_PLAYER_BOX_REFRESH): no request
     assert out["training_check"].get("status") != "failed"
     assert sealed.execute("SELECT COUNT(*) FROM job_runs WHERE job IN ('boxscores', 'shadow')").fetchone()[0] == 0
@@ -205,7 +205,7 @@ def test_daily_runs_shadow_steps_only_when_enabled(sealed, monkeypatch):
     monkeypatch.setattr(jobs, "shadow_forecasts", lambda conn: {"status": "success"})
     out = jobs.daily(sealed, force_refresh=True, fetch=lambda _m: empty, sleep=lambda _s: None)
     assert list(out) == ["refresh", "boxscores", "player_box", "score", "two_hour_score", "market_score", "forecast_policy",
-                         "training_check", "adaptive_train"]
+                         "training_check", "adaptive_train", "attention", "outcome"]
 
 
 # ---- possession refresh ----------------------------------------------------------------------------------------
