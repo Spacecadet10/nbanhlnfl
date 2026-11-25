@@ -1,3 +1,39 @@
+## NHL player-box repair, partial failures visible, release pin — live b15457d (branch live-release), delivery ec5a909 (nhl-boxes) RELEASED Nov 25, 2026 17:51-17:54Z — Claude Opus 5.5 (lead)
+- Cause: since Nov 18 the NHL stats API returns at most 100 rows whatever `limit`; the collector asked for every missing game at once (42 games =
+  1,512 skater rows) and refused the short reply as truncated, 11 runs in a row, so the backlog only grew. Last good collection Nov 17-18
+  (343 boxes, last game 2026020343). training_inputs also exited 0 with that step failed.
+- Fix: new nhl_box_collect.py (2 games per request, splits on truncation, outage stop, time cap, atomic writes). training-inputs/daily exit 3 =
+  done but a required step failed/needs attention (`attention`, `outcome` in daily). Installed plists = templates: adaptive-train, nhl-daily,
+  ncaab-daily (3 still trains, job ends 3; a failed odds step is no longer hidden).
+- Pin: NBA/NHL jobs run ~/nba-predictor-live by design (NBA_RELEASE_ROOT was right). 43d4b74 (Nov 16) was released directly in that detached checkout,
+  on no branch, without the pin step. Now: pushed branch `live-release`; write_pin refuses a commit no branch holds; docs/RELEASE_CHECKOUTS.md. release-check
+  nba/nhl: problems [], pin_note null, research definitions unchanged (94844709fc4412a5 / f862a44ddaa1e76f); no pin line in ticks since.
+- Catch-up 17:54Z (real data, exit 0): stored 42, failed 0, missing 0, unavailable []; 385 boxes; the 343 old boxes + raw files byte-identical (only
+  last-bulk-run.json, the status file, changed).
+- TRAINING is separate and was NOT triggered by hand: the scheduled 20:30Z run (job exit 0) refit NHL weekly (20:30-20:45Z, combiner fit 187) and daily
+  (20:45-22:04Z, fit 204); nhl_players_injuries@adaptive success, inputs box_games 385. torch/keras members skipped as always. Adaptive RESEARCH percentages
+  moved through that normal refit; shown percentages, cards and colours do not read the adaptive ensemble. Definitions b921c537a765c65c / d11d95730c905f88.
+- Affected: only nhl_players_injuries@adaptive and, through it, the NHL adaptive combiner.
+- History preserved: row-by-row compare of backups 20261125T174959Z vs 20261125T220901Z (predict/forecast/snapshot/adaptive/research/selection/grade/
+  result tables of five stores + 1,585 pick_snapshots): 0 old rows changed or removed.
+- Live first colours (all saved before start): Soccer 08:07:47Z, NCAAB 13:01:20Z, NBA 20:02:12Z, NHL 22:03:07Z, NFL 23:00:43Z. adds_up/sent_adds_up true everywhere.
+  Not observed yet: the first settled NBA, NHL or NFL live row (games not over).
+- The 15 picks = observed live ('seen') NCAAB rows of RICE@OHIO, UNI@CLT, SBU@BEL (4 green, 2 red, 9 neutral). CORRECTION of an earlier message: at 16:40Z they were
+  all pending, so they did not count yet. Settled now: green 3-1, red 1-1, neutral 6-3. Separate: 355 backfilled colours proven by saved card text. Reconstructed: none.
+- Review: one independent Opus reviewer (REQUEST CHANGES 2 high + 3 medium -> fixed; N1, N2 fixed) -> APPROVE of b15457d and ec5a909; recorder EQUIVALENT f9c09c0..ec5a909 (static).
+- Tests, 3 chunks per line `python -m pytest -q -p no:cacheprovider tests/<third of the files>`, default temp, exact deployed commits:
+  live b15457d 2,410 passed, 9 FAILED (8 test_deep_study: no torch/keras; test_weekly_report::test_review_time_and_recorder_come_from_the_config_unless_given, same
+  failure on 43d4b74: it reads the live review config); delivery ec5a909 3,478 passed, 1 skipped, 8 FAILED (the same deep_study). The first full run found test_shadow
+  broken by the new daily keys -> fixed test-only, rerun above. Old assertion "exit 0 with a failed collector" changed to 3 on the owner's request. Frontend: unchanged, not run.
+- Hand runs (owner request) Nov 25 16:29Z: nhl-daily exit 0 (84 quotes, 118 injury rows, 55/55 settled), ncaab-daily exit 0 (370 quotes, 8 incomplete; 404 forecasts: 380 settled, 9 pending, 15 void).
+- OPEN: (1) nhl_players_injuries@adaptive still abstains on 7 of tonight's 8 games for a DIFFERENT, older reason (same on Nov 18-19): one injured-reserve player with no
+  NHL box this season (Huberdeau, Graves, Krug, ... 33 of 115 rows, 19 teams) makes the whole game abstain. Used in CAR@TBL with the new fit. Its file is hashed into the model
+  definition: a fix is a model change, owner decision. (2) lock-busy odds and partial/skipped adaptive-train still exit 0. (3) `cli scheduler --job daily` exits 0 with
+  attention (no plist uses it). (4) box folder not in the nightly backup (refetchable). (5) pin mismatch stays a log line (owner, Nov 11). (6) backups exit 2 = no mirror drive.
+  (7) later retrospective replays may use boxes collected late (separate ledger).
+- ROLLBACK, reverse order: delivery + runner `git checkout --detach f9c09c0`, pin, kickstart api-delivery; live `git checkout --detach 43d4b74`, kickstart api (its pin: branch
+  live-release holds 43d4b74); plists from evidence/before, bootout+bootstrap. Boxes can stay. Evidence: ~/nba-predictor-research-data/nhl-boxes-2026-11-25/.
+
 ## Green/red/neutral pick tracking — branch green-tracking a40309d, RELEASED to delivery (2026-11-25T08:06:54Z) — Claude Opus 5.5 (lead)
 - What: each prediction's colour is saved before its start (exact %, W/L behind it, rule version, forecast id, time) in the append-only
   `data/pick_snapshots.sqlite`, graded automatically, shown on every Performance page (`GET /api/pick-colours`; counting rules:
