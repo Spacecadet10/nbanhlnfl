@@ -402,8 +402,9 @@ Dependency order, per sport, in `com.nba-predictor.adaptive-train` (09:30 local,
 then check) → `adaptive-train` (weekly, if due) → `adaptive-train --cadence daily` (if due); the two-hour cycle then records
 weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; the System status panel reports.
 - Collect (`training_inputs.collect`, each step isolated): results refresh; NHL shots (`jobs.nhl_pbp`); NHL player boxes for
-  new finals of the current season (`nhl_player_ratings.collect_bulk_boxes`, opt-in `NHL_PLAYER_BOX_REFRESH=1`; two requests
-  per 128 games); NBA team boxes and the season player-box file.
+  new finals of the current season (`nhl_box_collect.collect`, opt-in `NHL_PLAYER_BOX_REFRESH=1`; two requests per two
+  games: the stats API returns at most 100 rows since 2026-11-18, so `nhl_player_ratings.collect_bulk_boxes` fails from three missing
+  games on; it is hashed into the NHL definition and stays unedited); NBA team boxes and the season player-box file.
 - Check (`training_inputs.check`, read-only), gating: results refresh within 3 h; NHL shots for finals whose results
   arrived in the last 3 days, until a game has stayed missing after 3 collection runs (then reported as given up: a source
   that never publishes cannot stop every later refit; manual runs count too). Recent shots are imported first, newest
@@ -428,3 +429,7 @@ weekly and (with `NBA_DAILY_AGREEMENT=1`) daily rows; the nightly jobs settle; t
 - Overlap: collection takes the store's job lock; training the per-sport training lock (non-blocking: a second trainer
   skips); the transfer refuses while a training lock is held.
 - Measured (isolated clone holding the imported fits, frozen tree 6b6c0917, 4 threads): incremental daily refit NHL 1,015 s, NBA 916 s (forced; no new NBA results); both succeeded and published 17 / 24 records.
+
+Exit codes (owner, 2026-11-25): `training-inputs` 0 = complete, 1 = training must wait, 3 = training may run but a required collection step
+failed or got only part of its data (`failed_steps`; the job_runs row is `failed`). The trainer trains on 0 and 3 and itself ends 3 after a 3.
+`daily` ends 3 with an `attention` list (a partial step, stale results refresh, failed or stale training inputs), 1 when something failed.

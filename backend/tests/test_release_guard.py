@@ -171,3 +171,18 @@ def test_a_refused_tick_is_recorded_at_most_every_15_minutes(tmp_path, store, mo
     conn.commit()
     assert cli.main(["--sport", "nhl", "tick"]) == 1
     assert json.loads(capsys.readouterr().out)["run_id"]
+
+
+def test_a_commit_no_branch_holds_is_never_pinned(tmp_path):
+    """Live ran 43d4b74 from 2026-11-16 to 25: committed in the release checkout itself, on no branch and nowhere else."""
+    root = git_repo(tmp_path / "release")
+    pinned = release.pinned_commit(root)
+    release._git(root, "checkout", "-q", "--detach")
+    release.write_pin(root)                                  # a detached checkout of a branch's commit is the normal release
+    (root / "README").write_text("made in the release checkout\n")
+    release._git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "stray")
+    with pytest.raises(ValueError, match="no branch holds"):
+        release.write_pin(root)
+    assert release.pinned_commit(root) == pinned
+    release._git(root, "branch", "live-release")
+    assert release.write_pin(root) == release.pinned_commit(root) != pinned

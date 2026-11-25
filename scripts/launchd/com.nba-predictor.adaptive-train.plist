@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md §7) run with the research environment's Python,
-     which has the pinned torch / tensorflow, so the deep members are refitted rather than kept. The release checkout's code
-     is used (WorkingDirectory). The command takes the store's job lock only to snapshot and to publish; the training reads
-     the snapshot under its own lock, so the odds/forecast cycles keep running. Due-only and idempotent. Install only with a
-     release move.
-     Order per sport (docs/ADAPTIVE_SYSTEM.md §14): `training-inputs` collects (results, NHL shots and player boxes, NBA boxes)
-     and checks; only when it passes, `adaptive-train` (weekly) then `adaptive-train` with the daily cadence. A run that is not ready
-     exits 1 (job_runs 'training_inputs' failed; adaptive-train 'deferred'); the 15:30 run is the retry (anything already
-     trained is not due and is skipped). Overlap: the store lock for collection, the per-sport training lock for training. -->
+<!-- adaptive-v1 scheduled training (docs/ADAPTIVE_SYSTEM.md sections 7 and 14), as installed: the LIVE release checkout's code and venv
+     (the NBA/NHL fits carry that code's definition), under the machine-wide learning guard (app.learning_run, delivery checkout).
+     Order per sport: `training-inputs` collects (results, NHL shots and player boxes, NBA boxes) and checks; on exit 0 or 3 the weekly,
+     then the daily-cadence `adaptive-train`; any other code means training must wait (exit 1; the 15:30 run is the retry). Exit 3 =
+     trained, but a required collection step failed: the whole job then ends 3, never 0 (owner, Nov 25 2026). Due-only, idempotent. -->
 <plist version="1.0">
 <dict>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_PLAYER_BOX_REFRESH</key>
 		<string>1</string>
+		<key>NBA_RELEASE_GUARD</key>
+		<string>1</string>
+		<key>NBA_RELEASE_ROOT</key>
+		<string>/Users/andry/nba-predictor-live</string>
 		<key>NHL_PLAYER_BOX_REFRESH</key>
 		<string>1</string>
 		<key>OMP_NUM_THREADS</key>
@@ -24,20 +24,38 @@
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.adaptive-train</string>
+	<key>Nice</key>
+	<integer>10</integer>
 	<key>ProcessType</key>
 	<string>Background</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/bin/caffeinate</string>
 		<string>-i</string>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python</string>
+		<string>-m</string>
+		<string>app.learning_run</string>
+		<string>--name</string>
+		<string>adaptive-train</string>
+		<string>--max-minutes</string>
+		<string>300</string>
+		<string>--max-rss-gb</string>
+		<string>8</string>
+		<string>--nice</string>
+		<string>0</string>
+		<string>--threads</string>
+		<string>4</string>
+		<string>--defer-sports</string>
+		<string></string>
+		<string>--</string>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>PY=/Users/andry/nba-predictor-deep/backend/.venv/bin/python; rc=0; for s in nhl nba; do if $PY -m app.cli --sport $s training-inputs; then $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; exit $rc</string>
+		<string>cd /Users/andry/nba-predictor-live/backend &amp;&amp; PY=/Users/andry/nba-predictor-live/backend/.venv/bin/python; rc=0; partial=0; for s in nhl nba; do $PY -m app.cli --sport $s training-inputs; t=$?; if [ $t -eq 0 ] || [ $t -eq 3 ]; then [ $t -eq 0 ] || partial=3; $PY -m app.cli --sport $s adaptive-train || rc=1; $PY -m app.cli --sport $s adaptive-train --cadence daily || rc=1; else rc=1; fi; done; [ $rc -ne 0 ] || rc=$partial; exit $rc</string>
 	</array>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/adaptive-train-launchd.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/adaptive-train-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/adaptive-train-launchd.log</string>
 	<key>StartCalendarInterval</key>
 	<array>
 		<dict>
@@ -56,6 +74,6 @@
 	<key>ThrottleInterval</key>
 	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>
 </plist>
