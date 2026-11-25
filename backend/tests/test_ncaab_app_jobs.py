@@ -118,6 +118,8 @@ def test_daily_scores_without_research_or_the_training_monitor(store, data, monk
     out = jobs.daily(store, force_refresh=False, now=NOW_DT, sleep=lambda _: None)
     assert out["training_check"]["status"] == "not_defined" and out["adaptive_train"]["status"] == "not_defined"
     assert out["score"]["status"] == "success" and out["two_hour_score"]["policy"] == "near_tipoff"
+    assert out["outcome"] == "success" and out["attention"] == []
+
 
 
 def test_backup_and_journal_include_the_ncaab_store(store, tmp_path):

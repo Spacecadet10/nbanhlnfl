@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Nightly odds snapshot, then data maintenance and scoring. Both exit codes count (owner, Nov 25 2026): a failed odds step used to
+     be hidden by a good daily step. Exit 3 = done, but something needs attention (named under "attention" in the log). -->
 <plist version="1.0">
 <dict>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>NBA_DATA_DIR</key>
-		<string>/Users/andry/Desktop/nba-predictor-sprint1/data</string>
+		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>
 		<string>1</string>
 		<key>NBA_RELEASE_ROOT</key>
-		<string>/Users/andry/nba-predictor-live</string>
+		<string>/Users/andry/nba-predictor-delivery</string>
 	</dict>
 	<key>Label</key>
 	<string>com.nba-predictor.ncaab-daily</string>
@@ -19,12 +21,12 @@
 	<array>
 		<string>/bin/sh</string>
 		<string>-c</string>
-		<string>/Users/andry/nba-predictor-live/backend/.venv/bin/python -m app.cli --sport ncaab odds; /Users/andry/nba-predictor-live/backend/.venv/bin/python -m app.cli --sport ncaab daily</string>
+		<string>/Users/andry/nba-predictor-delivery/backend/.venv/bin/python -m app.cli --sport ncaab odds; o=$?; /Users/andry/nba-predictor-delivery/backend/.venv/bin/python -m app.cli --sport ncaab daily; d=$?; [ $o -eq 0 ] || exit $o; exit $d</string>
 	</array>
 	<key>StandardErrorPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/ncaab-daily-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/ncaab-daily-launchd.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/andry/Desktop/nba-predictor-sprint1/data/ncaab-daily-launchd.log</string>
+	<string>/Users/andry/Desktop/nbanhlnfl/data/ncaab-daily-launchd.log</string>
 	<key>StartCalendarInterval</key>
 	<dict>
 		<key>Hour</key>
@@ -32,9 +34,7 @@
 		<key>Minute</key>
 		<integer>45</integer>
 	</dict>
-	<key>ThrottleInterval</key>
-	<integer>60</integer>
 	<key>WorkingDirectory</key>
-	<string>/Users/andry/nba-predictor-live/backend</string>
+	<string>/Users/andry/nba-predictor-delivery/backend</string>
 </dict>
 </plist>

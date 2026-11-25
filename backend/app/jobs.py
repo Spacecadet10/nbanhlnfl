@@ -900,7 +900,7 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
     # adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): due state only; the refits run as `adaptive-train` under their own lock.
     if sport(conn) == "ncaab":      # no adaptive ensemble, research cohorts or recovery for NCAAB
         out["adaptive_train"] = {"status": "not_defined", "reason": "NCAAB has no adaptive or research forecasts"}
-        return out
+        return _attention(out)
     out["adaptive_train"] = adaptive_train(conn) if research_live.enabled() else {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
     return _attention(out)
 

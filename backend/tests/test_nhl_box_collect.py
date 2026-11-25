@@ -250,7 +250,8 @@ def test_the_trainer_trains_on_partial_inputs_and_reports_them(tmp_path, codes, 
     assert _run_template(tmp_path, "adaptive-train", codes) == (expect, calls)
 
 
+@pytest.mark.parametrize("sport", ["nhl", "ncaab"])
 @pytest.mark.parametrize("codes, expect", [({}, 0), ({"odds": 1}, 1), ({"daily": 1}, 1), ({"daily": 3}, 3), ({"odds": 1, "daily": 3}, 1)])
-def test_a_failed_odds_step_is_not_hidden_by_a_good_daily_step(tmp_path, codes, expect):
-    code, calls = _run_template(tmp_path, "nhl-daily", {f"--sport nhl {k}": v for k, v in codes.items()})
-    assert (code, calls) == (expect, ["--sport nhl odds", "--sport nhl daily"])
+def test_a_failed_odds_step_is_not_hidden_by_a_good_daily_step(tmp_path, codes, expect, sport):
+    code, calls = _run_template(tmp_path, f"{sport}-daily", {f"--sport {sport} {k}": v for k, v in codes.items()})
+    assert (code, calls) == (expect, [f"--sport {sport} odds", f"--sport {sport} daily"])
