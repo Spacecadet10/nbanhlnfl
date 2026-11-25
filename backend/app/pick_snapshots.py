@@ -191,7 +191,7 @@ def price_at(store, sport: str, pick: dict, side: str, line: Optional[float], at
                 return {**out, "price_reason": "line_moved"}
             found = q is not None and ({"a": q["price_a"], "mid": q["price_mid"], "b": q["price_b"]}.get(side), q["provider"], q["quote_id"],
                                        q["retrieved_at"])
-    except (sqlite3.Error, KeyError, IndexError, TypeError):
+    except Exception:                          # a price problem never costs the pick its saved colour
         return {**out, "price_reason": "quotes_unreadable"}
     if not found or found[0] is None or abs(found[0]) < 100 or not found[3] < start:
         return {**out, "price_reason": "no_quote_at_this_line"}
@@ -227,13 +227,18 @@ def _row(sport: str, pick: dict, store, at: str, on_card: bool, recommended: Opt
 
 
 def _insert(conn, row: dict) -> None:
-    row = {**row, "code_commit": _commit(), "recorded_at": datetime.now(timezone.utc).strftime(FMT)}
+    row = {**row, "recorded_at": datetime.now(timezone.utc).strftime(FMT)}
     conn.execute(f"INSERT INTO pick_snapshots ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", tuple(row.values()))
 
 
 def _latest(conn, r: dict):
     return conn.execute("SELECT * FROM pick_snapshots WHERE event = 'seen' AND sport = ? AND game_id = ? AND market = ? AND forecast_key = ? "
                         "ORDER BY version_no DESC LIMIT 1", (r["sport"], r["game_id"], r["market"], r["forecast_key"])).fetchone()
+
+
+def _changed(last, r: dict) -> bool:
+    """Is `r` a new version? An unreadable recommendation (None) alone is not a change."""
+    return last is None or any(last[k] != r[k] for k in VERSIONED if not (k == "recommended" and r[k] is None))
 
 
 def _open_store(sport: str):
@@ -251,38 +256,56 @@ def observe(sport: str, report: dict, now: datetime, store=None) -> int:
     try:
         conn = _connect(write=True)
         at = now.strftime(FMT)
-        picks = [p for p in report["picks"] if p["status"] == "scheduled" and p["grade"] == "pending" and p["generated_at"] <= at < p["tipoff"]]
+        broken = 0
+
+        def failed(p, exc):                        # one malformed pick never stops the others; the run is still reported as failed
+            nonlocal broken
+            broken += 1
+            print(f"pick-snapshots recorder (cards unaffected): {sport} {p.get('game_id')} {p.get('market')}: {type(exc).__name__}",
+                  file=sys.stderr, flush=True)
+
+        picks = []
+        for p in report["picks"]:
+            try:
+                if p["status"] == "scheduled" and p["grade"] == "pending" and _t(p["generated_at"]) <= _t(at) < _t(p["tipoff"]):
+                    p["game_id"], p["market"], p["forecast_id"], p["probability"]
+                    if not (p["generated_at"] <= at < p["tipoff"]):
+                        raise ValueError("time format")
+                    picks.append(p)
+            except Exception as exc:
+                failed(p, exc)
         if not picks:
-            return 0
+            return -1 if broken else 0
         if store is None:
             store = opened = _open_store(sport)
-        rep = {**report, "sport": sport}
+        rep = {**report, "sport": sport, "picks": picks}
         cards = [p for gid in dict.fromkeys(p["game_id"] for p in picks) for p in pp.on_card(rep, gid, now)]
         named, shown = _recommended(rep, cards), {id(p) for p in cards}
-        fresh, broken = [], 0
+        fresh = []
         for p in picks:
-            try:                               # one malformed pick never stops the others; the run is still reported as failed
+            try:
                 r = _row(sport, p, store, at, id(p) in shown, named.get(p["game_id"]) if id(p) in shown else None)
+                if r is not None and _changed(_latest(conn, r), r):
+                    fresh.append((p, {**r, **price_at(store, sport, p, r["side"], r["line"], at)}))
             except Exception as exc:
-                broken += 1
-                print(f"pick-snapshots recorder (cards unaffected): {sport} {p.get('game_id')} {p.get('market')}: {type(exc).__name__}",
-                      file=sys.stderr, flush=True)
-                continue
-            last = r and _latest(conn, r)
-            if r is not None and (last is None or any(last[k] != r[k] for k in VERSIONED)):
-                fresh.append((p, r))
+                failed(p, exc)
         if not fresh:
             return -1 if broken else 0
+        commit = _commit()                         # git is asked before the write lock is taken, never under it
         written = 0
         conn.execute("BEGIN IMMEDIATE")
         try:
             for p, r in fresh:
                 last = _latest(conn, r)                        # again, under the lock: two runs never write one version twice
-                if last is not None and all(last[k] == r[k] for k in VERSIONED):
+                if not _changed(last, r):
                     continue
-                _insert(conn, {"event": "seen", "version_no": 1 if last is None else last["version_no"] + 1, **r,
-                               **price_at(store, sport, p, r["side"], r["line"], at)})
-                written += 1
+                try:
+                    _insert(conn, {"event": "seen", "version_no": 1 if last is None else last["version_no"] + 1, "code_commit": commit, **r})
+                    written += 1
+                except (sqlite3.Error, ValueError, TypeError) as exc:
+                    if not conn.in_transaction:     # the whole transaction is gone (disk, corruption): nothing to keep
+                        raise
+                    failed(p, exc)
         except BaseException:
             conn.execute("ROLLBACK")
             raise
@@ -309,14 +332,14 @@ def record_sent(ledger, sport: str, key: str, game_id: str, report: dict, now: d
         rep = {**report, "sport": sport}
         cards = pp.on_card(rep, game_id, now)
         named = _recommended(rep, cards).get(game_id)
-        written = 0
+        commit, written = _commit(), 0
         for p in cards:
             at = d["attempted_at"]
             r = _row(sport, p, store, at, True, named) if at < p["tipoff"] else None
             if r is None or conn.execute("SELECT 1 FROM pick_snapshots WHERE event = 'sent' AND delivery_key = ? AND market = ?",
                                          (key, p["market"])).fetchone():
                 continue
-            _insert(conn, {"event": "sent", "delivery_key": key, "message_id": d["message_id"], **r, **price_at(store, sport, p, r["side"], r["line"], at)})
+            _insert(conn, {"event": "sent", "delivery_key": key, "message_id": d["message_id"], "code_commit": commit, **r, **price_at(store, sport, p, r["side"], r["line"], at)})
             written += 1
         return written
     except Exception as exc:
@@ -443,7 +466,7 @@ def backfill(ledger, sport: str, starts: dict, apply: bool = False, store=None) 
                             (pub["delivery_key"], pub["market"])).fetchone():
                 out["already_saved"] += 1
                 continue
-            _insert(conn, {"event": "sent", **row,
+            _insert(conn, {"event": "sent", "code_commit": _commit(), **row,
                            **price_at(store, sport, {"game_id": row["game_id"], "market": row["market"], "tipoff": start}, row["side"],
                                       row["line"], row["observed_at"])})
             out["written"] += 1
@@ -511,7 +534,7 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
                 "selection_differs": differs}
 
     out: dict = {"all": [], "recommended": [], "sent": [], "excluded": Counter()}
-    by_item = {}
+    by_item, named = {}, {}
     for it in items:
         gm = (it["game_id"], it["market"])
         by_item[gm] = it
@@ -522,11 +545,16 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         row = known(it, s) if s is not None and not late else unknown(it, it["start_at"], bool(before), late)
         row["versions"] = [_version(v) for v in mine]
         if s is not None and not late:         # the card's recommendation as it last stood before the start: at most one per game
-            carded = [v for v in before if v["forecast_key"] == it["forecast_key"] and v["on_card"]]
+            carded = [v for v in before if v["forecast_key"] == it["forecast_key"] and v["on_card"] and v["recommended"] is not None]
             row["recommended"] = bool(carded and carded[-1]["recommended"])
+            if row["recommended"]:
+                named.setdefault(it["game_id"], []).append((carded[-1]["observed_at"], len(out["all"]), row))
         out["all"].append(row)
-        if row["recommended"]:
-            out["recommended"].append(row)
+    for options in named.values():             # a pick that left the card keeps its last state: the later recommendation stands
+        keep = max(options, key=lambda o: o[:2])[2]
+        for *_, row in options:
+            row["recommended"] = row is keep
+    out["recommended"] = [r for r in out["all"] if r["recommended"]]
 
     sent_rows = {(r["delivery_key"], r["market"]): r for r in snaps if r["event"] == "sent"}
     last: dict = {}

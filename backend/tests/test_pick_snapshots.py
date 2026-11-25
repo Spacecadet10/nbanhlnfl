@@ -493,3 +493,51 @@ def test_a_forecast_first_seen_after_a_start_that_moved_earlier_says_so():
     ps.observe("nba", rep(pick()), T)
     got, = classify([item(start="2026-11-25T19:45:00Z")])["all"]
     assert (got["colour"], got["unknown_reason"], got["recommended"]) == ("unknown", "saved_after_the_moved_start", None)
+
+
+# --- Re-review (Nov 25) -------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("fault", [{"tipoff": None}, {"generated_at": None}, {"tipoff": "2026-11-25 nonsense"}, {"market": None}, {"pick_label": object()}])
+def test_no_single_bad_pick_drops_the_batch(fault):
+    bad = {**pick("bad", fid=9), **fault}
+    assert ps.observe("nba", rep(bad, pick("good", fid=1)), T) == -1
+    assert "good" in [r["game_id"] for r in rows()]
+
+
+def test_an_unexpected_price_error_saves_the_pick_unpriced(monkeypatch):
+    from app import odds
+    monkeypatch.setattr(odds, "provider_key", lambda n: (_ for _ in ()).throw(RuntimeError("x")))
+    assert ps.observe("nba", rep(total()), T, store=quotes(q())) == 1
+    assert rows()[0]["price_reason"] == "quotes_unreadable"
+
+
+def test_an_unreadable_recommendation_never_erases_a_known_one(monkeypatch):
+    from app import tickets
+    ps.observe("nba", rep(pick()), T)
+    monkeypatch.setattr(tickets, "card_choice", lambda *a: (_ for _ in ()).throw(KeyError("x")))
+    assert ps.observe("nba", rep(pick()), T + timedelta(minutes=1)) == 0              # not a new version
+    ps.observe("nba", rep(pick(h=hist(w=4, l=1))), T + timedelta(minutes=2))           # a real change, recommendation unreadable
+    assert len(rows()) == 2
+    assert [r["game_id"] for r in classify([item()])["recommended"]] == ["g1"]
+
+
+def test_a_pick_that_left_the_card_gives_way_to_the_later_recommendation():
+    ps.observe("nba", rep(pick(fid=1)), T)
+    later = pick(fid=2, market="total", line=220.5, h=hist(market="total", src="bookmaker"))
+    ps.observe("nba", rep(later), T + timedelta(minutes=10))                          # the winner pick is gone from the report
+    out = classify([item(), item(market="total", fid="2", line=220.5)])
+    assert [r["market"] for r in out["recommended"]] == ["total"]
+    assert {r["market"]: r["recommended"] for r in out["all"]} == {"winner": False, "total": True}
+
+
+def test_git_is_never_asked_while_the_write_lock_is_held(monkeypatch):
+    asked = []
+
+    def commit():
+        c = sqlite3.connect(ps.path(), timeout=0.1, isolation_level=None)
+        c.execute("BEGIN IMMEDIATE")               # fails if the recorder holds the lock
+        c.execute("ROLLBACK")
+        c.close()
+        asked.append(1)
+        return "abc"
+    monkeypatch.setattr(ps, "_commit", commit)
+    assert ps.observe("nba", rep(pick()), T) == 1 and asked and rows()[0]["code_commit"] == "abc"
