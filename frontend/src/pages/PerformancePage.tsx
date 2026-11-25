@@ -19,6 +19,7 @@ import { canonicalFor, CanonicalReport } from '../components/Canonical';
 import { ThresholdOverviewCard } from '../components/ThresholdOverview';
 import { PaperRulesCard } from '../components/PaperRules';
 import { RecoveredPerformance } from '../components/TelegramHistory';
+import { PickColours } from '../components/PickColours';
 import { hasResearch } from '../components/sportCaps';
 import { Icon, PageTitle } from '../components/ui';
 
@@ -47,6 +48,7 @@ export function PerformancePage() {
           <PolicyToggle value={policy} onChange={setPolicy} canonical />
           {market === 'winner' && <RunTypeToggle value={run} onChange={setRun} />}
         </div>
+        <PickColours league={sport} />
         <RecoveredPerformance league={sport} market={market} />
         <CanonicalReport sport={sport} market={market} />
         <ThresholdOverviewCard sport={sport} />

@@ -11,6 +11,7 @@ import { PickEvidence } from '../components/PickEvidence';
 import { daySummary, daySummaryText, emptyCompetition, forecastBanner, forecastKind, forecastStateOf, importHint, liveLoadProblem, matchForecastNote } from '../components/soccerStatus';
 import type { NflCapability } from '../api/types';
 import { RecoveredLedger, RecoveredPerformance } from '../components/TelegramHistory';
+import { PickColours } from '../components/PickColours';
 import { TeamLogo } from '../components/TeamLogo';
 import { EmptyForecastState, Icon, MetricCard, PageTitle } from '../components/ui';
 import { calendarDate, dateTime, FULL_DATE, shiftDate, tipoffTime } from '../format';
@@ -593,7 +594,7 @@ function SoccerRecordPage({ meta, page }: { meta: SoccerMeta; page: 'history' | 
       <PageTitle icon={page === 'history' ? 'history' : 'performance'} title={title}
         sub={`${meta.competition}: every recorded live 90-minute forecast and its result.`} />
       {page === 'history' ? <RecoveredLedger league="soccer" competition={meta.competition_id} competitionName={meta.competition} />
-        : <RecoveredPerformance league="soccer" competition={meta.competition_id} competitionName={meta.competition} />}
+        : <><PickColours league="soccer" /><RecoveredPerformance league="soccer" competition={meta.competition_id} competitionName={meta.competition} /></>}
       <h2>Live 1X2 record: {meta.competition}</h2>
       <AsyncView state={state} retry={retry}>
         {(r: SoccerLiveRecord) => {

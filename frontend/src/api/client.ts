@@ -6,7 +6,7 @@ import type { CanonicalHistory, CanonicalPerformance, PaperRules, RankedPicks, T
   PerformanceResponse, Policy, ResearchGame, ResearchHistory, ResearchReport, ResearchSlate, Retrospective, RuleReport, CandidateRoster, PoolReport, SelectionStatus, Sport,
   DataFreshness, Health, NflRecord, PolledLeague, SoccerCompetitionId, SoccerMatchDetail, SoccerMatchesResponse, SoccerMeta, SoccerLiveResponse, SoccerLiveRecord,
   SoccerPerformance, SoccerResearchHistory, SoccerResearchMatchDetail, SoccerResearchMatches, SoccerResearchMeta, NflGameDetail, NflGamesResponse, NflMeta, TrainingRun, TrainingStatus, TrackingCheck, TrackingEvidence, TrackingGame, TrackingKind, TrackingReport,
-  LearningCoverage, LearningOps, League, TgReport,
+  LearningCoverage, LearningOps, League, PcReport, TgReport,
 } from './types';
 
 export class ApiError extends Error {
@@ -80,6 +80,8 @@ export const api = {
     signal?: AbortSignal) => get<SoccerResearchHistory>('/soccer/research/history',
     { competition, ...(season != null ? { season: String(season) } : {}), ...(model ? { model } : {}), offset: String(offset), limit: '100' }, signal),
   // NFL: data-only reads (schedule, results, matchup facts). Separate endpoints; NFL is never passed as `sport`.
+  /** Results of the picks by the colour saved before their start. */
+  pickColours: (f: Record<string, string | undefined>, signal?: AbortSignal) => get<PcReport>('/pick-colours', f, signal),
   /** Recovered Telegram predictions with the live record, each game and market counted once. No market = every market. */
   telegramHistory: (league: League, f: { market?: string; date_from?: string; date_to?: string; team?: string; competition?: string; live_rows?: string }, signal?: AbortSignal) =>
     get<TgReport>(league === 'nfl' ? '/nfl/telegram-history' : league === 'soccer' ? '/soccer/telegram-history' : '/telegram-history',

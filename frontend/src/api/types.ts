@@ -1307,3 +1307,24 @@ export interface TgReport {
   not_predictions: { game_id: string; market_key: string; matchup: string; pick: string; percentage: string; message_id: number; sent_at_local: string; start_at: string; reason: string }[];
   rows: TgRow[]; live_rows: TgLive[]; summary: TgSummary; markets: ({ market: string; title: string } & TgSummary)[]; exact_percentages: TgExact[];
 }
+
+/** GET /api/pick-colours: results of the picks by the colour saved before their start. */
+export interface PcTally { predictions: number; games: number; win: number; loss: number; push: number; void: number; half: number; unsettled: number; settled: number; win_rate: number | null;
+  ci95: [number, number] | null; small_sample: boolean; priced: number; unpriced: number; priced_settled: number; profit_units: number | null; roi: number | null }
+export interface PcSupport { wins: number | null; losses: number | null; pushes: number | null; voids: number | null; recovered_wins: number | null; recovered_losses: number | null;
+  recovered_pushes: number | null; recovered_voids: number | null; recovered_reason: string | null; past_wins: number | null; past_losses: number | null; past_colour: string | null; colour_rule: string;
+  observed_at: string; basis: 'live' | 'card_text'; event: string; provenance: string | null; price_american: number | null; price_provider: string | null; price_quote_id: number | null;
+  price_retrieved_at: string | null; price_reason: string | null; live_source: string | null; recovered_source: string | null }
+export interface PcVersion { event: 'seen' | 'sent'; version_no: number | null; forecast_id: string; generated_at: string; observed_at: string; pick_label: string | null; side: string; line: number | null;
+  percentage: string; colour: string | null; wins: number | null; losses: number | null; recovered_colour: string | null; recovered_wins: number | null; recovered_losses: number | null;
+  recommended: number | null; on_card: number | null; basis: string }
+export interface PcRow { sport: string; game_id: string; market: string; market_title: string; forecast_id: string; percentage: string; side: string; line: number | null; grade: string; start_at: string;
+  game_date: string; generated_at: string; matchup: string | null; pick: string | null; model_version: string | null; final_score: string | null; colour: string; recovered_colour: string;
+  unknown_reason: string | null; support: PcSupport | null; price: number | null; recommended: boolean | null; selection_differs: boolean; versions: PcVersion[]; sent_at?: string; message_id?: number | null }
+export interface PcReport { sport: string; view: string; record: string; as_of: string; note: string; colour_rule: string; legend: string; rule_live_since: string; tracking_start: string | null; backfilled_from: string | null;
+  sports: { sport: string; status: string; tracking_start: string | null; backfilled_from: string | null; upcoming: number; markets: { market: string; title: string }[] }[];
+  summary: { total: PcTally; live: Record<string, PcTally>; recovered: Record<string, PcTally>; cross: Record<string, number>; adds_up: boolean };
+  by_market: { sport: string; market: string; title: string; all: PcTally; groups: Record<string, PcTally> }[]; by_percentage: { percentage: string; all: PcTally; groups: Record<string, PcTally> }[];
+  views: Record<string, PcTally>; rows: PcRow[]; rows_total: number;
+  reconciliation: { live_forecasts: PcTally; known_colour: number; unknown_colour: number; unknown_reasons: Record<string, number>; observed_live: number; observed_card_text: number; recovered_only: PcTally;
+    combined_predictions: number; recovered_note: string; sent: number; sent_excluded: Record<string, number>; upcoming_saved: number; adds_up: boolean } }
