@@ -1,3 +1,51 @@
+## Green/red/neutral pick tracking — branch green-tracking a40309d, RELEASED to delivery (2026-11-25T08:06:54Z) — Claude Opus 5.5 (lead)
+- What: each prediction's colour is saved before its start (exact %, W/L behind it, rule version, forecast id, time) in the append-only
+  `data/pick_snapshots.sqlite`, graded automatically, shown on every Performance page (`GET /api/pick-colours`; counting rules:
+  docs/PICK_COLOURS.md). Colour rule (bucket-record-v1), cards, recommendations and message keys unchanged. It measures the colours;
+  it does not show that green picks are profitable.
+- Tracking start: 2026-11-25T08:07:47Z (first rows saved live: 72 Soccer, none settled). NBA, NHL, NFL, NCAAB: NO live row yet - no pregame
+  forecast existed at release; their first live rows were not observed. Everything settled below is backfilled from saved card text.
+- Backfill (proof = the sent card's own text; dry run, --apply, recheck): 1,220 of 2,922 saved card lines (105 NBA, 66 NHL, 20 NFL, 755
+  NCAAB, 274 Soccer), from 2026-11-22; recheck wrote 0. Not proven: 1,607 before the rule went live (2026-11-22T17:15:41Z), 95 lines with
+  no confirmed delivery in the ledger (52 of those count as sent through the Telegram export, colour unknown). No colour was reconstructed.
+- Live totals 08:12:45Z, all sports (after/table.txt, after/api/*.json; adds_up and sent_adds_up true for every sport): 3,650 live forecasts (355 known
+  colour, 3,295 unknown: 2,496 before the rule, 708 later forecast not saved, 91 before tracking) + 973 recovered-only, counted once = 4,623.
+  Against the 4,157 of the earlier report: +456 Soccer picks in its three other markets, +10 NCAAB (two newer games); other sports identical.
+- GREEN, live record, W-L (priced picks only for units; small samples marked on the page):
+  - All forecasts 21-14, 2 void, 1 unsettled (-0.08u on 4): NBA 6-4, NHL 1-1, NFL none, NCAAB 2-3, Soccer 12-6.
+  - Recommended 1-2, 1 void (-1.00u on 1): NBA 0-1, NCAAB void, Soccer 1-1.
+  - Confirmed sends 79-48, 6 void, 1 unsettled (-1.40u on 67): NBA 6-6, NHL 1-1, NFL none, NCAAB 60-35, Soccer 12-6.
+  - Recovered-history support (separate): all 11-5 (NBA 6-3, NHL 5-2); sends 14-7 (NBA 8-5, NHL 6-2).
+  - Baseline, same periods: sends red 118-108, neutral 334-302. Overlapping markets of one game are not independent.
+- Review: one independent Opus reviewer. Round 1 REQUEST CHANGES (3 high, 4 medium, lows) -> fixed test-first (two mediums documented only: M4
+  a failed sent-row write needs a manual backfill; soccer price coverage is low and biased) -> APPROVE of e51f4b24 -> N1 (lock delay) fixed
+  -> final APPROVE of a40309d. Recorder EQUIVALENT 5ded396..a40309d (static; 47-delivery replay byte-identical at e51f4b24, not replayed at
+  a40309d). weekly_report_review.json: see its last entry.
+- Tests at a40309d: full backend `pytest tests/test_*.py` (default chunks failed on an awk slip, so five whole copies ran in parallel under
+  --basetemp in a scratch folder): each 3,408 passed, 1 skipped, 25 FAILED, the same 25 = 8 test_deep_study (torch/keras not installed) + 16
+  test_research_agent + 1 test_soccer_live. test_research_agent is the --basetemp: default temp 46 passed at a40309d and at 2749f91; the same
+  --basetemp on 2749f91 fails the same 16. test_soccer_live passes alone. Not fully green (deep_study). Frontend: build OK; 77 unit tests
+  passed before e51f4b24, not rerun (no frontend change since).
+- Live checks: Telegram runs 08:07:47Z, 08:10:05Z, 08:12:23Z ok, no `pick_snapshots: failed`, error log unchanged, cadence unchanged (~137 s);
+  /performance for all five sports at 1440 and 390: no overflow, no console error, numbers = API. First uncached Soccer build 10 s (then 60 s cache).
+- Backups: before 20261125T080550Z; after (runner -> a40309d) pick_snapshots.sqlite 1,292 rows, integrity ok. Both exit 2 = no mirror drive.
+- OPEN: (1) observe the first live NBA/NHL/NFL/NCAAB rows and the first live 'sent' row. (2) Telegram paused, stale pages or the Mac off ->
+  colour not saved -> unknown. (3) Unpriced: 3,536 of 3,650 forecasts have no matching stored price. (4) M4. (5) soccer-live exit 1 is its own
+  refusal (matches still to be played), seen before this release too.
+- ROLLBACK: delivery `git checkout --detach 2749f91`, frontend build, `app.release pin`, kickstart api-delivery + web; runner -> 787d861.
+  pick_snapshots.sqlite can stay (nothing else reads it). Evidence: ~/nba-predictor-research-data/pick-colours-2026-11-25/.
+
+## NBA daily job run by hand (owner request), Nov 25, 2026 04:36Z — Claude Opus 5.5 — no code change
+- Why: the Mac restarted ~21:59 local (login 23:34), so the 22:00 run never fired. Ran `launchctl kickstart -p gui/$(id -u)/com.nba-predictor.daily`
+  -> runs 1, last exit code 0 (data/daily-launchd.log, 04:36:05Z-04:36:14Z). Refresh skipped (odds cycle had refreshed 04:35:51Z, next due 04:36:51Z);
+  box scores 3/3; player_box 2027 downloaded; score/two-hour/market scoring ran (72 of 73 two-hour forecasts settled, 1 pending).
+- Log's 18 "outcome": "failed" = availability_two_hour in earlier odds cycles (22:31Z-02:46Z), not this run: 10 unresolved/no-history Out players
+  (Larrea, Mitchell, Beekman, ...), 8 "Invalid player minutes". Not investigated. adaptive_train still "due".
+- Not an issue: com.nba-predictor.card-thresholds is absent on purpose (retired Nov 22, bucket-colours release afdb239). This checkout
+  (colour-gate 708a9ff) is STALE; the current handoff is delivery 2749f91 / origin/delivery-release.
+- OPEN: nhl-daily and ncaab-daily showed runs 0 since login at 04:35Z (not run by hand; only the NBA daily was requested).
+- Not run: direct integrity check of data/nba.sqlite after the restart (command denied).
+
 ## Resumable research runs + five-sport completion — branch research-resume 0097440, RELEASED to delivery (2026-11-24 ~03:00Z) — Claude Fable 5.2 (lead)
 - RESULT (verified 2026-11-24 07:30Z, `python3 -I <evidence>/verify_results.py` -> PROBLEMS: 0; output in evidence/after/verify_results.txt):
   all five v3 studies `evaluated`, queue.remaining 0, no failed item, no item scored twice; pinned code in every run (runner-runs.jsonl:
