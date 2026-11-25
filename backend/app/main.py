@@ -685,6 +685,24 @@ def soccer_telegram_history(market: Optional[str] = None, date_from: Optional[da
                                           competition=competition, live_rows=live_rows, **filters)}
 
 
+@app.get("/api/pick-colours")
+def pick_colours_report(sport: str = Query("all", pattern="^(all|nba|nhl|nfl|ncaab|soccer)$"), view: str = Query("all", pattern="^(all|recommended|sent)$"),
+                        record: str = Query("live", pattern="^(live|recovered)$"), market: Optional[str] = None,
+                        percentage: Optional[str] = Query(None, pattern=r"^\d{1,3}\.\d$"), date_from: Optional[date] = None, date_to: Optional[date] = None,
+                        colour: Optional[str] = Query(None, pattern="^(green|red|neutral|no_record|unknown)$"),
+                        limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0), mode: str = Depends(api_mode)):
+    """Results of the picks that were green, red or neutral before their start (app/pick_colours.py). Read-only."""
+    from . import pick_colours as pc
+    if mode == "demo":
+        raise HTTPException(status_code=404, detail="Saved pick colours exist only for real forecasts.")
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
+    if market is not None and not any(market in pc.markets_of(s) for s in (pc.SPORTS if sport == "all" else (sport,))):
+        raise HTTPException(status_code=404, detail=f"The {market} market is not defined for {sport}.")
+    return pc.report(sport=sport, view=view, record=record, market=market, percentage=percentage, date_from=date_from and date_from.isoformat(),
+                     date_to=date_to and date_to.isoformat(), colour=colour, limit=limit, offset=offset)
+
+
 @app.get("/api/thresholds")
 def thresholds(p=Depends(get_provider)):
     if p.mode != "real":

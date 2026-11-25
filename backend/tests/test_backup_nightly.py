@@ -89,7 +89,7 @@ def test_the_snapshot_also_holds_adaptive_pickles_scorecard_dbs_and_thresholds_d
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
     (data / "scorecard").mkdir()
-    for name in ("scorecard/nhl.sqlite", "card_thresholds.sqlite"):
+    for name in ("scorecard/nhl.sqlite", "card_thresholds.sqlite", "pick_snapshots.sqlite"):
         c = sqlite3.connect(data / name)
         c.execute("CREATE TABLE scorecard (k TEXT)")
         c.executemany("INSERT INTO scorecard VALUES (?)", [("a",), ("b",)])
@@ -104,7 +104,7 @@ def test_the_snapshot_also_holds_adaptive_pickles_scorecard_dbs_and_thresholds_d
     assert not any(p.name.endswith(".lock") or ".env" in p.name for p in (root / "pool").rglob("*"))
     assert not any(n.endswith(".lock") or ".env" in n for n in names)
     dbs = out["extras"]["databases"]
-    assert set(dbs) == {"scorecard/nhl.sqlite", "card_thresholds.sqlite"}
+    assert set(dbs) == {"scorecard/nhl.sqlite", "card_thresholds.sqlite", "pick_snapshots.sqlite"}
     for rel, info in dbs.items():
         copy = sqlite3.connect(folder / "databases" / rel)
         assert copy.execute("PRAGMA integrity_check").fetchone()[0] == "ok" == info["integrity"]

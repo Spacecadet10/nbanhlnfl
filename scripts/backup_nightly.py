@@ -44,8 +44,8 @@ EXTRA_PATTERNS = (("repo", "docs/telegram_record.json"), ("repo", "docs/preregis
                   ("data", "reports/weekly_report_review.json"), ("launch_agents", "com.nba-predictor.*.plist"))
 
 
-# SQLite files beside the stores (relative to the data folder): the per-sport scorecards and the card-threshold log.
-EXTRA_SQLITE = ("scorecard/*.sqlite", "card_thresholds.sqlite")
+# SQLite files beside the stores (relative to the data folder): the per-sport scorecards, the card-threshold log and the saved pick colours.
+EXTRA_SQLITE = ("scorecard/*.sqlite", "card_thresholds.sqlite", "pick_snapshots.sqlite")
 
 
 def _copy_sqlite(src: Path, target: Path) -> dict:

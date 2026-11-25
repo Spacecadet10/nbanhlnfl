@@ -568,3 +568,35 @@ def summarise(rows: list) -> dict:
                       and all(t["predictions"] == t["win"] + t["loss"] + t["push"] + t["void"] + t["half"] + t["unsettled"]
                               == t["priced"] + t["unpriced"] for t in parts))
     return out
+
+
+def main(argv: Optional[list] = None) -> int:
+    """python -m app.pick_snapshots backfill [--apply]: what the saved cards prove (dry run unless --apply)."""
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] != ["backfill"] or set(argv[1:]) - {"--apply"}:
+        print("usage: python -m app.pick_snapshots backfill [--apply]", file=sys.stderr)
+        return 2
+    from . import release
+    from .pick_colours import SPORTS, starts
+    apply = "--apply" in argv
+    if apply and config.protected_data_dir(config.data_dir()) and (not release.enabled() or release._checkout(release.code_root().resolve())[1]):
+        raise SystemExit("release guard: a backfill into the live data folder requires the clean release checkout")
+    ledger = sqlite3.connect(f"file:{config.telegram_ledger_path()}?mode=ro", uri=True, timeout=5)
+    ledger.row_factory = sqlite3.Row
+    try:
+        for sport in SPORTS:
+            store = _open_store(sport)
+            if store is None:
+                print(json.dumps({"sport": sport, "status": "no_store"}))
+                continue
+            try:
+                print(json.dumps(backfill(ledger, sport, starts(store, sport), apply=apply, store=store)))
+            finally:
+                store.close()
+    finally:
+        ledger.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
