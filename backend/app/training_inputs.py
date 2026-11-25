@@ -10,7 +10,7 @@ Why the check gates training. Some inputs retire a fitted member when they arriv
   gate has passed (a run that defers training adds none), right before training, and nowhere in the two-hour cycle. They
   never gate training: once one has arrived the member is retired until the next fit anyway, and training is how it comes
   back (without a missing box only that team's games lack it). A box collection that fails marks the run failed (visible)
-  without stopping training. With NHL_PLAYER_BOX_REFRESH unset no box is collected and the member stays missing (reported).
+  without stopping training: `training-inputs` then exits 3 (train, but this run is not a success; see cli.PARTIAL). With NHL_PLAYER_BOX_REFRESH unset no box is collected and the member stays missing (reported).
 - NHL shots: imported within 24 h of the result they count as observed (available at retrieval); later they are dated back
   (historical_backfill) and retire the xG member until the next fit. Recent finals are imported first (newest first), so an
   old backlog cannot starve them.
@@ -178,8 +178,8 @@ IN_FLIGHT_SECONDS = 600           # files modified this recently may still be op
 
 
 def _quarantine_unreadable_boxes(folder) -> list:
-    """collect_bulk_boxes writes each box file and each raw bulk response in place (not atomically; that module is part of
-    the NHL definition and is not edited): a run killed mid-write leaves a truncated file that counts as present and makes
+    """nhl_player_ratings' collectors write each box file and each raw response in place (not atomically; that module is part
+    of the NHL definition and is not edited; nhl_box_collect, used here, writes whole files): a run killed mid-write leaves a truncated file that counts as present and makes
     the member's loader raise (JSON that does not parse; a bulk-*.raw whose bytes no longer match the sha256 in its name).
     Such files modified in the last QUARANTINE_DAYS are renamed aside (`.corrupt-<time>`, kept), so they are fetched again.
     Files modified in the last IN_FLIGHT_SECONDS are left alone (`nhl-player-inputs` may be writing them). Game files that
@@ -222,15 +222,22 @@ def _quarantine_unreadable_boxes(folder) -> list:
 def collect_boxes(conn) -> dict:
     if not config.nhl_player_box_refresh_enabled():
         return {"status": "disabled", "reason": "NHL_PLAYER_BOX_REFRESH is not set to 1; no request was made"}
-    from . import nhl_player_ratings
+    from . import nhl_box_collect
     from .sources import nhl_injuries
     season = _nhl_season(conn)
     if season is None:
         return {"status": "skipped", "reason": "no NHL final in the store"}
     folder = nhl_injuries.root() / "boxes"
     quarantined = _quarantine_unreadable_boxes(folder) if folder.is_dir() else []
-    out = nhl_player_ratings.collect_bulk_boxes(conn, season, season, delay=1., log=lambda _m: None)
-    return {"status": "failed" if out["failed"] else "success", **out, "errors": out["errors"][:10], "quarantined": quarantined}
+    out = nhl_box_collect.collect(conn, season, season, delay=1.)
+    broken = out["failed"] or out["missing"]
+    return {"status": ("partial" if out["stored"] else "failed") if broken else "success", **out, "errors": out["errors"][:10],
+            "quarantined": quarantined}
+
+
+def _incomplete(step) -> bool:
+    """A required collection step that failed, or got only part of what it asked for (errors beside successes)."""
+    return isinstance(step, dict) and (step.get("status") in ("failed", "partial") or bool(step.get("errors")))
 
 
 def _count_missing(conn, now: str) -> None:
@@ -278,7 +285,7 @@ def run(conn, now: Optional[str] = None, collect: bool = True) -> dict:
         c = check(conn, now)
     except Exception as exc:
         c = {"ready": False, "blocking": {"check": f"{type(exc).__name__}: {exc}"}, "report": {}}
-    failed = sorted(k for k, v in steps.items() if isinstance(v, dict) and v.get("status") == "failed")
+    failed = sorted(k for k, v in steps.items() if _incomplete(v))
     detail = {"steps": {k: (v.get("status") if isinstance(v, dict) else v) for k, v in steps.items()}, "failed_steps": failed,
               "check": c}
     # 'failed' when training must wait OR a collector failed (visible on the panel); `ready` alone decides training.

@@ -147,6 +147,9 @@ def _raw_missing(conn) -> dict:
     return {"count": len(missing), "raw_ids": missing[:RAW_LIST_LIMIT], "truncated": len(missing) > RAW_LIST_LIMIT}
 
 
+PARTIAL = 3     # `training-inputs`, `daily`: the work went on, but something required is missing (named in the output)
+
+
 def _any_failed(result) -> bool:
     """True if any job result (nested dicts/lists) has status 'failed'."""
     if isinstance(result, list):
@@ -379,7 +382,8 @@ def main(argv=None) -> int:
     ar.add_argument("--cadence", choices=("weekly", "daily"), default="weekly")
     sub.add_parser("adaptive-status", help="Read-only adaptive-v1 status: fits in force, weights, exclusions, due state, record")
     sub.add_parser("training-inputs", help="Before a scheduled refit: collect the inputs the adaptive members read (results, "
-                   "NHL shots and player boxes, NBA boxes), then check them; exit 1 when training must wait")
+                   "NHL shots and player boxes, NBA boxes), then check them; exit 1 when training must wait, "
+                   "3 when it may run but a collection step failed")
     aim = sub.add_parser("adaptive-import", help="Transfer published adaptive-v1 fits (rows, artifacts, history) from the data "
                          "directory they were trained in into this store; every artifact verified, same definition only")
     aim.add_argument("--from", dest="source", required=True, help="The source data directory (holding <sport>.sqlite and research/)")
@@ -508,15 +512,17 @@ def main(argv=None) -> int:
         if args.sport != "nhl" or args.to_season < args.from_season or (args.limit is not None and args.limit < 1):
             p.error("requires --sport nhl, ascending seasons, and a positive limit")
         from .sources import nhl_injuries
-        from . import nhl_player_ratings
+        from . import nhl_box_collect, nhl_player_ratings
         report = {}
         if args.kind in ("injuries", "both"):
             report["injuries"] = nhl_injuries.collect(args.from_season - 1, args.to_season,
                                                      limit=args.limit, delay=args.sleep)
         if args.kind in ("boxes", "both"):
             with db.connect_readonly("nhl") as conn:
-                report["boxes"] = nhl_player_ratings.collect_boxes(conn, args.from_season, args.to_season,
-                                                                   limit=args.limit, delay=args.sleep)
+                report["boxes"] = (nhl_box_collect.collect(conn, args.from_season, args.to_season, delay=args.sleep)
+                                   if args.limit is None else
+                                   nhl_player_ratings.collect_boxes(conn, args.from_season, args.to_season,
+                                                                    limit=args.limit, delay=args.sleep))
         print(json.dumps(report, indent=2))
         return 1 if any(r.get("failed") for r in report.values()) else 0
 
@@ -1375,7 +1381,9 @@ def _run(args, p, conn, applied) -> int:
         from . import training_inputs
         r = training_inputs.run(conn)
         print(json.dumps(r, indent=1, default=str))
-        return 0 if r["check"]["ready"] else 1      # readiness alone decides training; a failed collector shows in job_runs
+        # Readiness alone decides training (exit 1: wait). A required collector that failed or got only part of its data never
+        # leaves the run an unqualified success: PARTIAL, on which the trainer trains and then itself exits PARTIAL.
+        return 1 if not r["check"]["ready"] else PARTIAL if r.get("failed_steps") else 0
     elif args.cmd == "adaptive-import":     # under the store lock taken above, like adaptive.publish
         from . import fit_transfer
         r = fit_transfer.transfer(conn, args.source, args.sport,
@@ -1436,7 +1444,9 @@ def _run(args, p, conn, applied) -> int:
                                     lock=lambda: db.store_lock(args.sport, wait_seconds=ODDS_LOCK_WAIT_SECONDS))
         print(json.dumps(result, indent=2, default=str))
         # the odds cycle's injury capture is reported, never fatal (as in the forecast step): its forecasts are done
-        return 1 if _any_failed({k: v for k, v in result.items() if k != "nhl_injuries"} if isinstance(result, dict) else result) else 0
+        if _any_failed({k: v for k, v in result.items() if k != "nhl_injuries"} if isinstance(result, dict) else result):
+            return 1
+        return PARTIAL if args.cmd == "daily" and result.get("attention") else 0
     elif args.cmd == "coverage":
         print(json.dumps(coverage.report(conn), indent=2))
     elif args.cmd == "release-check":

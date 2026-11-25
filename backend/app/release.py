@@ -79,8 +79,12 @@ def pinned_commit(root: Path) -> Optional[str]:
 
 
 def write_pin(root: Path) -> str:
-    """Pins the checkout's current commit (the release procedure's last step); returns it."""
+    """Pins the checkout's current commit (the release procedure's last step); returns it. A commit that no branch holds is
+    refused: it was made in the release checkout itself, exists nowhere else and git may delete it once the checkout moves
+    (live 43d4b74, Nov 16-25). Put it on its release branch (live: `live-release`, delivery: `delivery-release`) and push it."""
     commit = _git(root, "rev-parse", "HEAD").strip()
+    if not _git(root, "for-each-ref", "--contains", commit, "--format=%(refname)", "refs/heads", "refs/remotes").strip():
+        raise ValueError(f"not pinned: no branch holds {commit[:12]}; put it on the release branch first")
     pin_path(root).write_text(commit + "\n")
     return commit
 

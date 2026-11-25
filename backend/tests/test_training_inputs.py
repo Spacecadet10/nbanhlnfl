@@ -80,9 +80,9 @@ def test_collect_runs_refresh_shots_and_boxes_in_order_and_logs_a_visible_job_ru
     calls = []
     monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: calls.append("refresh") or {"status": "success"})
     monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: calls.append("shots") or {"status": "skipped"})
-    from app import nhl_player_ratings
-    monkeypatch.setattr(nhl_player_ratings, "collect_bulk_boxes",
-                        lambda conn, a, b, **kw: calls.append(("boxes", a, b)) or {"stored": 0, "cached": 3, "failed": 0, "errors": []})
+    from app import nhl_box_collect
+    monkeypatch.setattr(nhl_box_collect, "collect",
+                        lambda conn, a, b, **kw: calls.append(("boxes", a, b)) or {"stored": 0, "cached": 3, "failed": 0, "missing": 0, "errors": []})
     monkeypatch.setattr(training_inputs, "collect_recent_shots", lambda conn, now=None: calls.append("recent") or {"status": "skipped"})
     monkeypatch.setattr(training_inputs, "check", lambda conn, now=None: {"ready": True, "blocking": {}, "report": {}})
     out = training_inputs.run(store, now=NOW)
@@ -96,11 +96,11 @@ def test_a_failing_collector_is_reported_and_the_check_still_runs(store, monkeyp
     monkeypatch.setenv("NHL_PLAYER_BOX_REFRESH", "1")
     monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "failed", "error": "ConnectError"})
     monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: {"status": "skipped"})
-    from app import nhl_player_ratings
+    from app import nhl_box_collect
 
     def down(*a, **kw):
         raise OSError("network down")
-    monkeypatch.setattr(nhl_player_ratings, "collect_bulk_boxes", down)
+    monkeypatch.setattr(nhl_box_collect, "collect", down)
     monkeypatch.setattr(training_inputs, "collect_recent_shots", lambda conn, now=None: {"status": "skipped"})
     checks = iter([{"ready": True, "blocking": {}, "report": {}},                          # pre-check passes; final does not
                    {"ready": False, "blocking": {"nhl_shots": "missing"}, "report": {}}])
@@ -159,8 +159,8 @@ def test_boxes_are_not_collected_when_another_input_already_defers_training(stor
     monkeypatch.setenv("NHL_PLAYER_BOX_REFRESH", "1")
     monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "failed", "error": "ConnectError"})
     monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: {"status": "skipped"})
-    from app import nhl_player_ratings
-    monkeypatch.setattr(nhl_player_ratings, "collect_bulk_boxes", lambda *a, **k: pytest.fail("boxes collected"))
+    from app import nhl_box_collect
+    monkeypatch.setattr(nhl_box_collect, "collect", lambda *a, **k: pytest.fail("boxes collected"))
     out = training_inputs.run(store, now=NOW)
     assert out["steps"]["nhl_player_boxes"]["status"] == "deferred" and "results" in out["check"]["blocking"], out
 
@@ -187,9 +187,9 @@ def test_a_failed_box_collection_is_visible_but_does_not_stop_training(store, mo
     monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "skipped"})
     monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: {"status": "skipped"})
     monkeypatch.setattr(training_inputs, "collect_recent_shots", lambda conn, now=None: {"status": "skipped"})
-    from app import nhl_player_ratings
-    monkeypatch.setattr(nhl_player_ratings, "collect_bulk_boxes",
-                        lambda conn, a, b, **kw: {"stored": 0, "cached": 0, "failed": 1, "errors": [{"game_id": "x", "error": "y"}]})
+    from app import nhl_box_collect
+    monkeypatch.setattr(nhl_box_collect, "collect",
+                        lambda conn, a, b, **kw: {"stored": 0, "cached": 0, "failed": 1, "missing": 1, "errors": [{"game_id": "x", "error": "y"}]})
     out = training_inputs.run(store, now=NOW)
     assert out["check"]["ready"] and out["status"] == "failed", out          # train, but show the failed step
     from app import training_monitor
@@ -229,19 +229,19 @@ def test_every_launchd_template_parses_with_the_strict_xml_parser():
         plistlib.loads(p.read_bytes())
 
 
-def test_training_inputs_command_exits_0_when_ready_although_a_collector_failed(store, monkeypatch, capsys):
-    """A failed box step is visible (job_runs 'failed') but must not stop training: the plist trains on exit 0."""
+def test_training_inputs_command_exits_3_when_ready_although_a_collector_failed(store, monkeypatch, capsys):
+    """A failed box step must not stop training (the trainer trains on 0 and 3) and must not look like a success (owner, Nov 25)."""
     monkeypatch.setenv("NHL_PLAYER_BOX_REFRESH", "1")
     monkeypatch.setattr(jobs, "refresh", lambda conn, **kw: {"status": "skipped"})
     monkeypatch.setattr(jobs, "nhl_pbp", lambda conn, **kw: {"status": "skipped"})
     monkeypatch.setattr(training_inputs, "collect_recent_shots", lambda conn, now=None: {"status": "skipped"})
     monkeypatch.setattr(training_inputs, "check", lambda conn, now=None: {"ready": True, "blocking": {}, "report": {}})
-    from app import nhl_player_ratings
+    from app import nhl_box_collect
 
     def down(*a, **kw):
         raise OSError("stats API down")
-    monkeypatch.setattr(nhl_player_ratings, "collect_bulk_boxes", down)
-    assert cli.main(["--sport", "nhl", "training-inputs"]) == 0
+    monkeypatch.setattr(nhl_box_collect, "collect", down)
+    assert cli.main(["--sport", "nhl", "training-inputs"]) == 3
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "failed" and out["steps"]["nhl_player_boxes"]["status"] == "failed", out
 
@@ -258,10 +258,10 @@ def test_an_unreadable_recent_box_file_is_quarantined_so_it_is_fetched_again(sto
     for f in folder.iterdir():                                   # written an hour ago (not still being written)
         os.utime(f, (time.time() - 3600, time.time() - 3600))
     seen = []
-    from app import nhl_player_ratings
-    monkeypatch.setattr(nhl_player_ratings, "collect_bulk_boxes",
+    from app import nhl_box_collect
+    monkeypatch.setattr(nhl_box_collect, "collect",
                         lambda conn, a, b, **kw: seen.append(sorted(p.name for p in folder.glob("[0-9]*.json"))) or
-                        {"stored": 0, "cached": 1, "failed": 0, "errors": []})
+                        {"stored": 0, "cached": 1, "failed": 0, "missing": 0, "errors": []})
     out = training_inputs.collect_boxes(store)
     assert seen == [["2026020051.json"]] and out["quarantined"] == ["2026020050.json"], (seen, out)
     assert any(p.name.startswith("2026020050.json.corrupt-") for p in folder.iterdir())

@@ -794,6 +794,25 @@ def _player_box_refresh(folder, season: int, get) -> dict:
             f" not published by the source; newest season cached: {out['newest_season']}"}
 
 
+COLLECTION_STEPS = ("refresh", "boxscores", "player_box", "nhl_pbp")
+
+
+def _attention(out: dict) -> dict:
+    """What a nightly run must not pass over in silence although nothing in it failed outright (cli exits PARTIAL): a step that
+    got only part of its data, results refresh that has gone stale, or training inputs whose last collection failed or is old.
+    Stale odds are normal while no game is near; they are not listed."""
+    found = [{"input": k, "reason": "part of the data could not be collected"} for k in COLLECTION_STEPS
+             if isinstance(out.get(k), dict) and (out[k].get("status") == "partial" or out[k].get("errors"))]
+    for name in ("refresh", "training_inputs"):
+        i = (out.get("training_check") or {}).get("inputs", {}).get(name) or {}
+        failure = i.get("last_failure") if name == "training_inputs" else None
+        if failure:
+            found.append({"input": name, "reason": failure.get("reason"), "at": failure.get("at"), "last_success": i.get("last_success")})
+        elif i.get("stale"):
+            found.append({"input": name, "reason": "stale", "last_success": i.get("last_success")})
+    return {**out, "attention": found, "outcome": "attention" if found else "success"}
+
+
 def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw) -> dict:
     """Nightly maintenance only. User policy: new forecasts are made within two hours of tipoff by odds cycles."""
     out = {"refresh": refresh(conn, force=force_refresh, **refresh_kw)}
@@ -814,7 +833,7 @@ def daily(conn: sqlite3.Connection, *, force_refresh: bool = False, **refresh_kw
         out["training_check"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
     # adaptive-v1 (docs/ADAPTIVE_SYSTEM.md): due state only; the refits run as `adaptive-train` under their own lock.
     out["adaptive_train"] = adaptive_train(conn) if research_live.enabled() else {"status": "disabled", "reason": "RESEARCH_SELECTION=0"}
-    return out
+    return _attention(out)
 
 
 def recover_missed(conn: sqlite3.Connection) -> dict:
