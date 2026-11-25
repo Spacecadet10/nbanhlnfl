@@ -711,6 +711,27 @@ def best_pick_pictures(conn, sport, report, now):
         return None
 
 
+def snapshot_seen(sport, report, now, store=None):
+    """Save the pregame colour and record of every pick this run shows (app/pick_snapshots.py). True unless it failed; never raises
+    and never touches the report, so cards, keys and choices are exactly what they were."""
+    try:
+        from . import pick_snapshots
+        return pick_snapshots.observe(sport, report, now, store=store) >= 0
+    except Exception as exc:
+        print(f'pick-snapshots recorder (cards unaffected): {type(exc).__name__}', file=sys.stderr, flush=True)
+        return False
+
+
+def snapshot_sent(conn, sport, key, game_id, report, now):
+    """Save what a confirmed card showed (status 'sent' only). Never raises."""
+    try:
+        from . import pick_snapshots
+        return pick_snapshots.record_sent(conn, sport, key, game_id, report, now) >= 0
+    except Exception as exc:
+        print(f'pick-snapshots recorder (card already sent): {type(exc).__name__}', file=sys.stderr, flush=True)
+        return False
+
+
 def record_published(conn, sport, key, game_id, report, now):
     """The picks of a card that was just sent, appended to published_picks (app/published_picks.py). Never raises."""
     try:
@@ -998,6 +1019,7 @@ def run_once(bot, settings, conn, *, now=None):
                                                                line=pick['quote_check']['line_at_forecast']))
                 tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
                 tickets.attach_facts(source, sport, report['picks'], report['as_of'])
+                saved = snapshot_seen(sport, report, now, source)
             finally:
                 source.close()
             games_by_key, outcomes = {}, Counter()
@@ -1010,7 +1032,8 @@ def run_once(bot, settings, conn, *, now=None):
                 if status == 'sent':
                     record_best_pick(conn, sport, key, games_by_key.get(key), pictures, report['as_of'])
                     record_published(conn, sport, key, games_by_key.get(key), report, now)
-            result['sports'][sport] = {'eligible_summaries': len(batches), **dict(outcomes)}
+                    saved = snapshot_sent(conn, sport, key, games_by_key.get(key), report, now) and saved
+            result['sports'][sport] = {'eligible_summaries': len(batches), **dict(outcomes), **({} if saved else {'pick_snapshots': 'failed'})}
         except Exception as exc:
             # Do not echo arbitrary exception text (URLs/credentials). Other sport can continue.
             result['sports'][sport] = {'status': 'failed', 'error_type': type(exc).__name__}
@@ -1033,6 +1056,7 @@ def run_once(bot, settings, conn, *, now=None):
                     if pick.get('card_market_prob') is None:
                         pick.update(additional_odds.comparison('soccer', pick, report['as_of'],
                                                                side=pick.get('side'), line=pick.get('line')))
+                saved = snapshot_seen('soccer', report, now)
                 outcomes, soccer_games = Counter(), {}
                 batches = message_batches(report, settings['TELEGRAM_CHAT_ID'], games_by_key=soccer_games, context_selection=True)
                 for key, text in batches:
@@ -1041,7 +1065,9 @@ def run_once(bot, settings, conn, *, now=None):
                     outcomes[status] += 1
                     if status == 'sent':
                         record_published(conn, 'soccer', key, soccer_games.get(key), report, now)
-                result['sports']['soccer'] = dict(eligible_summaries=len(batches), **dict(outcomes), refused=section['refused'])
+                        saved = snapshot_sent(conn, 'soccer', key, soccer_games.get(key), report, now) and saved
+                result['sports']['soccer'] = dict(eligible_summaries=len(batches), **dict(outcomes), refused=section['refused'],
+                                                  **({} if saved else {'pick_snapshots': 'failed'}))
         except Exception as exc:
             result['sports']['soccer'] = {'status': 'failed', 'error_type': type(exc).__name__}
     if any(s.get('status') == 'failed' or any(s.get(k, 0) for k in ('failed', 'uncertain', 'retry'))
