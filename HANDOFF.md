@@ -1,3 +1,17 @@
+## NHL injury model: previous-season player boxes added (owner choice "last season's boxes"), Nov 26, 2026 04:47Z — Claude Opus 5.5 — data only, no code change
+- Why: nhl_players_injuries@adaptive abstained on 7 of 8 games on Nov 25 (also Nov 18-19): any injured-reserve player with no box in the live folder
+  (current season only) is unresolved and the whole game abstains. The model already reads current + previous season minutes; the folder lacked 2025-26.
+- Done: rehearsal on a copy (~/nba-predictor-research-data/nhl-prev-season-2026-11-26): `app.cli --sport nhl nhl-player-inputs --from-season 2026
+  --to-season 2026 --kind boxes --sleep 1` -> stored 1,394, failed 0, missing 0 (26 min). Measured with the model's own player_features (scratchpad
+  realcheck.py; reproduces the live result 1/8 first): Nov 25 22:00:55Z games usable 1 of 8 -> 6 of 8 (still skipped: NYR@BUF, STL@NYI - rookies /
+  no NHL minutes in two seasons). Box load +0.8 s. Then the new files were added to data/research/nhl_players/boxes with `rsync --ignore-existing`
+  (excluding last-bulk-run.json): 1,779 boxes; the 436 existing files byte-identical (sha256 list in evidence/).
+- Consequence (expected): NHL fits now "due" (box data of consumed results changed); the scheduled 09:30 ET adaptive-train refits; the member trains on
+  2025-26 too. Research percentages move through that refit only; shown percentages, cards, colours unaffected. No NHL game Nov 26; first Nov 27 18:00Z.
+- Not verified yet: the 09:30 refit (duration with ~4x boxes: NHL weekly+daily took 95 min on Nov 25; NBA is also due; wall cap 300 min) and live
+  forecasts with the member on Nov 27. Pettersson (two in VAN) stays ambiguous by design.
+- Rollback: delete the 2,788 added files (1,394 box .json + their bulk-*.raw; exact list: evidence/added-files.txt) and let adaptive-train refit.
+
 ## NHL player-box repair, partial failures visible, release pin — live b15457d (branch live-release), delivery ec5a909 (nhl-boxes) RELEASED Nov 25, 2026 17:51-17:54Z — Claude Opus 5.5 (lead)
 - Cause: since Nov 18 the NHL stats API returns at most 100 rows whatever `limit`; the collector asked for every missing game at once (42 games =
   1,512 skater rows) and refused the short reply as truncated, 11 runs in a row, so the backlog only grew. Last good collection Nov 17-18
