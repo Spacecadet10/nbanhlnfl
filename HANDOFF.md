@@ -15,7 +15,7 @@ Which checkout runs what: docs/RELEASE_CHECKOUTS.md. How to move one: skill `rel
 - Colours: rule bucket-record-v1 live since 2026-11-22T17:15:41Z (green-tracking released 2026-11-25T08:07Z; pick_snapshots.sqlite). The NCAAB
   colour gate was removed in 6603296. This Desktop checkout (colour-gate 708a9ff) is STALE.
 - Learning audit of 2026-11-26 (~/nba-predictor-research-data/learning-audit-2026-11-26/): published models are sealed; no code path promotes;
-  NBA/NHL forward pairs were invalid until the repair above. The plan and PROMOTION_CRITERIA are proposals, NOT adopted.
+  NBA/NHL forward pairs are invalid until the repair above is released and has run. The plan and PROMOTION_CRITERIA are proposals, NOT adopted.
 
 ### NHL retrain: PENDING VERIFICATION
 Previous-season player boxes were added to data/research/nhl_players/boxes on Nov 26 04:47Z (1,394 boxes), so NHL fits are due; the scheduled 09:30 ET

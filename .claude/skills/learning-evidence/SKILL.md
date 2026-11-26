@@ -8,12 +8,17 @@ Sources (cited per rule): ~/nba-predictor-research-data/learning-audit-2026-11-2
 PROMOTION_CRITERIA.md = PC}; docs/AUTORESEARCH.md; docs/PICK_COLOURS.md; HANDOFF.md "Forward bar repair" entry (FB). PC and P are proposals, not adopted.
 
 ## DO NOT EDIT without an owner-approved model change (B)
-Bytes are hashed into model/activation identities: an edit deactivates NFL (Telegram skips it silently) or retires NBA/NHL fits (F: activation hash
-covers nfl_live, nfl_eval, coverage, markets, models/base, elo, points).
+Bytes are hashed into model/activation identities: an edit deactivates NFL (the Telegram run then records NFL `inactive` with the reason,
+`GET /api/nfl/activation`) or retires NBA/NHL fits (F: activation hash covers nfl_live, nfl_eval, coverage, markets, models/base, elo, points).
 Files: nfl_live.py, nfl_eval.py, coverage.py, markets.py, models/*.py, adaptive.py, player_ratings.py, nhl_player_ratings.py, sources/nhl_injuries.py,
-combine.py, research_live.py, market_live.py, retrain_cadence.py, fit_register.py, candidates/{features,learners,engine,goalies,registry}.py,
-daily_agreement.py, combination_thresholds.py, backtest.py, agreement.py, availability*.py, reference/identity_aliases.json, best_pick_record.py,
-every sealed JSON (models/*.json, soccer_*sealed*.json, intl_sealed_candidate.json, soccer_markets_reading_*.json, soccer_*protocol*.json).
+combine.py, research_live.py, market_live.py, retrain_cadence.py, fit_register.py, candidates/{features,learners,engine,goalies,registry,deep}.py,
+deep_study.py, daily_agreement.py, combination_thresholds.py, backtest.py, agreement.py, availability*.py, reference/identity_aliases.json,
+best_pick_record.py, every sealed JSON (models/*.json, soccer_*sealed*.json, intl_sealed_candidate.json, soccer_markets_reading_*.json,
+soccer_*protocol*.json). Library versions are hashed too (scikit-learn in the research/agreement digests, `libraries()` in registry.definition):
+a venv package upgrade changes identities. `identity_aliases.json` can map changed code to an old identity: treat an alias as a reviewed decision.
+NFL pin: docs/nfl_activation_pin.json; re-pin (`python -m app.nfl_status pin`) only after a reviewed, deliberate `nfl activate`.
+Unhashed code that still changes served predictions with no identity change (review it as a model change): ncaab.py, ncaab_app.py, near_tipoff.py,
+live.py, soccer_live.py, soccer_markets_live.py, nfl.py.
 Check `git diff --name-only <base>` before committing; if a fix needs one, STOP and report. Also unchanged unless the brief says so: card text and
 Telegram delivery keys (the weekly recorder parses them), prediction percentages, colour rules (threshold_overview.bucket_colour, COLOUR_RULE), promotion.
 Historical rows are never rewritten or deleted; label them. Live data folder: never write; use a backup copy as NBA_DATA_DIR.
@@ -23,8 +28,9 @@ Every input must be available at `inputs.information_at`; quotes retrieved at or
 labelling risks (F): NCAAB sealed validation used 00:00 ET cutoff vs the served two-hour window; soccer 1X2 `cutoff_at` stores kickoff while the real cutoff is 06:00Z.
 
 ## Valid pairing (FB, docs/AUTORESEARCH.md)
-The bar is the PUBLISHED forecast as of start - 60 min (not necessarily the last card). A pair needs same game, market, line, line kind and quote;
-the candidate never later than the published row, at most 10 min before it. Rows without information time (all pre-repair rows) are labelled
+The bar is the PUBLISHED forecast as of start - 60 min (not necessarily the last card). A pair needs the same game, market and line; against the
+published bar also the same line kind (bookmaker vs model line); the candidate's information time between 10 min before and the published row's
+time, never after. The quote itself is not compared. Rows without information time (all pre-repair rows) are labelled
 "invalid: no information time (pre-repair)", never rewritten, never counted. Do not cite the API's `raw_joined_graded_items` (a naive join);
 only `paired_graded_items` (valid pairs).
 
@@ -46,7 +52,12 @@ forecast that no longer equals the saved pick is unscorable. Units only with a s
 
 ## Colours
 Rule bucket-record-v1 is unchanged (green/red/neutral by the exact printed % bucket's W-L record). Always show W-L and n; n < 30 is a small
-sample (P: MIN_LIVE_GRADED 30 is a proposal needing an owner decision). Colours measure; they do not show green picks are profitable.
+sample (threshold_overview.MIN_LIVE_GRADED = 30 already drives the labels; GATING colours, rank or the recommended-pick support on it is a
+proposal needing an owner decision). Colours, rank and recommended-pick support react to live W-L with no minimum sample today. Colours measure;
+they do not show green picks are profitable.
+
+## Known train/serve gaps (F)
+Live NHL line markets force `empty_net: True` (market_live.py) unlike their seal; adaptive trains at model lines but serves at bookmaker lines.
 
 ## Never evidence for promotion (F, P, PC)
 Retraining, coverage and win rate. Adaptive forecasts are not in the forward store and `coverage.py` rejects adaptive unconditionally. Promotion
