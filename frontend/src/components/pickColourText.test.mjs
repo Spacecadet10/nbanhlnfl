@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { recordOf, returnsText, supportText, tallyText } from './pickColourText.ts';
+import { colourThenText, recordOf, returnsText, sampleSuffix, supportText, tallyText, tallyWithSample } from './pickColourText.ts';
 
 const t = (o = {}) => ({ predictions: 9, games: 8, win: 3, loss: 1, push: 1, void: 1, half: 2, unsettled: 1, settled: 4, win_rate: 0.75, priced: 2, unpriced: 7, priced_settled: 2, profit_units: -0.5, roi: -0.25, ...o });
 
@@ -31,4 +31,25 @@ test('all three performance pages show the saved colours, with its filters in th
   for (const p of ['pages/PerformancePage.tsx', 'pages/NflPages.tsx', 'pages/SoccerPages.tsx']) assert.match(read(p), /<PickColours /);
   const c = read('components/PickColours.tsx');
   for (const k of ['pc_sport', 'pc_view', 'pc_record', 'pc_market', 'pc_pct', 'pc_colour', 'date_from', 'date_to']) assert.match(c, new RegExp(k));
+});
+
+test('every tally says how many settled results stand behind it, and labels a small sample', () => {
+  assert.equal(sampleSuffix(0), '');
+  assert.equal(sampleSuffix(9), ' · 9 settled · small sample');
+  assert.equal(sampleSuffix(29), ' · 29 settled · small sample');
+  assert.equal(sampleSuffix(30), ' · 30 settled');
+  assert.equal(tallyWithSample(t()), '3–1 (75.0%) · 1 push · 1 void · 2 half results · 1 unsettled · 4 settled · small sample');
+  assert.equal(tallyWithSample(t({ win: 40, loss: 10, settled: 50, win_rate: 0.8, push: 0, void: 0, half: 0, unsettled: 0 })), '40–10 (80.0%) · 50 settled');
+  assert.equal(tallyWithSample(t({ predictions: 0 })), 'None');
+});
+
+test('"Colour then" shows the record that supported the colour, live or recovered, and never invents one', () => {
+  const row = (s) => ({ support: s });
+  const s = { wins: 8, losses: 1, recovered_wins: 0, recovered_losses: 2 };
+  assert.equal(colourThenText(row(s), 'live'), '8–1 (89%) · 9 settled · small sample');
+  assert.equal(colourThenText(row(s), 'recovered'), '0–2 (0%) · 2 settled · small sample');
+  assert.equal(colourThenText(row({ wins: 40, losses: 10 }), 'live'), '40–10 (80%) · 50 settled');
+  assert.equal(colourThenText(row({ wins: 0, losses: 0 }), 'live'), 'no settled result');
+  assert.equal(colourThenText(row({ wins: null, losses: null, recovered_wins: null, recovered_losses: null }), 'recovered'), null);
+  assert.equal(colourThenText({ support: null }, 'live'), null);
 });

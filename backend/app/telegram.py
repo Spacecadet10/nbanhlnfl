@@ -176,7 +176,8 @@ def controls(bot, settings, conn):
     return _get(conn, 'enabled', '1') == '1'
 
 
-from .threshold_overview import PAST_PREFIX, PAST_PREFIX_NO_LINE, PAST_SEASONS, TELEGRAM_LABEL, history_line, telegram_line  # noqa: E402,F401
+from .threshold_overview import (MIN_LIVE_GRADED, PAST_PREFIX, PAST_PREFIX_NO_LINE, PAST_SEASONS, TELEGRAM_LABEL, history_line,  # noqa: E402,F401
+                                 record_line, telegram_line)
 
 
 def message_batches(report, chat_id, lineup_lines=None, games_by_key=None, *, best_pick_pictures=None, context_selection=False):
@@ -259,6 +260,8 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
             label = next((p.get('pick_label') for p in picks if p.get('forecast_id') == named_id), None)
             if label:
                 lines.append(STRONGEST_PREFIX + escape(label))
+    if chosen:      # display only; after the lineup, which stays right under the pick
+        lines.append(pick_evidence_line(chosen, preview))
     lines += ['<i>' + ('App ranking for this past game.' if preview else ('Context comparison · provisional lean, not a ticket. Method context-card-v1.' if choice else 'Based on the app’s existing ranking.')) + '</i>',
               divider, '', '<b>Market breakdown</b>', '']
     versions, priced_at = [], []   # forecast times of the picks that show a sportsbook % (label below)
@@ -278,7 +281,7 @@ def format_batch(report, chat_id, gid, picks, *, preview=False, lineup_line=None
         return None
     if not preview and report['sport'] in LABELLED_SPORTS:     # a supported market with no forecast is said so, never invented
         lines += missing_market_blocks(report['sport'], picks)
-    lines += [divider] + ([] if compact else colour_key_lines(decisions)) + ['<i>Records match the sport, market, direction, percentage and model.</i>']
+    lines += [divider] + colour_key_lines(decisions, compact) + ['<i>Records match the sport, market, direction, percentage and model.</i>']
     if not preview:   # the web card says the same: the counts are OTHER settled games (the API record excludes the card's game)
         lines.append('<i>Counts are other settled games, not this game.</i>')
 
@@ -349,11 +352,33 @@ def panel_pct(pct, colour=None):
     return f'{pct}%'
 
 
-def colour_key_lines(decisions):
-    """The one legend line, only when some market on the card is coloured."""
+EVIDENCE_PREFIX = 'Pick record · '
+SAMPLE_NOTE_PREFIX = 'Sample note · '
+SAMPLE_NOTE = f'Colours from fewer than {MIN_LIVE_GRADED} settled results are small samples.'
+
+
+def pick_evidence_line(pick, preview=False):
+    """The recommended pick's own exact-% record on its own line under the reason (display only): the colour mark, the same
+    words as its market block's record (W–L, rate, pushes, 'small sample (n settled)'), and n settled when it is not small.
+    The same counts as market_block and card_colour (a preview adds this game's own result, as the block does)."""
+    h = _dump(pick.get('percentage_history'))
+    if not h:
+        return EVIDENCE_PREFIX + 'exact-% history unavailable'
+    wins = h['wins'] + int(preview and pick.get('grade') == 'win')
+    losses = h['losses'] + int(preview and pick.get('grade') == 'loss')
+    settled = wins + losses
+    tail = record_line(h['percentage'], wins, losses, h.get('pushes') or 0, settled, h.get('voids') or 0).split(' · ', 1)[1]
+    if settled >= MIN_LIVE_GRADED:
+        tail += f' · {settled} settled'
+    return EVIDENCE_PREFIX + panel_pct(escape(h['percentage']), card_colour(pick, preview)) + ' · ' + tail
+
+
+def colour_key_lines(decisions, compact=False):
+    """The legend line and, under it, the sample note, only when some market on the card is coloured. The compact card drops the
+    legend (length) but keeps the note: it still shows the marks."""
     if not any(d and d.get('colour') in ('green', 'red') for d in decisions):
         return []
-    return [COLOUR_PREFIX + escape(COLOUR_KEY)]
+    return ([] if compact else [COLOUR_PREFIX + escape(COLOUR_KEY)]) + [SAMPLE_NOTE_PREFIX + escape(SAMPLE_NOTE)]
 
 
 def _dump(x):

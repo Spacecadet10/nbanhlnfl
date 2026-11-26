@@ -22,7 +22,7 @@ export function bucketColourOf(r: BucketRecord | null | undefined): BucketColour
   return r.colour === 'green' || r.colour === 'red' || r.colour === 'neutral' ? r.colour : bucketColour(r.wins, r.losses);
 }
 
-const SMALL_SAMPLE_BELOW = 30;
+export const SMALL_SAMPLE_BELOW = 30;   // twin of backend threshold_overview.MIN_LIVE_GRADED
 function bucketText(r: BucketRecord): string {
   const settled = r.wins + r.losses;
   const pushes = r.pushes ? ` · ${r.pushes} ${r.pushes === 1 ? 'push' : 'pushes'}` : '';
@@ -30,6 +30,22 @@ function bucketText(r: BucketRecord): string {
   const small = settled > 0 && (settled < SMALL_SAMPLE_BELOW || r.small_sample) ? ` · small sample (${settled} settled)` : '';
   const head = settled === 0 ? 'no settled history at this exact %' : `${r.wins}–${r.losses} (${Math.round((100 * r.wins) / settled)}%)`;
   return `${head}${pushes}${voids}${small}`;
+}
+
+/** The sample note printed beside every colour key (Telegram 'Sample note · …', the web legend): a colour is a record, and a short one is weak. */
+export const SMALL_SAMPLE_NOTE = `Colours from fewer than ${SMALL_SAMPLE_BELOW} settled results are small samples.`;
+
+/** A cue that does not depend on seeing the colour: green gets a check, red a down triangle (its record is a losing one); neutral nothing. */
+export const COLOUR_CUE: Record<BucketColour, string> = { green: ' ✓', red: ' ▼', neutral: '' };
+
+/** Why a % is coloured, with the record that supports it (tooltip and screen-reader text): "…so far: 8–1 (89%) · 1 push · small sample (9 settled)";
+ *  from 30 settled on the count is added ("· 44 settled"). Without a record, the rule alone. Display only: the colour is decided elsewhere. */
+export function colourReason(colour: BucketColour, r?: BucketRecord | null): string {
+  if (colour === 'neutral') return '';
+  const rule = colour === 'green' ? 'this exact % has won at least 75% of its settled picks so far' : 'this exact % has lost more than it has won so far';
+  if (!r) return rule;
+  const settled = r.wins + r.losses;
+  return `${rule}: ${bucketText(r)}${settled >= SMALL_SAMPLE_BELOW && !r.small_sample ? ` · ${settled} settled` : ''}`;
 }
 
 /** Headline, the same text as the Telegram card: "57.3% · this exact % has gone 8–1 (89%) · 1 push · small sample (9 settled)". */
