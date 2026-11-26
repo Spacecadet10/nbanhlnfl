@@ -28,7 +28,7 @@ The user wants trustworthy predictions, a working frontend and low token use.
   Missing checks or dependencies are failures, not passes.
 - Never delete/skip tests or replace real assertions with unconditional passes. Fix the cause. After two failed attempts at the same issue, record the
   exact failure for review and continue unrelated work.
-- Frontend changes: verify the running API and frontend in a browser at desktop and phone widths; record commands/results and gaps in docs/SMOKE_TEST.md.
+- Frontend changes (and any claim that the app works): verify the running API and frontend in a browser at desktop and phone widths; record commands/results and gaps in docs/SMOKE_TEST.md.
   If browser verification is unavailable, mark it unverified.
 - Done means working navigation, API-backed data, visible Demo labels, loading/error/empty states, passing checks and reproducible startup.
   A screenshot or successful build alone is insufficient.

@@ -4,6 +4,8 @@ description: Use when moving the live NBA/NHL checkout (~/nba-predictor-live), t
 ---
 # Release a commit to a running checkout
 
+Only when the owner explicitly asks for this release (AGENTS.md: no unrequested deployment). Builders never move checkouts or launchd jobs.
+
 Sources: docs/RELEASE_CHECKOUTS.md (which checkout runs what, plist order), HANDOFF.md entries "NHL player-box repair ... RELEASED Nov 25" and
 "Green/red/neutral pick tracking ... RELEASED" (steps and rollback as actually done), backend/app/release.py (`pin`), the 2026-11-26 audit
 BUILD_RULES.md (zsh push note, delivery-before-live ordering), docs/ADAPTIVE_SYSTEM.md section 14 (exit codes).
@@ -11,7 +13,11 @@ BUILD_RULES.md (zsh push note, delivery-before-live ordering), docs/ADAPTIVE_SYS
 ## Which checkout runs what
 - `~/nba-predictor-live` (branch `live-release`): NBA and NHL collection, forecasts, daily, injuries, markets, `training-inputs`, `adaptive-train`; API 8100.
 - `~/nba-predictor-delivery` (branch `delivery-release`): NCAAB, NFL, Soccer, Telegram, scorecard, weekly report, learning guard, autoresearch; API 8101, web 4173.
-- `~/nba-predictor-backup-runner` (a `delivery-release` commit): nightly backup and forecast journal.
+- `~/nba-predictor-backup-runner` (a `delivery-release` commit): nightly backup and forecast journal. Backup changes (e.g. the forward-store
+  copy) take effect only once this checkout moves.
+- Cross-checkout jobs: adaptive-train runs LIVE code under the delivery guard wrapper (`app.learning_run`, delivery venv/cwd); autoresearch-daily and
+  autoresearch-agent run delivery scripts with the live venv (LEARNING_PYTHON); forward-record, forward-grade, additional-odds and rundown-odds run
+  from delivery; forecast-journal runs with the delivery venv and the runner's PYTHONPATH. So "adaptive-train is running" blocks moving delivery too.
 - NBA/NHL fits in force carry the LIVE code's definitions (adaptive.definition, research_live.definition). Running those jobs from delivery
   changes them: that is its own reviewed release, not a configuration fix.
 - Data folder `~/Desktop/nbanhlnfl/data` is shared by all; a release never migrates or edits it unless the task says so.
@@ -39,5 +45,6 @@ BUILD_RULES.md (zsh push note, delivery-before-live ordering), docs/ADAPTIVE_SYS
 13. Observe: next scheduled ticks, error logs, `/api` health, first Telegram run; record exact times in HANDOFF.md with what was NOT observed.
 
 ## Rollback (reverse order)
-Runner and delivery: `git checkout --detach <previous>`, frontend build if needed, pin, kickstart api-delivery (+web); then live: detach previous, pin
-(its branch must hold it), kickstart api; then plists from the saved `plists-before`, bootout + bootstrap. Data additions (boxes, snapshots) can stay.
+Live first (so a live pool change never outruns the delivery code that reads it): detach previous, pin (its branch must hold it), kickstart api;
+then runner and delivery: `git checkout --detach <previous>`, frontend build if needed, pin, kickstart api-delivery (+web); then plists from the
+saved `plists-before`, bootout + bootstrap. Data additions (boxes, snapshots) can stay.
