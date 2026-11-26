@@ -4,25 +4,26 @@
 // recovered Telegram history and the record basis. Fields an older API does not send are left out. Wording: cardRecord.ts.
 import type { ForecastPercentageHistory, RecordBasis, SportsbookComparison } from '../api/types';
 import { dateTime, pct } from '../format';
-import { bucketColourOf, bucketHeadline, historyLine, recordBasisLines, telegramRecoveredLine, thisGameLine, type BucketColour } from './cardRecord';
+import { bucketColourOf, bucketHeadline, colourReason, COLOUR_CUE, historyLine, recordBasisLines, SMALL_SAMPLE_NOTE, telegramRecoveredLine, thisGameLine, type BucketColour, type BucketRecord } from './cardRecord';
 import { dnbModelNote, quoteTime, sportsbookLine } from './sportsbook';
 
-/** A model % coloured by its own exact-% bucket record (green with a check, red); neutral = plain. Colour only describes the
- *  history of this bucket; it never hides or reorders a pick. */
-export function ColouredValue({ text, colour }: { text: string; colour: BucketColour }) {
+/** A model % coloured by its own exact-% bucket record (green with a check, red with a triangle: neither depends on the colour alone);
+ *  neutral = plain. The tooltip and the screen-reader text carry the supporting record (W–L, rate, n settled, small sample).
+ *  Colour only describes the history of this bucket; it never hides or reorders a pick. */
+export function ColouredValue({ text, colour, record }: { text: string; colour: BucketColour; record?: BucketRecord | null }) {
   if (colour === 'neutral') return <>{text}</>;
-  const where = colour === 'green' ? 'this exact % has won at least 75% of its settled picks so far' : 'this exact % has lost more than it has won so far';
-  return <span className={`model-pct model-pct-${colour}`} title={where} aria-label={`${text}, ${where}`}>{text}{colour === 'green' ? ' ✓' : ''}</span>;
+  const where = colourReason(colour, record);
+  return <span className={`model-pct model-pct-${colour}`} title={where} aria-label={`${text}, ${where}`}>{text}{COLOUR_CUE[colour]}</span>;
 }
 
 /** The model % next to a card section, coloured identically to the card section itself. */
 export function ModelPct({ probability, history }: { probability: number | null | undefined; history?: ForecastPercentageHistory | null }) {
-  return <ColouredValue text={pct(probability, 1)} colour={history ? bucketColourOf(history) : 'neutral'} />;
+  return <ColouredValue text={pct(probability, 1)} colour={history ? bucketColourOf(history) : 'neutral'} record={history} />;
 }
 
 const LEGEND: Record<'green' | 'red', string> = {
-  green: 'Green: this exact % has won at least 75% of its settled picks so far — a historical record, not a profit guarantee',
-  red: 'Red: this exact % has lost more than it has won so far',
+  green: `Green ✓: this exact % has won at least 75% of its settled picks so far — a historical record, not a profit guarantee. ${SMALL_SAMPLE_NOTE}`,
+  red: `Red ▼: this exact % has lost more than it has won so far. ${SMALL_SAMPLE_NOTE}`,
 };
 
 export interface PickEvidenceProps {
@@ -48,13 +49,13 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
   // The same model % repeated as "App 50.8% · …" in the sportsbook line is coloured the same (never a conditional DNB %).
   const shown = header ? pct(header.probability, 1) : h ? `${h.percentage}%` : null;
   const app = bookText && shown && colour !== 'neutral' && bookText.startsWith(`App ${shown} · `) ? shown : null;
-  const book = app && bookText ? <>App <ColouredValue text={app} colour={colour} />{bookText.slice(`App ${app}`.length)}</> : bookText;
+  const book = app && bookText ? <>App <ColouredValue text={app} colour={colour} record={h} />{bookText.slice(`App ${app}`.length)}</> : bookText;
   const basis = recordBasisLines(recordBasis, quoteTime, { market: h?.market, teams });
   const dnbPct = (h?.market as string | undefined) === 'draw_no_bet' ? h?.percentage ?? null
     : sportsbook?.basis?.startsWith('conditional on no draw') && header ? (header.probability * 100).toFixed(1) : null;
   const dnbNote = dnbPct != null ? <>{dnbModelNote(dnbPct)}<br /></> : null;
   const headLine = header && <>
-    <strong>{header.pick}</strong> · {header.market}{header.line != null && <> · line {header.line > 0 ? '+' : ''}{header.line}</>} · app <ColouredValue text={pct(header.probability, 1)} colour={colour} /><br />
+    <strong>{header.pick}</strong> · {header.market}{header.line != null && <> · line {header.line > 0 ? '+' : ''}{header.line}</>} · app <ColouredValue text={pct(header.probability, 1)} colour={colour} record={h} /><br />
   </>;
   if (!h) return <span className="small percentage-record pick-evidence">{headLine}
     {dnbNote}
@@ -72,7 +73,7 @@ export function PickEvidence({ history: h, grade, sportsbook, recordBasis, oppos
     {dnbNote}
     {book && <>{bookLabel ? `${bookLabel}: ` : ''}{book}<br /></>}
     <span className={`bucket-${colour}`}><strong>{bucketHeadline(h.percentage, h)}</strong></span><br />
-    {h.sport.toUpperCase()} · {h.market_title} · {h.direction} · <ColouredValue text={`${h.percentage}%`} colour={colour} /> only
+    {h.sport.toUpperCase()} · {h.market_title} · {h.direction} · <ColouredValue text={`${h.percentage}%`} colour={colour} record={h} /> only
     {h.line_source !== 'none' && <> · {h.line_source === 'bookmaker' ? 'bookmaker lines' : 'model lines'}</>}
     <br />{thisGameLine(grade)}
     {excluded > 0 && <><br /><span className="muted">{excluded} non-decisive or unavailable results excluded</span></>}

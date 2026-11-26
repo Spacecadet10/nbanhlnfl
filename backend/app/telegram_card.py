@@ -212,14 +212,20 @@ def render_card(message):
     # A full outline replaces the asymmetric stripe from the reference.
     # Owner request Nov 11: one plain "who is playing" line under the pick, only when there is something to say.
     lineup=next((line.removeprefix('Lineup: ') for line in lines[rec+2:markets] if line.startswith('Lineup: ')),None)
-    from .telegram import STRONGEST_PREFIX, BLOCK_EXTRA_PREFIXES, COLOUR_PREFIX, GREEN_MARK, RED_MARK
+    from .telegram import (STRONGEST_PREFIX, BLOCK_EXTRA_PREFIXES, COLOUR_PREFIX, EVIDENCE_PREFIX, SAMPLE_NOTE_PREFIX, GREEN_MARK,
+                           RED_MARK)
     strongest = next((line for line in lines[rec+2:markets] if line.startswith(STRONGEST_PREFIX)), None)
     pick_size=72 if len(lines[rec+1])<22 else 48
-    detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━' and not line.startswith(('Lineup: ', STRONGEST_PREFIX))),'')
+    detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━'
+                 and not line.startswith(('Lineup: ', STRONGEST_PREFIX, EVIDENCE_PREFIX))),'')
+    # The pick's own exact-% record (colour mark, W-L, rate, sample size), one more line of the panel under the detail.
+    evidence=next((line for line in lines[rec+2:markets] if line.startswith(EVIDENCE_PREFIX)),'')
     # Card colouring: the recommended pick's model % carries its market block's marker; drawn coloured below, never as an emoji.
-    mark = re.search(rf'(\d+\.\d%) ({GREEN_MARK}|{RED_MARK})', detail)
-    if mark:
-        detail = detail[:mark.start()] + mark.group(1) + detail[mark.end():]
+    def unmark(text):
+        found = re.search(rf'(\d+\.\d%) ({GREEN_MARK}|{RED_MARK})', text)
+        return (text[:found.start()] + found.group(1) + text[found.end():] if found else text), found
+    detail, mark = unmark(detail)
+    evidence, ev_mark = unmark(evidence)
     def rows(text,width,size,bold=False):
         n,row=0,''
         for word in text.split():
@@ -231,6 +237,8 @@ def render_card(message):
         return n+(1 if row else 0)
     detail_top=max(155,59+rows(lines[rec+1],810,pick_size,True)*int(pick_size*1.28)+6)
     detail_end=detail_top+rows(detail,835,27)*int(27*1.28)
+    if evidence:
+        detail_end+=4+rows(evidence,835,25)*int(25*1.28)
     lineup_top=max(168,detail_end+4)          # review LOW 10: never over a pick or detail that wraps
     panel_h=max(218,detail_end+24,lineup_top+50 if lineup else 0)
     strongest_top = max(panel_h - 16, detail_end + 4)
@@ -243,15 +251,21 @@ def render_card(message):
     draw.text((92,y+18),'RECOMMENDED PICK',font=_font(26,True),fill=_mix(accent,'#FFFFFF',.65))
     end=wrapped(lines[rec+1],92,y+59,810,size=pick_size,bold=True,fill='white',display=True)
     detail_y=max(y+155,end+6)
-    wrapped(detail,95,detail_y,835,size=27,fill='#E0E6EC')
-    if mark and draw.textlength(detail[:mark.start()+len(mark.group(1))],font=_font(27))<=835:   # the % sits on the first row
-        token, font = mark.group(1), _font(27)
-        x0 = 95 + draw.textlength(detail[:mark.start()], font=font)
-        x1 = x0 + draw.textlength(token, font=font)
-        under = image.getpixel((int(x0) - 2, detail_y + 14))
-        draw.rectangle((x0 - 1, detail_y, x1 + 1, detail_y + 33), fill=under)      # cover the plain digits, then redraw
-        ink = '#86EFAC' if mark.group(2) == GREEN_MARK else '#FDA4AF'              # light tones: readable on the dark panel
-        draw.text((x0, detail_y), token, font=font, fill=ink)
+    def tint(text, found, row_y, size):
+        if found and draw.textlength(text[:found.start()+len(found.group(1))],font=_font(size))<=835:   # the % sits on the first row
+            token, font = found.group(1), _font(size)
+            x0 = 95 + draw.textlength(text[:found.start()], font=font)
+            x1 = x0 + draw.textlength(token, font=font)
+            under = image.getpixel((int(x0) - 2, row_y + 14))
+            draw.rectangle((x0 - 1, row_y, x1 + 1, row_y + 33), fill=under)      # cover the plain digits, then redraw
+            ink = '#86EFAC' if found.group(2) == GREEN_MARK else '#FDA4AF'       # light tones: readable on the dark panel
+            draw.text((x0, row_y), token, font=font, fill=ink)
+    after=wrapped(detail,95,detail_y,835,size=27,fill='#E0E6EC')
+    tint(detail, mark, detail_y, 27)
+    if evidence:
+        evidence_y=after+4
+        wrapped(evidence,95,evidence_y,835,size=25,fill='#E0E6EC')
+        tint(evidence, ev_mark, evidence_y, 25)
     if lineup:
         draw.text((95,y+lineup_top),fit_line(draw,lineup,_font(26,True),860),font=_font(26,True),fill='#FFD27A')
     if strongest:
@@ -272,12 +286,15 @@ def render_card(message):
         label_lines = max(1,int(draw.textlength(pick,font=_font(34,True))/470)+1)
         opposite_lines = max(1,int(draw.textlength(opposite,font=_font(24,True))/820)+1) if opposite else 0
         past = next((line for line in group if line.startswith('Past seasons ')), None)
+        # One row (22 to 17 px) when it fits; a long one (record, rate, sample size and colour word) wraps instead of being cut.
+        past_rows = [] if not past else [past] if fit_record(draw, past)[0] == past else _wrap_rows(draw, past, 18, 800)
+        past_h = 0 if not past_rows else 30 if len(past_rows) == 1 else 24 * len(past_rows) + 6
         # The shared market block's extra lines (sportsbook quote or its reason, recovered Telegram history, record basis):
         # wrapped at 20 px, never cut, so nothing the text card says is missing from the picture.
         extras = [line for line in group[2:] if line.startswith(BLOCK_EXTRA_PREFIXES)
                   or line.startswith('Model ') and ' = 90-minute win chance' in line]    # draw no bet's Model % definition
         extra_rows = [row for line in extras for row in _wrap_rows(draw, line, 20, 800)]
-        height=130+(label_lines-1)*44+(30 if provenance else 0)+(30 if past else 0)+len(extra_rows)*26+(opposite_lines*32+12 if opposite else 0)
+        height=130+(label_lines-1)*44+(30 if provenance else 0)+past_h+len(extra_rows)*26+(opposite_lines*32+12 if opposite else 0)
         draw.rounded_rectangle((58,y,1022,y+height),radius=25,fill=cream,outline=border,width=2)
         draw.rounded_rectangle((78,y+25,149,y+86),radius=17,fill=pale)
         draw.text((91,y+31),f'{number:02d}',font=_font(31,True,True),fill=primary)
@@ -299,12 +316,14 @@ def render_card(message):
         draw.text((925-w/2,y+41),prob,font=_font(34,True),fill=prob_ink)
         record_text, record_font = fit_record(draw, record+(' · '+note if note else ''))
         draw.text((200,end+4),record_text,font=record_font,fill=INK)
-        if past:      # the recomputed past seasons, on their own line under the live record and its note
+        if len(past_rows) == 1:      # the recomputed past seasons, on their own line under the live record and its note
             past_text, past_font = fit_record(draw, past)
             draw.text((200,end+33),past_text,font=past_font,fill=INK)
+        for n, row in enumerate(past_rows if len(past_rows) > 1 else []):
+            draw.text((200,end+33+24*n),row,font=_font(18),fill=INK)
         if provenance:
-            draw.text((200,end+33+(30 if past else 0)),provenance.capitalize(),font=_font(20),fill=MUTED)
-        extra_y = end+33+(30 if past else 0)+(30 if provenance else 0)
+            draw.text((200,end+33+past_h),provenance.capitalize(),font=_font(20),fill=MUTED)
+        extra_y = end+33+past_h+(30 if provenance else 0)
         for row in extra_rows:
             draw.text((200,extra_y),row,font=_font(20),fill=MUTED)
             extra_y += 26
@@ -313,8 +332,8 @@ def render_card(message):
         y+=height+8
     for text in notes:       # one muted line for the markets the competition does not serve
         y = wrapped(text, 58, y + 6, 964, size=24, fill=MUTED)
-    for key in (line for line in lines[footer:] if line.startswith(COLOUR_PREFIX)):    # one colour-key line per class
-        y = wrapped(key.removeprefix(COLOUR_PREFIX), 58, y + 6, 964, size=24, bold=True, fill=MUTED)
+    for key in (line for line in lines[footer:] if line.startswith((COLOUR_PREFIX, SAMPLE_NOTE_PREFIX))):    # the colour key, then its sample note
+        y = wrapped(key.removeprefix(COLOUR_PREFIX).removeprefix(SAMPLE_NOTE_PREFIX), 58, y + 6, 964, size=24, bold=True, fill=MUTED)
     y += 9
     note = ('90-minute markets. Draw-no-bet draws return the stake. Model selections may lack sportsbook offers.'
             if league == 'SOCCER' else 'Same sport, market, direction, percentage and model.')

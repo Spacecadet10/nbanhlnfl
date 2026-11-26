@@ -1,5 +1,6 @@
 // Wording for the saved pregame colours (backend app/pick_colours.py). The API decides every colour and count.
 import type { PcRow, PcTally } from '../api/types';
+import { SMALL_SAMPLE_BELOW } from './cardRecord.ts';
 
 export const COLOUR_LABEL: Record<string, string> = {
   green: 'Green', red: 'Red', neutral: 'Neutral', no_record: 'No recovered record', unknown: 'Colour unknown',
@@ -20,6 +21,23 @@ export function tallyText(t: PcTally): string {
     t.unsettled ? `${t.unsettled} unsettled` : ''].filter(Boolean);
   const rate = t.win_rate == null ? '' : ` (${(100 * t.win_rate).toFixed(1)}%)`;
   return [`${t.win}–${t.loss}${rate}`, ...extra].join(' · ');
+}
+
+/** ' · 9 settled · small sample' under 30 settled results (the same threshold as the Telegram card), ' · 44 settled' above; '' without any. */
+export function sampleSuffix(settled: number): string {
+  return settled > 0 ? ` · ${settled} settled${settled < SMALL_SAMPLE_BELOW ? ' · small sample' : ''}` : '';
+}
+
+/** A tally with its sample size: '3–1 (75.0%) · 1 push · 4 settled · small sample'. */
+export const tallyWithSample = (t: PcTally): string => tallyText(t) + (t.predictions === 0 ? '' : sampleSuffix(t.settled));
+
+/** The record behind a row's colour, beside 'Colour then': '8–1 (89%) · 9 settled · small sample'; null when none was saved (the
+ *  colour is unknown, or the record file had none). Live or recovered, as the page shows. */
+export function colourThenText(r: PcRow, record: string): string | null {
+  const s = r.support;
+  const w = record === 'live' ? s?.wins : s?.recovered_wins, l = record === 'live' ? s?.losses : s?.recovered_losses;
+  if (w == null || l == null) return null;
+  return l + w === 0 ? 'no settled result' : `${w}–${l} (${Math.round((100 * w) / (w + l))}%)${sampleSuffix(w + l)}`;
 }
 
 export function returnsText(t: PcTally): string {

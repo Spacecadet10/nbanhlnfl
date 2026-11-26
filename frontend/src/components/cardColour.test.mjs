@@ -3,7 +3,7 @@
 // denominator. The headline text mirrors the backend record_line; recovered/recomputed lines are the backend's own `line` strings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketColour, bucketColourOf, bucketHeadline, bucketSubLine, historyLine, telegramRecoveredLine } from './cardRecord.ts';
+import { bucketColour, bucketColourOf, bucketHeadline, bucketSubLine, colourReason, COLOUR_CUE, historyLine, SMALL_SAMPLE_BELOW, SMALL_SAMPLE_NOTE, telegramRecoveredLine } from './cardRecord.ts';
 
 test('the rule on the owner examples', () => {
   for (const [w, l] of [[1, 0], [2, 0], [8, 1], [3, 1], [75, 25]]) assert.equal(bucketColour(w, l), 'green', `${w}-${l}`);
@@ -95,4 +95,21 @@ test('backend-provided line strings are rendered verbatim, tinted by the record 
   assert.equal(historyLine({ line: null, wins: 4, losses: 1 }), null);                       // Telegram hides it
   assert.equal(historyLine(null), null);
   assert.equal(historyLine({ wins: 1, losses: 3 }).text, 'Recomputed past seasons · 1–3 (25%) · small sample (4 settled) · red record');   // older API
+});
+
+test('the colour tooltip carries the supporting record and says so when the sample is small', () => {
+  assert.equal(colourReason('neutral', { wins: 3, losses: 2 }), '');
+  assert.equal(colourReason('green', { wins: 8, losses: 1, pushes: 1 }),
+    'this exact % has won at least 75% of its settled picks so far: 8–1 (89%) · 1 push · small sample (9 settled)');
+  assert.equal(colourReason('red', { wins: 0, losses: 2 }), 'this exact % has lost more than it has won so far: 0–2 (0%) · small sample (2 settled)');
+  assert.equal(colourReason('green', { wins: 29, losses: 0 }), 'this exact % has won at least 75% of its settled picks so far: 29–0 (100%) · small sample (29 settled)');
+  assert.equal(colourReason('green', { wins: 30, losses: 0 }), 'this exact % has won at least 75% of its settled picks so far: 30–0 (100%) · 30 settled');
+  assert.equal(colourReason('red', { wins: 10, losses: 40 }), 'this exact % has lost more than it has won so far: 10–40 (20%) · 50 settled');
+  assert.equal(colourReason('green'), 'this exact % has won at least 75% of its settled picks so far');           // no record to quote
+});
+
+test('red has a cue that is not a colour, green keeps its check, neutral has none; the sample note matches the Telegram one', () => {
+  assert.deepEqual(COLOUR_CUE, { green: ' ✓', red: ' ▼', neutral: '' });
+  assert.equal(SMALL_SAMPLE_BELOW, 30);
+  assert.equal(SMALL_SAMPLE_NOTE, 'Colours from fewer than 30 settled results are small samples.');
 });

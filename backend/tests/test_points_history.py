@@ -127,7 +127,7 @@ def test_card_names_past_seasons_on_their_own_line_and_fits():
     _, text = tg.message_batches(d, "123")[0]
     lines = text.split("\n")
     record = lines.index("<b>Model 51.8%</b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)")              # the live record line, unchanged
-    assert "Past seasons 2024-26, recomputed, model line: 41W–37L" in lines[record:]
+    assert "Past seasons 2024-26, recomputed, model line: 41–37 (53%) · 78 settled" in lines[record:]
     assert "past seasons" not in lines[record].lower()
     plain = copy.deepcopy(report())
     assert "Past seasons" not in tg.message_batches(plain, "123")[0][1]
@@ -141,8 +141,8 @@ def test_card_names_past_seasons_on_their_own_line_and_fits():
     from app import telegram_card
     draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
     for longest in ("12W–10L (22 settled) · rank 12 of 120 · AVOID · Small sample.",
-                    "Past seasons 2024-26, recomputed, model line: 1234W–1199L",
-                    "Past seasons 2024-26, recomputed, model line: 29W–0L · Small sample."):
+                    "Past seasons 2024-26, recomputed, model line: 1234–1199 (51%) · 2433 settled",
+                    "Past seasons 2024-26, recomputed, model line: 29–0 (100%) · small sample (29 settled)"):
         text_out, font = telegram_card.fit_record(draw, longest)
         assert text_out == longest and font.size >= 17 and draw.textlength(text_out, font=font) <= telegram_card.RECORD_WIDTH
     assert telegram_card.render_card(text)                                      # the picture still renders

@@ -169,13 +169,13 @@ def test_winner_card_line_is_named_without_model_line_fits_and_keeps_identity():
     _, text = tg.message_batches(d, "123")[0]
     lines = text.split("\n")
     record = lines.index("<b>Model 51.8%</b> 🔴 · this exact % has gone 0–2 (0%) · small sample (2 settled)")
-    assert "Past seasons 2024-26, recomputed: 61W–44L" in lines[record:]
+    assert "Past seasons 2024-26, recomputed: 61–44 (58%) · 105 settled" in lines[record:]
     assert "model line: 61W" not in text
     assert tg.message_batches(d, "123")[0][0] == tg.message_batches(plain, "123")[0][0]   # no resend
     from PIL import Image, ImageDraw
     from app import telegram_card
     draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
-    for longest in ("Past seasons 2024-26, recomputed: 1234W–1199L", "Past seasons 2024-26, recomputed: 29W–0L · Small sample."):
+    for longest in ("Past seasons 2024-26, recomputed: 1234–1199 (51%) · 2433 settled", "Past seasons 2024-26, recomputed: 29–0 (100%) · small sample (29 settled)"):
         text_out, font = telegram_card.fit_record(draw, longest)
         assert text_out == longest and draw.textlength(text_out, font=font) <= telegram_card.RECORD_WIDTH
     assert telegram_card.render_card(text)
@@ -197,7 +197,8 @@ def test_past_seasons_line_names_its_seasons_and_flags_a_small_sample_like_the_l
             d["picks"][0]["percentage_history"]["history"] = {"source": "history_recomputed", "line_source": line_source,
                                                               "wins": wins, "losses": losses, "settled": wins + losses}
             key, text = tg.message_batches(d, "123")[0]
-            want = f"{prefix}{wins}W–{losses}L" + (" · Small sample." if small else "")
+            n = wins + losses
+            want = f"{prefix}{wins}–{losses} (100%)" + (f" · small sample ({n} settled)" if small else f" · {n} settled")
             assert want in text.split("\n")
             assert key == tg.message_batches(plain, "123")[0][0]
             assert tg.card_identity(text) == tg.card_identity(tg.message_batches(plain, "123")[0][1])

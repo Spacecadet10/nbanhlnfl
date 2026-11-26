@@ -527,7 +527,7 @@ def test_history_line_is_null_when_telegram_hides_it_and_otherwise_the_printed_t
     rec = percentage_item('self', 'pending', conf=.5731)[1]['record']
     key = ('57.3', 'a', to.HISTORY_SOURCE, 'test-model', 'bookmaker')
     h = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={key: {'a': 'win', 'b': 'win'}})['history']
-    assert h['line'] == 'Past seasons 2024-26, recomputed, model line: 2W–0L · Small sample. · green record'
+    assert h['line'] == 'Past seasons 2024-26, recomputed, model line: 2–0 (100%) · small sample (2 settled) · green record'
     none = to.percentage_record('nba', 'total', rec, 'self', {}, AFTER, history_index={})['history']
     assert none['line'] is None
     from app.schemas import PercentageHistorySource

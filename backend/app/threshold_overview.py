@@ -120,8 +120,10 @@ def history_line(h: Optional[dict]) -> Optional[str]:
     if not h or not h.get('settled'):
         return None
     prefix = PAST_PREFIX_NO_LINE if h['line_source'] == 'none' else PAST_PREFIX
-    small = ' · Small sample.' if h['settled'] < MIN_LIVE_GRADED else ''
-    return f"{prefix}{h['wins']}W–{h['losses']}L{small}{_own_colour(h)}"
+    # Same words as record_line (the live record): W–L (rate), then the sample size; 'small sample (n settled)' under MIN_LIVE_GRADED.
+    rate = int(Decimal(h['wins'] * 100) / Decimal(h['settled']) + Decimal('0.5'))
+    size = f" · small sample ({h['settled']} settled)" if h['settled'] < MIN_LIVE_GRADED else f" · {h['settled']} settled"
+    return f"{prefix}{h['wins']}–{h['losses']} ({rate}%){size}{_own_colour(h)}"
 
 
 def telegram_line(sport: str, tg: Optional[dict], cov: Optional[dict]) -> Optional[str]:

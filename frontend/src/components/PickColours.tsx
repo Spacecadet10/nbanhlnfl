@@ -8,7 +8,7 @@ import { useApi } from '../api/useApi';
 import type { League, PcReport, PcRow, PcTally } from '../api/types';
 import { american, calendarDate, dateTime, FULL_DATE, pct } from '../format';
 import { AsyncView, Empty } from './States';
-import { COLOUR_LABEL, recordOf, returnsText, supportText, tallyText, UNKNOWN_LABEL, VIEW_LABEL } from './pickColourText';
+import { colourThenText, COLOUR_LABEL, recordOf, returnsText, sampleSuffix, supportText, tallyText, tallyWithSample, UNKNOWN_LABEL, VIEW_LABEL } from './pickColourText';
 import { gradeLabel } from './recoveredHistory';
 
 const SPORTS = ['nba', 'nhl', 'nfl', 'ncaab', 'soccer'];
@@ -21,7 +21,7 @@ function Colour({ c }: { c: string }) {
 }
 
 function GroupRow({ label, t }: { label: React.ReactNode; t: PcTally }) {
-  return <tr><th scope="row">{label}</th><td>{t.predictions} in {t.games} games</td><td>{tallyText(t)}{t.small_sample && t.settled > 0 && <span className="small muted"> · small sample</span>}</td>
+  return <tr><th scope="row">{label}</th><td>{t.predictions} in {t.games} games</td><td>{tallyText(t)}{t.settled > 0 && <span className="small muted">{sampleSuffix(t.settled)}</span>}</td>
     <td>{t.ci95 ? `${pct(t.ci95[0], 0)}–${pct(t.ci95[1], 0)}` : '—'}</td><td>{returnsText(t)}</td></tr>;
 }
 
@@ -52,7 +52,7 @@ function Rows({ rows, record }: { rows: PcRow[]; record: string }) {
       <td data-label="Game"><span>{sportName(r.sport)} · {r.matchup ?? r.game_id}</span></td>
       <td data-label="Market">{r.market_title}</td>
       <td data-label="Pick"><span><strong>{r.pick ?? r.side}</strong> {r.percentage}%{r.recommended && <span className="badge"> Recommended</span>}</span></td>
-      <td data-label="Colour then"><Colour c={record === 'live' ? r.colour : r.recovered_colour} /></td>
+      <td data-label="Colour then"><Colour c={record === 'live' ? r.colour : r.recovered_colour} />{colourThenText(r, record) && <><br /><span className="small muted">{colourThenText(r, record)}</span></>}</td>
       <td data-label="Result">{r.final_score ?? <span className="muted">No result yet</span>}</td>
       <td data-label="Grade"><span className={gradeClass(r.grade)}>{gradeLabel(r.grade)}</span></td>
       <td data-label="Support"><Detail r={r} /></td>
@@ -130,10 +130,10 @@ export function PickColours({ league }: { league: League }) {
         <p className="small muted">Win rate = wins / (wins + losses). Markets mix easy and hard picks and picks of one game move together, so compare colours within one market. {Object.entries(r.views).map(([v, t]) => `${VIEW_LABEL[v]}: ${t.predictions}`).join(' · ')}.</p>
         <details><summary><strong>By market</strong> · {r.by_market.length}</summary><div className="table-wrap"><table className="table">
           <thead><tr><th>Market</th><th>Green</th><th>Red</th><th>Neutral</th><th>Every pick</th></tr></thead>
-          <tbody>{r.by_market.map((m) => <tr key={`${m.sport}|${m.market}`}><th scope="row">{r.sport === 'all' && `${sportName(m.sport)} · `}{m.title}</th><td>{tallyText(m.groups.green)}</td><td>{tallyText(m.groups.red)}</td><td>{tallyText(m.groups.neutral)}</td><td>{tallyText(m.all)}</td></tr>)}</tbody></table></div></details>
+          <tbody>{r.by_market.map((m) => <tr key={`${m.sport}|${m.market}`}><th scope="row">{r.sport === 'all' && `${sportName(m.sport)} · `}{m.title}</th><td>{tallyWithSample(m.groups.green)}</td><td>{tallyWithSample(m.groups.red)}</td><td>{tallyWithSample(m.groups.neutral)}</td><td>{tallyWithSample(m.all)}</td></tr>)}</tbody></table></div></details>
         <details><summary><strong>By exact %</strong> · {r.by_percentage.length}</summary><div className="table-wrap"><table className="table">
           <thead><tr><th>Exact %</th><th>Green</th><th>Red</th><th>Neutral</th><th>Every pick</th></tr></thead>
-          <tbody>{r.by_percentage.map((b) => <tr key={b.percentage}><th scope="row">{b.percentage}%</th><td>{tallyText(b.groups.green)}</td><td>{tallyText(b.groups.red)}</td><td>{tallyText(b.groups.neutral)}</td><td>{tallyText(b.all)}</td></tr>)}</tbody></table></div>
+          <tbody>{r.by_percentage.map((b) => <tr key={b.percentage}><th scope="row">{b.percentage}%</th><td>{tallyWithSample(b.groups.green)}</td><td>{tallyWithSample(b.groups.red)}</td><td>{tallyWithSample(b.groups.neutral)}</td><td>{tallyWithSample(b.all)}</td></tr>)}</tbody></table></div>
           <p className="small muted">57.3% is not 57.4%. Most exact percentages hold one or two picks: too few to judge.</p></details>
         <h3>Individual picks · {r.rows_total}</h3>
         <label className="small">Show <select value={f.colour} onChange={(e) => f.set({ pc_colour: e.target.value })}><option value="">Every colour</option>
