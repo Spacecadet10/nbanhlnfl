@@ -221,6 +221,14 @@ def nfl_meta(mode: str = Depends(api_mode)):
         return {"mode": "real", **nfl.meta(conn, _dt.now(nfl.EASTERN).date())}
 
 
+@app.get("/api/nfl/activation")
+def nfl_activation():
+    """Read-only: whether NFL is being served and, if not, why (app/nfl_status.py), against the committed activation pin.
+    Needs no store: it reads the activation file only."""
+    from . import nfl_status
+    return nfl_status.status()
+
+
 @app.get("/api/nfl/games", response_model=NflGamesResponse, response_model_exclude_unset=True)
 def nfl_games(date: date = Query(description="Kickoff date (US Eastern), YYYY-MM-DD"), mode: str = Depends(api_mode)):
     from . import nfl

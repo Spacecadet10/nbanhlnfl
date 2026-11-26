@@ -104,7 +104,9 @@ def test_stale_or_failed_sources_do_not_construct_or_send_picks(tmp_path, monkey
     bot = Bot()
     with tg.ledger(tmp_path / 'receipts.sqlite') as conn:
         result = tg.run_once(bot, {'TELEGRAM_CHAT_ID':'123'}, conn, now=datetime(2026,11,2,20,tzinfo=timezone.utc))
-    assert result['sports'] == {sport:{'status':'source_not_fresh'} for sport in ('nba','nhl','ncaab')}   # NFL is inactive
+    nfl = result['sports'].pop('nfl')       # NFL is inactive here (no activation file); the run now says so instead of skipping it
+    assert nfl['status'] == 'inactive' and 'no activation file' in nfl['reason']
+    assert result['sports'] == {sport:{'status':'source_not_fresh'} for sport in ('nba','nhl','ncaab')}
     assert not bot.sends
 
 

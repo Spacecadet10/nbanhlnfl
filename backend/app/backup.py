@@ -6,6 +6,7 @@ The raw response cache (`raw/`) is append-only and untouched by migrations; it i
 
     NBA_DATA_DIR=<store dir> python -m app.backup --dest <dir>            # backup of every store present (reads them only)
     NBA_DATA_DIR=<store dir> python -m app.backup --restore <backup dir> --sport nhl
+    NBA_DATA_DIR=<store dir> python -m app.backup --restore <backup dir> --database research/forward-candidates.sqlite
 """
 import argparse
 import fcntl
@@ -238,6 +239,97 @@ def restore(backup_dir: Path, data_dir: Path, *, sports: list) -> dict:
     finally:
         for lock in locks:
             os.close(lock)
+
+
+DATABASES_MANIFEST = "databases-manifest.json"
+
+
+def describe_database(path: Path) -> dict:
+    """integrity_check and the row count of every table of a database nobody is writing (a backup copy or a just-restored
+    file). `immutable=1` opens it without creating -wal/-shm files."""
+    conn = sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+    try:
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+        return {"integrity": conn.execute("PRAGMA integrity_check").fetchone()[0],
+                "rows": {t: conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in sorted(tables)}}
+    finally:
+        conn.close()
+
+
+def restore_databases(backup_dir: Path, data_dir: Path, paths: list) -> dict:
+    """Puts back databases that sit beside the stores (`research/forward-candidates.sqlite`, `scorecard/<sport>.sqlite`,
+    `card_thresholds.sqlite`, ...), copied by the nightly backup into `<backup dir>/databases/<path>` and listed with their
+    sha256, bytes and row counts in `databases-manifest.json`. Each copy must match the manifest (sha256), pass
+    integrity_check and have exactly the manifest's row count in every table before any file is touched; the new file is
+    written and synced beside the old one, the replaced file (and its -wal/-shm/-journal) is moved to
+    `<name>.replaced-<UTC>`, never deleted, and the result is read back. A failed swap is rolled back like a store's. Stop
+    the jobs that write the database first (forward-record and forward-grade for the forward store): an open connection
+    keeps writing to the replaced file."""
+    try:
+        listed = json.loads((Path(backup_dir) / DATABASES_MANIFEST).read_text())["databases"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise BackupError(f"Unreadable {DATABASES_MANIFEST} in {backup_dir} (a backup from before it existed holds no "
+                          f"verifiable database copy): {type(exc).__name__}: {exc}") from None
+    checked = []
+    for rel in dict.fromkeys(paths):
+        parts = Path(rel).parts
+        if Path(rel).is_absolute() or not parts or ".." in parts:
+            raise BackupError(f"{rel!r} is not a path inside the data folder; not restored")
+        m = listed.get(rel)
+        if m is None:
+            raise BackupError(f"The backup has no {rel} (it holds: {', '.join(sorted(listed)) or 'none'})")
+        src = Path(backup_dir) / "databases" / rel
+        if not src.is_file() or sha256(src) != m.get("sha256"):
+            raise BackupError(f"{src} does not match the manifest (sha256); not restored")
+        info = describe_database(src)
+        if info["integrity"] != "ok" or info["rows"] != m.get("rows"):
+            raise BackupError(f"{src} fails its check (integrity {info['integrity']}, rows {info['rows']} != manifest "
+                              f"rows {m.get('rows')}); not restored")
+        checked.append((rel, m, src, Path(data_dir) / rel))
+    written = []
+    try:
+        for rel, m, src, target in checked:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = Path(f"{target}.restoring")
+            written.append(tmp)
+            with open(src, "rb") as fin, open(tmp, "wb") as fout:
+                for chunk in iter(lambda: fin.read(1 << 20), b""):
+                    fout.write(chunk)
+                fout.flush()
+                os.fsync(fout.fileno())
+            if sha256(tmp) != m["sha256"]:
+                raise BackupError(f"The copy of {src} does not match the manifest; nothing was touched")
+    except BaseException:
+        for tmp in written:
+            tmp.unlink(missing_ok=True)
+        raise
+    out, done = {}, []
+    where = {rel: {"active": target, "safety": [], "staged": Path(f"{target}.restoring")} for rel, m, src, target in checked}
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    try:
+        for rel, m, src, target in checked:
+            parts = ("", "-wal", "-shm", "-journal")
+            n, suffix = 0, stamp
+            while any(os.path.lexists(f"{target}{part}.replaced-{suffix}") for part in parts):
+                n += 1
+                suffix = f"{stamp}-{n}"
+            for part in parts:
+                p, aside = Path(f"{target}{part}"), Path(f"{target}{part}.replaced-{suffix}")
+                if p.exists():
+                    p.rename(aside)
+                    done.append((p, aside))
+                    where[rel]["safety"].append(aside)
+            where[rel]["staged"].rename(target)
+            done.append((where[rel]["staged"], target))
+            info = describe_database(target)
+            if sha256(target) != m["sha256"] or info["integrity"] != "ok" or info["rows"] != m["rows"]:
+                raise BackupError(f"The restored {target} does not match the manifest")
+            out[rel] = {"path": str(target), "sha256": m["sha256"], **info}
+    except BaseException as exc:
+        _undo_swap(done, where, data_dir, exc)
+        raise
+    _fsync_dir(data_dir)
+    return out
 
 
 def _fsync_dir(data_dir: Path) -> None:
@@ -484,7 +576,8 @@ def main(argv: Optional[list] = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dest", type=Path, help="Directory for a new backup (a timestamped folder is created inside)")
     ap.add_argument("--restore", type=Path, help="A backup folder (with manifest.json) to restore from")
-    ap.add_argument("--sport", choices=SPORTS, action="append", help="Default for a backup: every store present; required for a restore")
+    ap.add_argument("--sport", choices=SPORTS, action="append", help="Default for a backup: every store present; a restore needs --sport or --database")
+    ap.add_argument("--database", action="append", metavar="PATH", help="Restore: a database beside the stores, relative to the data folder (e.g. research/forward-candidates.sqlite)")
     ap.add_argument("--snapshot", type=Path, metavar="DEST", help="Build a read-only research snapshot DEST/<--name> (five-sport-snapshot-v1)")
     ap.add_argument("--name", help="Snapshot name, e.g. data-snapshot-2026-11-22-5sport")
     ap.add_argument("--raw", action="store_true", help="Snapshot: also copy the raw response cache")
@@ -505,10 +598,16 @@ def main(argv: Optional[list] = None) -> None:
         sys.exit(2 if res.get("status") == "partial" else 0)
     if bool(args.dest) == bool(args.restore):
         ap.error("give exactly one of --dest or --restore")
-    if args.restore and not args.sport:
-        ap.error("--restore needs --sport")
-    result = (run(config.data_dir(), args.dest, sports=args.sport) if args.dest else
-              restore(args.restore, config.data_dir(), sports=args.sport))
+    if args.restore and not (args.sport or args.database):
+        ap.error("--restore needs --sport or --database")
+    if args.database and not args.restore:
+        ap.error("--database is for --restore")
+    if args.database:
+        result = {"stores": restore(args.restore, config.data_dir(), sports=args.sport) if args.sport else {},
+                  "databases": restore_databases(args.restore, config.data_dir(), args.database)}
+    else:
+        result = (run(config.data_dir(), args.dest, sports=args.sport) if args.dest else
+                  restore(args.restore, config.data_dir(), sports=args.sport))
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

@@ -142,8 +142,27 @@ def check(sport: str, root: Optional[Path] = None) -> dict:
         problems.append(f"no migrated {sport} store at {config.db_path(sport)}")
     elif stored != shipped:
         problems.append(f"store schema {stored} differs from this release's schema {shipped}: update the release deliberately")
-    return {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()), "store_schema": stored,
+    info = {"commit": commit, "root": str(root), "data_dir": str(config.data_dir()), "store_schema": stored,
             "release_schema": shipped, "problems": problems, "pin_note": pin_note(root, commit)}
+    if sport == "nfl":
+        info["nfl_pin_problems"] = _nfl_pin_problems()
+    return info
+
+
+def _nfl_pin_problems() -> list:
+    """NFL only. The NFL activation file or this checkout's NFL definition differs from docs/nfl_activation_pin.json. Like
+    the release pin it is a log line (stderr, once per process), never a refusal: it is NOT in `problems`, which the guard
+    acts on, so no job of any sport can be stopped by it. `nfl release-check` lists it as a problem and exits 1."""
+    try:
+        from . import nfl_status
+        found = nfl_status.pin_problems()
+    except Exception as exc:                  # noqa: BLE001  (a broken pin check must never break a release check)
+        found = [f"cannot check the NFL activation pin: {type(exc).__name__}: {exc}"]
+    for note in found:
+        if note not in _PIN_LOGGED:
+            _PIN_LOGGED.add(note)
+            print(f"NFL activation pin (not a refusal): {note}", file=sys.stderr, flush=True)
+    return found
 
 
 def migration_context(sport: str, info: Optional[dict] = None) -> list[str]:

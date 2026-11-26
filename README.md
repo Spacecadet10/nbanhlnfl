@@ -217,6 +217,10 @@ cd ~/nba-predictor-live/backend && NBA_RELEASE_GUARD=1 NBA_RELEASE_ROOT=$HOME/nb
   (refuses a manifest naming another store, a file that does not match the manifest or carries another store identity, and a store whose job lock is held; the new file is written and synced first, then the replaced files are kept as
   `*.replaced-<UTC>`). Rehearsed on copies of the live stores 2026-10-14: schema 26 → 30 in under 1 s per sport, restore
   logically identical to the original (docs/SMOKE_TEST.md).
+  The nightly backup (`scripts/backup_nightly.py`) also copies the databases beside the stores, among them the forward-testing
+  evidence `research/forward-candidates.sqlite`, into `<night>/databases/` with `databases-manifest.json` (sha256, integrity, row
+  counts per table). Put one back (jobs that write it stopped) with `… -m app.backup --restore <night> --database research/forward-candidates.sqlite`:
+  refused unless sha256, integrity_check and every table's row count equal the manifest; the replaced file is kept as `*.replaced-<UTC>`.
 - Roll back: `git -C ~/nba-predictor-live checkout -B release <previous commit>`, then steps 3–4. Pre-release launchd files:
   `data/backups/launchd-before-release-20261003/` (dev checkout) and `…-before-release-venv-20261003/` (shared venv, Desktop path).
 - The release runs only while this Mac is awake: closing a laptop lid sleeps it. An always-on host is the planned next step.

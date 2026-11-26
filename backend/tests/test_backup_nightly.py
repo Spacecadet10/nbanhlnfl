@@ -372,3 +372,56 @@ def test_a_failed_pool_copy_keeps_the_backup_and_warns_instead_of_crashing(tmp_p
     out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", notify=seen.append)
     assert "disk full" in out["pool"]["error"] and (root / "stores" / "20261116T043000Z" / "manifest.json").is_file()
     assert any("model pickles were NOT backed up" in m for m in seen)
+
+
+# ---- the forward-testing evidence (research/forward-candidates.sqlite) is in every night's backup -----------------------------
+def _forward_db(path, rows=5, table="rf_forecasts"):
+    import sqlite3
+    path.parent.mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(path)
+    c.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, v TEXT)")
+    c.execute("CREATE TABLE rf_grades (id INTEGER PRIMARY KEY, v TEXT)")
+    c.executemany(f"INSERT INTO {table} (v) VALUES (?)", [(f"r{i}",) for i in range(rows)])
+    c.commit(); c.close()
+
+
+def test_the_forward_candidate_store_and_the_challenger_store_are_copied_each_night_with_a_databases_manifest(tmp_path):
+    import sqlite3
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    _forward_db(data / "research" / "forward-candidates.sqlite", rows=5)
+    _forward_db(data / "research" / "challengers.sqlite", rows=2, table="forecasts")
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", ledger=tmp_path / "none.sqlite", repo_root=tmp_path / "r")
+    folder = root / "stores" / "20261116T043000Z"
+    dbs = out["extras"]["databases"]
+    assert {"research/forward-candidates.sqlite", "research/challengers.sqlite"} <= set(dbs)
+    fwd = dbs["research/forward-candidates.sqlite"]
+    assert fwd["integrity"] == "ok" and fwd["rows"] == {"rf_forecasts": 5, "rf_grades": 0}
+    assert fwd["sha256"] == backup.sha256(folder / "databases" / "research" / "forward-candidates.sqlite")
+    # the same facts are written into the night's folder, so a restore needs nothing but the folder
+    man = json.loads((folder / backup.DATABASES_MANIFEST).read_text())
+    assert man["databases"] == dbs
+    # the source is untouched and still writable
+    c = sqlite3.connect(data / "research" / "forward-candidates.sqlite")
+    c.execute("INSERT INTO rf_forecasts (v) VALUES ('later')"); c.commit(); c.close()
+
+
+def test_a_missing_forward_store_is_not_an_error_and_the_manifest_lists_only_what_exists(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", ledger=tmp_path / "none.sqlite", repo_root=tmp_path / "r")
+    assert "databases" not in out["extras"]
+    assert not (root / "stores" / "20261116T043000Z" / backup.DATABASES_MANIFEST).exists()
+
+
+def test_the_databases_manifest_travels_with_the_mirror_and_is_checked_there(tmp_path):
+    data, root, offsite = tmp_path / "data", tmp_path / "backups", tmp_path / "offsite"
+    _store(data)
+    offsite.mkdir()
+    _forward_db(data / "research" / "forward-candidates.sqlite")
+    out = nb.nightly(data, root, mirror=offsite, stamp="20261116T043000Z", ledger=tmp_path / "none.sqlite", repo_root=tmp_path / "r")
+    assert out["status"] == "ok"
+    copy = offsite / "20261116T043000Z"
+    assert (copy / backup.DATABASES_MANIFEST).is_file() and (copy / "databases" / "research" / "forward-candidates.sqlite").is_file()
+    restored = backup.restore_databases(copy, tmp_path / "scratch", ["research/forward-candidates.sqlite"])
+    assert restored["research/forward-candidates.sqlite"]["rows"]["rf_forecasts"] == 5

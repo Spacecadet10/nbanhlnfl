@@ -45,7 +45,10 @@ EXTRA_PATTERNS = (("repo", "docs/telegram_record.json"), ("repo", "docs/preregis
 
 
 # SQLite files beside the stores (relative to the data folder): the per-sport scorecards, the card-threshold log and the saved pick colours.
-EXTRA_SQLITE = ("scorecard/*.sqlite", "card_thresholds.sqlite", "pick_snapshots.sqlite")
+# research/forward-candidates.sqlite is the only prospective promotion evidence (forward-record every 30 min, forward-grade hourly);
+# research/challengers.sqlite is the learning-challenger store (absent until that job has run). Restore: `app.backup --restore <night> --database <path>`.
+EXTRA_SQLITE = ("scorecard/*.sqlite", "card_thresholds.sqlite", "pick_snapshots.sqlite", "research/forward-candidates.sqlite",
+                "research/challengers.sqlite")
 
 
 def _copy_sqlite(src: Path, target: Path) -> dict:
@@ -99,6 +102,7 @@ def _extras(folder: Path, data_dir: Path, ledger, repo_root, launch_agents) -> d
                 databases[str(rel)] = _copy_sqlite(path, folder / "databases" / rel)
     if databases:
         out["databases"] = databases
+        (folder / backup.DATABASES_MANIFEST).write_text(json.dumps({"databases": databases}, indent=2, sort_keys=True))
     roots = {"repo": repo_root, "data": data_dir, "launch_agents": launch_agents}
     tmp = folder / "files.tar.gz.partial"
     count = 0
