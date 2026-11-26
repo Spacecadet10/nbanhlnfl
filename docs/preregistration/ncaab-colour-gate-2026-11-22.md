@@ -1,3 +1,7 @@
+> **NOTE 2026-11-26 (added later; the text below is unchanged history).** This gate no longer exists: its code and the probability-threshold colouring were
+> removed in commit 6603296 (Nov 22, "Colour each exact-% bucket by its own W/L record (bucket-record-v1); remove probability-threshold colouring and the
+> NCAAB gate"). Nothing here describes current behaviour; the live colour rule is bucket-record-v1 (docs/PICK_COLOURS.md).
+
 # NCAAB colour-gated Telegram selection — policy ncaab-colour-gate-v1 (prospective)
 
 Written before any card was sent under this policy and before any outcome under it was read. Code: backend/app/ncaab_gate.py

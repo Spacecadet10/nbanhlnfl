@@ -1,3 +1,7 @@
+> **NOTE 2026-11-26 (added later; behaviour not changed).** The Telegram Recommended pick for NFL does not apply the frozen 75% winner rule described
+> below: per the 2026-11-26 colour/ranking audit, 12 of 16 recommended NFL winners were under 75%, and a total was recommended. The frozen rule applies to the
+> model's own winner evaluation, not to this card selection.
+
 # NFL live operation — 2026-11-02
 
 The user requested active NFL predictions throughout the app. The dedicated NFL adapter leaves shared NBA/NHL model,

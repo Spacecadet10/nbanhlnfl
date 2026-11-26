@@ -1,3 +1,7 @@
+> **NOTE 2026-11-26 (added later; behaviour not changed).** The "Recommended pick" on a card does not come from the strong Best Pick described below. It
+> comes from `tickets.card_choice` (method `context-card-v1`; backend/app/tickets.py, telegram.py), labelled on the card as a context comparison and
+> provisional lean, not a ticket. Text below that says otherwise is outdated.
+
 # Personal Telegram picks
 
 The dedicated sender reads NBA/NHL canonical forecasts from the existing stores with query-only connections and a
