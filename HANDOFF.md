@@ -1,3 +1,18 @@
+## Forward bar repair: NBA/NHL compare against the PUBLISHED forecast; same-eligibility counts; per-sport forward status — branch forward-bar (base 3774a73), Nov 26, 2026 — Claude Sonnet 5.5 — NOT released
+- Done: (1) NBA/NHL record model `published` (read-only from game_forecasts, `candidates_view.upcoming_published`; market, line, side orientation,
+  information time in the new `rf_forecasts.basis` column) and it is THE bar (`FORWARD_PAIRING["bar"]`); research members stay as labelled context
+  incumbents; no fallback to a member. (2) `autoresearch.forward_pair_counts` (the evaluator's own pairing) feeds `/api/research/autoresearch`
+  `v3.forward.<sport>.pairing`; `paired_graded_items` = valid pairs only, old join kept as `raw_joined_graded_items`. Rows without information time
+  (all rows before the live port) are labelled "invalid: no information time (pre-repair)", never deleted, never counted. (3) `forward_status.py`:
+  `v3.forward_status` for all five sports. (4) `FORWARD_PAIRING["published_bar_from"] = None` (not established): nothing confirmatory; protocol ids unchanged.
+  (5) `full_coverage` criterion untouched. Frontend: status table + new column (typecheck and test:unit pass). Details: docs/AUTORESEARCH.md.
+- Changed an existing assertion (spec-driven): test_research_status::test_forward_summary_labels_each_sport_and_counts_paired_graded_items
+  (`paired_graded_items` 1 -> 0, plus `raw_joined_graded_items == 1`): the old number was the naive join this task replaces.
+- On the Nov 25 backup copy: nba 748 and nhl 462 candidate game-market units invalid (no information time), 0 valid pairs; old join said 127 / 114.
+  NCAAB/NFL/Soccer: no candidate. Published rows recorded into the COPY equal coverage.canonical for 75/75 NBA and 96/96 NHL game-markets.
+- Needs: the live-checkout pool freeze (information_at) before any valid pair can exist; then, after live verification, a separate dated commit
+  setting `published_bar_from` to a FUTURE start. Open: the as-of rule scores the published run made by start - 60 min, not necessarily the last published one.
+
 ## NHL injury model: previous-season player boxes added (owner choice "last season's boxes"), Nov 26, 2026 04:47Z — Claude Opus 5.5 — data only, no code change
 - Why: nhl_players_injuries@adaptive abstained on 7 of 8 games on Nov 25 (also Nov 18-19): any injured-reserve player with no box in the live folder
   (current season only) is unresolved and the whole game abstains. The model already reads current + previous season minutes; the folder lacked 2025-26.

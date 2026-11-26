@@ -61,8 +61,17 @@ function V3Research({ v }: { v: AutoresearchV3 }) {
         <td>{s.blockers.length ? <ul className="small">{s.blockers.map((b, i) => <li key={i}>{b}</li>)}</ul> : 'none'}</td>
         <td>{s.next_run ?? '—'}{s.data_cutoff?.last_final ? <div className="small muted">data through {dateTime(s.data_cutoff.last_final)}</div> : null}</td></tr>)}
     </tbody></table></div>
+    {v.forward_status && <><h4>Forward status per sport</h4>
+      <p className="small muted">The bar is the forecast actually published. Rows recorded before the repair have no information time: they are labelled invalid and never counted. The prospective start of the repaired comparison is not established until a dated commit sets it: until then nothing is confirmatory.</p>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Status</th><th>Why</th><th>Baseline (what the candidate is compared with)</th><th>Candidate path</th><th>Pairs (evaluator's pairing)</th></tr></thead><tbody>
+        {Object.entries(v.forward_status).map(([sport, f]) => { const t = f.pairing?.totals; return <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
+          <td><strong>{f.status}</strong></td><td className="small">{f.reason}</td>
+          <td className="small">{f.baseline.published === true ? 'Published forecast. ' : f.baseline.published === false ? 'NOT the published forecast. ' : `Published for ${f.baseline.published}. `}{f.baseline.label}</td>
+          <td className="small">{f.candidate.label}</td>
+          <td className="small">{t ? <>{f.pairing?.established ? `confirmatory from ${f.pairing.prospective_start}` : 'start not established: nothing confirmatory'}<br />valid {t.confirmatory.valid_pairs} ({t.confirmatory.valid_pairs_graded} graded) · exploratory {t.exploratory.valid_pairs}<br />unpaired: timing {t.all.unpaired_timing}, line {t.all.unpaired_line}, side {t.all.unpaired_orientation} · missing {t.all.missing} · late {t.all.as_of_late}<br />invalid, no information time (pre-repair): {t.all.invalid_no_information_time} · no published row: {t.all.no_published_bar}</> : '—'}</td></tr>; })}
+      </tbody></table></div></>}
     {v.forward && !('error' in v.forward) && <><h4>Forward test (games still ahead; research store, never official)</h4>
-      <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Candidate recording</th><th>Grading</th><th>Candidate forecasts</th><th>Current-model forecasts</th><th>Graded games</th><th>Graded items with both a candidate and the current model (raw stored rows; the comparison uses the pairing rule)</th><th>Last record / grade</th></tr></thead><tbody>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Sport</th><th>Candidate recording</th><th>Grading</th><th>Candidate forecasts</th><th>Current-model forecasts</th><th>Graded games</th><th>Valid graded pairs (the evaluator's own pairing: published forecast as the bar, information time, same line and side)</th><th>Last record / grade</th></tr></thead><tbody>
         {Object.entries(v.forward).map(([sport, f]) => <tr key={sport}><th>{SPORT_NAME[sport] ?? sport}</th>
           <td>{f.label ?? f.status ?? '—'}{f.suspect_models && Object.keys(f.suspect_models).length > 0 ? <div className="small" role="alert">Suspect (forecasts at probability 0 or 1, never recommended until diagnosed): {Object.entries(f.suspect_models).map(([m, n]) => `${m} (${n})`).join(', ')}</div> : null}</td>
           <td>{f.grading ?? '—'}</td>

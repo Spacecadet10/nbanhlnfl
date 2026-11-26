@@ -91,3 +91,18 @@ def upcoming_line_member(conn, model: str, now: str) -> list:
         "AND f.policy = 'near_tipoff' AND (substr(f.model_version, 1, ?) = ? OR substr(f.model_version, 1, ?) = ?) "
         "AND g.tipoff_at > ? AND f.generated_at < g.tipoff_at AND f.tipoff_at = g.tipoff_at ORDER BY f.generated_at",
         (len(research), research, len(primary), primary, now)).fetchall()
+
+
+def upcoming_published(conn, now: str) -> list:
+    """The forecasts actually published (game_forecasts, the rows coverage.canonical selects among), every recorded run of a game
+    that has not started, for its current start only (read-only; research forward test). Runs, not only the latest: the forward
+    rule picks the run made by its fixed instant. Status 'forecast' rows only (a 'missing' row is not a forecast); preseason is
+    never a canonical forecast and is left out, as in coverage._canonical_one."""
+    from . import coverage
+    types = [t for t in coverage.FORECAST_TYPES if t != "preseason"]
+    return conn.execute(
+        "SELECT f.forecast_id, f.game_id, f.market, f.source, f.model_version, f.source_table, f.source_id, f.source_generated_at, "
+        "f.line, f.line_source, f.market_quote_id, f.p_a, f.p_mid, f.p_b, f.generated_at, g.tipoff_at AS game_tipoff, g.season "
+        "FROM game_forecasts f JOIN games g USING (game_id) WHERE f.status = 'forecast' AND g.tipoff_at > ? AND f.generated_at <= ? "
+        f"AND f.generated_at < g.tipoff_at AND f.tipoff_at = g.tipoff_at AND g.season_type IN ({','.join('?' * len(types))}) "
+        "ORDER BY f.generated_at, f.forecast_id", (now, now, *types)).fetchall()
