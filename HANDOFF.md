@@ -3,40 +3,43 @@
 Read only "Current state" below unless the task needs history. Entries dated before 2026-11-22 were moved verbatim on 2026-11-26 to
 docs/handoff-archive/HANDOFF-2026-11-before-22.md (nothing deleted). Newest entry first. Each task adds one short entry here.
 
-## Current state (written 2026-11-26 from the newest entries; verify against the checkouts before relying on a commit id)
+## Current state (2026-11-26 17:55Z; verify against the checkouts before relying on a commit id)
 Which checkout runs what: docs/RELEASE_CHECKOUTS.md. How to move one: skill `release`. Evidence rules: skill `learning-evidence`.
-- Live checkout `~/nba-predictor-live` (branch live-release): b15457d. NBA/NHL jobs, API 8100. Release of Nov 25 17:51Z; release-check
-  problems [], pin_note null. It lacks the candidate-pool `information_at` freeze that delivery has.
-- Delivery checkout `~/nba-predictor-delivery` (branch delivery-release): 3774a73 per the 2026-11-26 audit (ec5a909 NHL box repair was released
-  Nov 25; the entries below name later releases). NCAAB, NFL, Soccer, Telegram, weekly report, autoresearch; API 8101, web 4173.
-- Backup runner `~/nba-predictor-backup-runner`: a delivery-release commit; nightly backup exits 2 = no mirror drive.
-- Forward-bar repair (branch forward-bar, base 3774a73, review fixes merged into 93e26d1): NOT released. `FORWARD_PAIRING["published_bar_from"]`
-  is None: nothing is confirmatory yet. Needs the live pool freeze first, then a separate dated commit setting a FUTURE start.
-- Colours: rule bucket-record-v1 live since 2026-11-22T17:15:41Z (green-tracking released 2026-11-25T08:07Z; pick_snapshots.sqlite). The NCAAB
-  colour gate was removed in 6603296. This Desktop checkout (colour-gate 708a9ff) is STALE.
-- Learning audit of 2026-11-26 (~/nba-predictor-research-data/learning-audit-2026-11-26/): published models are sealed; no code path promotes;
-  NBA/NHL forward pairs are invalid until the repair above is released and has run. The plan and PROMOTION_CRITERIA are proposals, NOT adopted.
+- Live `~/nba-predictor-live` (live-release): 6baf5ad (candidate-pool information_at freeze), released 2026-11-26 ~17:50Z; release-check
+  nba/nhl problems [], pin_note null, research definitions 94844709fc4412a5 / f862a44ddaa1e76f unchanged. Previous: b15457d.
+- Delivery `~/nba-predictor-delivery` (delivery-release) and backup runner: the learning-safety merge (fedbdaa, released 07:50Z) plus this
+  HANDOFF-only commit. Previous: 3774a73. API 8101, web 4173.
+- Forward comparisons (`/api/research/autoresearch` v3.forward_status): NBA and NHL "invalid comparison" (748 / 462 pre-repair rows, labelled,
+  0 valid pairs); NCAAB, NFL, Soccer "no candidate" (baselines labelled as re-implementations; Soccer 1X2 is the published forecast).
+  `FORWARD_PAIRING["published_bar_from"]` is None: nothing is confirmatory.
+- Colours: rule bucket-record-v1 unchanged; evidence lines show W-L and n, n < 30 labelled small sample.
+- Learning audit 2026-11-26 (~/nba-predictor-research-data/learning-audit-2026-11-26/): no code path promotes; PLAN and PROMOTION_CRITERIA are proposals.
 
-### NHL retrain: PENDING VERIFICATION
-Previous-season player boxes were added to data/research/nhl_players/boxes on Nov 26 04:47Z (1,394 boxes), so NHL fits are due; the scheduled 09:30 ET
-adaptive-train should refit. NOT verified: that refit (duration with ~4x boxes; NHL took 95 min on Nov 25, cap 300 min) and the first live forecasts
-with the member on Nov 27. Do not move live while adaptive-train runs.
+### NHL retrain: DONE 2026-11-26
+adaptive-train 09:30 ET: NHL weekly b921c537 (14:30-14:49Z) and daily d11d9573 (14:49-16:09Z) success, 17 fits each, 0 failed,
+nhl_players_injuries@adaptive success. NBA also refit (4b3b8abf, 89dc8edd). NOT verified: the member's coverage on the first live NHL games (Nov 27).
+
+### Next
+1. First NBA/NHL cycle on the new live code (Nov 27): candidate rows carry inputs.information_at and pair (forward_status "recording valid evidence");
+   watch NHL cohort_lines_rejected. Then a separate dated commit setting `published_bar_from` to a FUTURE start (never backdated).
+2. Nightly backup's pool copy reports "conflicts" for adaptive history-*.pkl rewritten by retrains (seen 2026-11-26 17:45Z): check whether expected.
 
 ### Open items
-- nhl_players_injuries@adaptive abstains when an injured-reserve player has no box (partly addressed by the box addition; model-file change is an owner decision).
-- Lock-busy odds and partial/skipped adaptive-train still exit 0; box folder not in the nightly backup; forward-candidates.sqlite (230 MB) not backed up.
-- First live settled NBA/NHL/NFL pick-colour rows and first live 'sent' row were not observed at release.
+- nhl_players_injuries@adaptive abstains when an injured-reserve player has no box (model-file change is an owner decision).
+- Lock-busy odds and partial/skipped adaptive-train still exit 0; box folder not in the nightly backup.
+- Restore (`app.backup --restore`) does not refuse while writers run; stop jobs first.
+- Recommended-pick audit (report only): NFL Telegram Recommended pick ignores the frozen 75% rule; NO_PROVEN_SKILL markets can be recommended;
+  soccer can recommend two picks per game; recommendation support has no minimum sample.
 - NCAAB neutral-site home/away flip after final; NCAAB total model; quote-selection rules differ by consumer (Nov 22 OPEN list, below).
-- Recommended-pick audit (colour/ranking): Telegram Recommended pick follows tickets.card_choice context-card-v1; for NFL it does not apply the frozen 75% rule.
-- Budget for autoresearch-agent expires 2026-12-31.
+- Autoresearch-agent budget ($5/week, NBA/NHL) expires 2026-12-31; scheduled runs Nov 20 and Nov 24 refused (adaptive-train running).
 
 ### Owner decisions pending
 Promotion constants and colour option (PLAN.md G0); adaptive clock via an adaptive.py edit; bookmaker gate form; one contender per sport; budget renewal;
-colour minimum sample (MIN_LIVE_GRADED 30); pointing `published_bar_from` at a future start. Nothing promotes without an owner decision.
+colour minimum sample (MIN_LIVE_GRADED 30); `published_bar_from` start date; recommended-pick rules above. Nothing promotes without an owner decision.
 
 ---
 
-## Forward bar repair: NBA/NHL compare against the PUBLISHED forecast; same-eligibility counts; per-sport forward status — branch forward-bar (base 3774a73), Nov 26, 2026 — Claude Sonnet 5.5 — NOT released
+## Forward bar repair: NBA/NHL compare against the PUBLISHED forecast; same-eligibility counts; per-sport forward status — branch forward-bar (base 3774a73), Nov 26, 2026 — Claude Sonnet 5.5 — RELEASED to delivery in fedbdaa (2026-11-26 07:50Z); live pool freeze 6baf5ad released 17:50Z
 - Done: (1) NBA/NHL record model `published` (read-only from game_forecasts, `candidates_view.upcoming_published`; market, line, side orientation,
   information time in the new `rf_forecasts.basis` column) and it is THE bar (`FORWARD_PAIRING["bar"]`); research members stay as labelled context
   incumbents; no fallback to a member. (2) `autoresearch.forward_pair_counts` (the evaluator's own pairing) feeds `/api/research/autoresearch`
