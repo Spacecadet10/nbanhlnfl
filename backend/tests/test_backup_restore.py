@@ -495,3 +495,75 @@ def test_snapshot_backfill_failures_keep_the_stage_and_are_not_finalised(tmp_pat
     r = backup.snapshot(data, dest, "s", sports=["soccer"], soccer_fetch=bad,
                         soccer_backfill={"from": "201008", "to": "201008", "competitions": ["eng.1"], "sleep": 0})
     assert r["status"] == "partial" and r["failed"] == ["eng.1:201008"] and (dest / "s.partial").is_dir() and not (dest / "s").exists()
+
+
+# ---- restoring a database that sits beside the stores (research/forward-candidates.sqlite, scorecards, ...) -------------------
+def _night_with_forward(tmp_path, rows=4):
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("backup_nightly", Path(__file__).resolve().parents[2] / "scripts" / "backup_nightly.py")
+    nb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(nb)
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data / "nba.sqlite", "nba").close()
+    fwd = data / "research" / "forward-candidates.sqlite"
+    fwd.parent.mkdir(parents=True)
+    c = sqlite3.connect(fwd)
+    c.execute("CREATE TABLE rf_forecasts (id INTEGER PRIMARY KEY, v TEXT)")
+    c.execute("CREATE TABLE rf_grades (id INTEGER PRIMARY KEY, v TEXT)")
+    c.executemany("INSERT INTO rf_forecasts (v) VALUES (?)", [(f"r{i}",) for i in range(rows)])
+    c.execute("INSERT INTO rf_grades (v) VALUES ('g')")
+    c.commit(); c.close()
+    nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", ledger=tmp_path / "none.sqlite", repo_root=tmp_path / "r")
+    return data, root / "stores" / "20261116T043000Z"
+
+
+def test_a_restore_puts_the_forward_store_back_verified_and_keeps_the_replaced_file(tmp_path):
+    data, night = _night_with_forward(tmp_path)
+    live = data / "research" / "forward-candidates.sqlite"
+    live.write_bytes(b"damaged")                                  # what a restore is for
+    out = backup.restore_databases(night, data, ["research/forward-candidates.sqlite"])
+    r = out["research/forward-candidates.sqlite"]
+    assert r["integrity"] == "ok" and r["rows"] == {"rf_forecasts": 4, "rf_grades": 1}
+    assert r["sha256"] == backup.sha256(live)
+    aside = [p for p in live.parent.iterdir() if ".replaced-" in p.name]
+    assert len(aside) == 1 and aside[0].read_bytes() == b"damaged"
+    assert sqlite3.connect(live).execute("SELECT COUNT(*) FROM rf_forecasts").fetchone()[0] == 4
+
+
+def test_a_restore_into_an_empty_folder_creates_the_file_and_a_tampered_copy_is_refused_before_anything_changes(tmp_path):
+    data, night = _night_with_forward(tmp_path)
+    scratch = tmp_path / "scratch"
+    out = backup.restore_databases(night, scratch, ["research/forward-candidates.sqlite"])
+    assert (scratch / "research" / "forward-candidates.sqlite").is_file() and out["research/forward-candidates.sqlite"]["rows"]["rf_forecasts"] == 4
+    copy = night / "databases" / "research" / "forward-candidates.sqlite"
+    c = sqlite3.connect(copy)
+    c.execute("INSERT INTO rf_forecasts (v) VALUES ('extra')"); c.commit(); c.close()   # file no longer matches its sha256
+    other = tmp_path / "other"
+    with pytest.raises(backup.BackupError, match="does not match"):
+        backup.restore_databases(night, other, ["research/forward-candidates.sqlite"])
+    assert not other.exists() or not any(other.rglob("*.sqlite*"))
+
+
+def test_a_restore_refuses_a_row_count_that_differs_from_the_manifest_and_a_night_that_never_held_the_database(tmp_path):
+    data, night = _night_with_forward(tmp_path)
+    mpath = night / backup.DATABASES_MANIFEST
+    man = json.loads(mpath.read_text())
+    man["databases"]["research/forward-candidates.sqlite"]["rows"]["rf_forecasts"] = 99
+    mpath.write_text(json.dumps(man))
+    with pytest.raises(backup.BackupError, match="rows"):
+        backup.restore_databases(night, tmp_path / "scratch", ["research/forward-candidates.sqlite"])
+    with pytest.raises(backup.BackupError, match="no research/challengers.sqlite"):
+        backup.restore_databases(night, tmp_path / "scratch", ["research/challengers.sqlite"])
+    with pytest.raises(backup.BackupError, match="not a path inside"):
+        backup.restore_databases(night, tmp_path / "scratch", ["../escape.sqlite"])
+
+
+def test_the_cli_restores_a_database_with_database_and_needs_no_sport(tmp_path, monkeypatch, capsys):
+    data, night = _night_with_forward(tmp_path)
+    scratch = tmp_path / "scratch"
+    monkeypatch.setenv("NBA_DATA_DIR", str(scratch))
+    backup.main(["--restore", str(night), "--database", "research/forward-candidates.sqlite"])
+    out = json.loads(capsys.readouterr().out)
+    assert out["databases"]["research/forward-candidates.sqlite"]["rows"]["rf_forecasts"] == 4 and out["stores"] == {}
+    assert (scratch / "research" / "forward-candidates.sqlite").is_file()

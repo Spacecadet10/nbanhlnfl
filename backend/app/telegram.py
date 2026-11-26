@@ -971,8 +971,12 @@ def run_once(bot, settings, conn, *, now=None):
     for sport in ('nba', 'nhl', 'nfl', 'ncaab'):
         try:
             if sport == 'nfl':
+                from . import nfl_status
                 from .nfl_live import activation
-                if not activation():
+                if not activation():     # was a silent skip: say why (unexpected = the pin says an activation exists)
+                    st = nfl_status.status()
+                    result['sports'][sport] = {'status': 'inactive', 'reason': st['reason'] or 'activation() returned None',
+                                               'unexpected': st['unexpected']}
                     continue
             if sport == 'ncaab' and not config.ncaab_cards_enabled():   # kill switch (NBA_NCAAB_CARDS=0); on by default
                 result['sports'][sport] = {'status': 'off', 'reason': 'NCAAB cards are off (NBA_NCAAB_CARDS=0)'}

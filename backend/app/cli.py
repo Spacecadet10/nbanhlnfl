@@ -849,7 +849,7 @@ def _nfl(args, p) -> int:
     if args.action == "release-check":     # read-only: the release facts plus the full missing-bytes scan (audit C4)
         import sqlite3
         info = release.check("nfl")
-        out = {**info, "guard_enabled": release.enabled(), "raw_missing": None}
+        out = {**info, "problems": info["problems"] + info["nfl_pin_problems"], "guard_enabled": release.enabled(), "raw_missing": None}
         path = config.db_path("nfl")
         if not path.is_file():
             out["raw_missing_reason"] = f"no nfl store at {path}"
@@ -866,7 +866,7 @@ def _nfl(args, p) -> int:
             except sqlite3.Error as exc:
                 out["raw_missing_reason"] = f"could not read the store: {type(exc).__name__}: {exc}"
         print(json.dumps(out, indent=1))
-        return 1 if info["problems"] else 0
+        return 1 if out["problems"] else 0
     from . import nfl_eval, nfl_live      # a tick/refresh reads the activation and may append to the access log
     if _refused("nfl", migrate=args.action == "migrate", info=guard_info,
                 paths=(nfl_live.activation_path(), nfl_eval.access_log_path())):
