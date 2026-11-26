@@ -1,7 +1,7 @@
 """Per-sport forward-test status for the five sports, with the reason, the baseline path and the candidate path (read-only).
 
 One of: `no candidate` (nothing registered to compare) | `waiting` (registered, but no eligible graded pair yet, or the prospective
-start is not established / not reached) | `invalid comparison` (rows exist but none is eligible: timing, line, side, no information
+start is not established / not reached) | `invalid comparison` (rows exist but none is eligible: timing, line, no information
 time, or a re-implemented bar) | `failed` (the record/grade job failed or is stale, the store is missing or unreadable) |
 `recording valid evidence` (eligible pairs accumulate after the prospective start).
 
@@ -15,10 +15,12 @@ from typing import Optional
 FIVE = ("nba", "nhl", "ncaab", "nfl", "soccer")
 STALE_AFTER = timedelta(hours=3)          # the recorder runs every 30 minutes and the grader hourly
 JOB_ERRORS = ("failed", "refused", "skipped")
+BAR_BASIS_NOTE = ("The bar is the published forecast as of 60 minutes before the start (the forward as-of rule: the latest published "
+                  "run made by then), not necessarily the last forecast published or sent on the cards before the start.")
 
 _PUBLISHED = {"published": True,
-              "label": "the forecast actually published (game_forecasts, the canonical selection the web cards and Telegram show), "
-                       "recorded read-only as model 'published' with its market, side orientation, line and information time; the "
+              "label": BAR_BASIS_NOTE + " The forecast actually published (game_forecasts, the canonical selection the web cards and Telegram show), "
+                       "recorded read-only as model 'published' with its market, line, line source and information time (a/b fixed by the market definition); the "
                        "research cohort members (elo, points_normal, ...) are recorded as labelled context incumbents only",
               "code": "autoresearch._study_upcoming -> candidates_view.upcoming_published"}
 BASELINE = {
@@ -59,8 +61,8 @@ def _parse(at) -> Optional[datetime]:
 
 
 def _breakdown(c: dict) -> str:
-    names = (("unpaired_timing", "unpaired by timing"), ("unpaired_line", "unpaired by line"),
-             ("unpaired_orientation", "unpaired by side orientation"), ("missing", "missing (no candidate forecast)"),
+    names = (("unpaired_timing", "unpaired by timing"), ("unpaired_line", "unpaired by line (number or kind of line)"),
+             ("missing", "missing (no candidate forecast)"),
              ("as_of_late", "forecast only after the fixed instant"),
              ("invalid_no_information_time", "invalid: no information time (pre-repair rows included)"),
              ("no_published_bar", "no published forecast to compare with"))

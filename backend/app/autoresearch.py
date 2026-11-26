@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import config, research_audit, sports
+from .forward_status import BAR_BASIS_NOTE
 
 UPSTREAM = {"repo": "https://github.com/karpathy/autoresearch", "commit": "228791fb499afffb54b46200aca536f79142f117"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1859,8 +1860,9 @@ NBA_NHL_MARKETS = {
             "spread": ("line", "puck line, push refunds"), "total": ("line", "push refunds"),
             "team_total_home": ("line", "push refunds"), "team_total_away": ("line", "push refunds")}}
 PUBLISHED = "published"        # the forward model name of the forecast actually published (NBA/NHL; read through candidates_view)
-# Side orientation of the forward store's a / mid / b per market (the app's own: markets.side_labels, tested): a = home /
-# over, b = away / under. A pair needs the same orientation on both sides.
+# Side orientation of the forward store's a / mid / b per market, FIXED BY THE MARKET DEFINITION (the app's own
+# markets.side_labels; tested): a = home / over, b = away / under. Stored in `basis` as documentation only: no pairing check
+# claims to verify it (both sides come from the same definition, so a check could not fail).
 SIDE_ORIENTATION = {"winner": ("home", "", "away"), "reg3": ("home", "draw", "away"), "spread": ("home", "push", "away"),
                     "total": ("over", "push", "under"), "team_total_home": ("over", "push", "under"),
                     "team_total_away": ("over", "push", "under")}
@@ -2017,7 +2019,7 @@ def _study_upcoming(sport: str, members: Optional[dict] = None):
                         "probs": vec(f, f["market"]),
                         "outcome": None, "model_version": f["model_version"],
                         "line_source": PUBLISHED_LINE_SOURCE.get(f["line_source"]),
-                        "basis": {"kind": "published", "information_at": info, "orientation": list(SIDE_ORIENTATION[f["market"]]),
+                        "basis": {"kind": "published", "information_at": info, "orientation_by_definition": list(SIDE_ORIENTATION[f["market"]]),
                                   "source": f["source"], "forecast_id": f["forecast_id"], "source_table": f["source_table"],
                                   "source_id": f["source_id"], "market_quote_id": f["market_quote_id"],
                                   "information_basis": "source_generated_at" if f["source_generated_at"] else "generated_at"}})
@@ -2043,7 +2045,7 @@ def _study_upcoming(sport: str, members: Optional[dict] = None):
                     else:
                         info = None             # no usable information time: the row is stored, labelled, and never pairs
                     r["basis"] = {"kind": "pool_candidate", "information_at": _iso(info) if info else None,
-                                  "orientation": list(SIDE_ORIENTATION[f["market"]])}
+                                  "orientation_by_definition": list(SIDE_ORIENTATION[f["market"]])}
                     out.append(r)
             return out
         if model_name in members["winner"]:
@@ -3116,7 +3118,9 @@ def _forward_rows(path: Optional[Path], sport: str, protocol_id: Optional[str] =
                             "data_version": r["data_version"]}
     for r in sorted(rows, key=lambda r: r["id"]):        # in recording order
         latest_start[r["game_id"]] = r["start_at"]
-    rows = [r for r in rows if r["model_version"] == latest_version[(r["model"], r["market"])]]
+    # Only the latest definition of a model is evaluated; the published forecast keeps EVERY version (a change of its model_version
+    # must not silently drop earlier published rows; each pair uses the rows' own versions).
+    rows = [r for r in rows if r["model"] == PUBLISHED or r["model_version"] == latest_version[(r["model"], r["market"])]]
     if superseded is not None:
         current = {(r["model"], r["market"], r["game_id"]) for r in rows if r["start_at"] == latest_start[r["game_id"]]}
         for r in rows:
@@ -3187,19 +3191,25 @@ def information_problem(r: dict) -> Optional[str]:
     return None
 
 
-def _orientation(r: dict) -> Optional[tuple]:
-    o = _basis(r).get("orientation")
-    return tuple(o) if isinstance(o, list) else None
+def _line_sources_agree(c: dict, i: dict) -> bool:
+    """Two rows at the same line pair only when their kind of line agrees wherever both state it (a bookmaker line is not a
+    model's own reference line, even at the same number). Required when the bar is the published forecast."""
+    return not (c.get("line_source") and i.get("line_source") and c["line_source"] != i["line_source"])
+
+
+def _common_lines(cand_lines: dict, inc_lines: dict, same_kind: bool) -> list:
+    return sorted(lk for lk in set(cand_lines) & set(inc_lines)
+                  if not same_kind or _line_sources_agree(cand_lines[lk], inc_lines[lk]))
 
 
 def forward_pairs(rows: list, cand: str, inc: str, market: str, late: Optional[set] = None, *,
                   require_information_time: bool = False) -> dict:
     """Candidate vs current-model pairs for one market. Per game: walk the current model's runs (at or before the evaluation
     instant) from the latest back; take the first one for which the candidate has a run whose information time is at most
-    max_gap_minutes before and never after the bar's, with at least one common line (and the same side orientation where both
-    rows state it); both sides' rows of those two runs at the common lines form the pair (a ladder pairs line by line).
-    A game where the candidate never forecast is `missing`; one where it forecast but no run pairs is `unpaired` (timing,
-    line or orientation: each also listed apart), counted and reported, never silently dropped. Only rows at or before the
+    max_gap_minutes before and never after the bar's, with at least one common line (against the published bar also of the same kind, bookmaker / model's own,
+    where both rows state it); both sides' rows of those two runs at the common lines form the pair (a ladder pairs line by line).
+    A game where the candidate never forecast is `missing`; one where it forecast but no run pairs is `unpaired` (timing
+    or line, which includes a different kind of line: each also listed apart), counted and reported, never silently dropped. Only rows at or before the
     instant exist here, so no later information enters a pair.
     `require_information_time` (the NBA/NHL published-bar comparison): a candidate row without a stated information time
     (information_problem) cannot pair; a game whose candidate rows are all of that kind is `invalid_information`, with the
@@ -3225,7 +3235,7 @@ def forward_pairs(rows: list, cand: str, inc: str, market: str, late: Optional[s
     before = timedelta(minutes=FORWARD_PAIRING["max_gap_minutes"])
     after = timedelta(minutes=FORWARD_PAIRING["max_candidate_later_minutes"])
     c_recs, i_recs, gaps, missing, as_of_late, invalid = [], [], [], [], [], []
-    timing, line, side = [], [], []
+    timing, line = [], []
     for gid, inc_runs in ci.items():
         cand_runs = cc.get(gid)
         if not cand_runs:
@@ -3234,39 +3244,32 @@ def forward_pairs(rows: list, cand: str, inc: str, market: str, late: Optional[s
             else:
                 (as_of_late if late and gid in late else missing).append(gid)
             continue
-        found, near_seen, line_seen = None, False, False
+        found, near_seen = None, False
         for ti in sorted(inc_runs, reverse=True):
             near = [tc for tc in cand_runs if -before <= _ts_parse(tc) - _ts_parse(ti) <= after]
             near_seen = near_seen or bool(near)
-            same_line = [tc for tc in near if set(cand_runs[tc]) & set(inc_runs[ti])]
-            line_seen = line_seen or bool(same_line)
-            ok = [tc for tc in same_line if any(
-                _orientation(cand_runs[tc][lk]) in (None, _orientation(inc_runs[ti][lk])) or _orientation(inc_runs[ti][lk]) is None
-                for lk in set(cand_runs[tc]) & set(inc_runs[ti]))]
+            ok = [tc for tc in near if _common_lines(cand_runs[tc], inc_runs[ti], inc == PUBLISHED)]
             if ok:                       # prefer the candidate run at or before the current model's, then the closest
                 tc = min(ok, key=lambda t: (_ts_parse(t) > _ts_parse(ti), abs(_ts_parse(t) - _ts_parse(ti)), t))
                 found = (ti, tc)
                 break
         if found is None:
-            (side if line_seen else line if near_seen else timing).append(gid)
+            (line if near_seen else timing).append(gid)
             continue
         ti, tc = found
-        for lk in sorted(set(cand_runs[tc]) & set(inc_runs[ti])):
-            co, io = _orientation(cand_runs[tc][lk]), _orientation(inc_runs[ti][lk])
-            if co is not None and io is not None and co != io:
-                continue
+        for lk in _common_lines(cand_runs[tc], inc_runs[ti], inc == PUBLISHED):
             c_recs.append(_forward_rec(cand_runs[tc][lk]))
             i_recs.append(_forward_rec(inc_runs[ti][lk]))
         gaps.append((_ts_parse(tc) - _ts_parse(ti)).total_seconds() / 60)     # signed: > 0 = candidate later
     return {"cand": c_recs, "inc": i_recs, "games": len(ci), "paired_games": len(gaps), "missing": missing,
-            "unpaired": timing + line + side, "unpaired_timing": timing, "unpaired_line": line, "unpaired_orientation": side,
+            "unpaired": timing + line, "unpaired_timing": timing, "unpaired_line": line,
             "invalid_information": invalid, "invalid_reasons": problems, "as_of_late": as_of_late,
             "max_gap_minutes": max((abs(g) for g in gaps), default=None),
             "candidate_later_pairs": sum(1 for g in gaps if g > 1 / 60),
             "max_candidate_later_minutes": max((g for g in gaps if g > 0), default=None)}
 
 
-PAIR_COUNT_KEYS = ("valid_pairs", "valid_pairs_graded", "unpaired_timing", "unpaired_line", "unpaired_orientation", "missing",
+PAIR_COUNT_KEYS = ("valid_pairs", "valid_pairs_graded", "unpaired_timing", "unpaired_line", "missing",
                    "as_of_late", "invalid_no_information_time", "no_published_bar")
 
 
@@ -3274,7 +3277,7 @@ def forward_pair_counts(path: Optional[Path], sport: str, protocol_id: Optional[
                         start="default") -> dict:
     """The displayed pairing counts, produced by the evaluator's own pairing (`forward_pairs`, the same as-of rule, the same bar,
     the same information-time requirement), never by a join. Per candidate and market, one class per game:
-      valid_pairs (+ valid_pairs_graded) | unpaired_timing | unpaired_line | unpaired_orientation | missing (the candidate never
+      valid_pairs (+ valid_pairs_graded) | unpaired_timing | unpaired_line (also a different kind of line) | missing (the candidate never
       forecast a game the bar did) | as_of_late (only forecasts after the fixed instant) | invalid_no_information_time (the
       candidate's rows have no stated information time: rows recorded before the repair are labelled, never counted) |
       no_published_bar (the candidate forecast a game the bar did not).
@@ -3286,8 +3289,13 @@ def forward_pair_counts(path: Optional[Path], sport: str, protocol_id: Optional[
     raw, _ = _forward_rows(path, sport, protocol_id, as_of=False, readonly=readonly)
     cands = sorted(n for n, i in info.items() if i["role"] == "candidate")
     zero = lambda: {k: 0 for k in PAIR_COUNT_KEYS}  # noqa: E731
+    by_key: dict = {}                            # indexes built once: no scan of every row per game
+    by_game: dict = {}
+    for r in rows:
+        by_key.setdefault((r["model"], r["market"]), []).append(r)
+        by_game.setdefault((r["model"], r["market"], r["game_id"]), []).append(r)
     out = {"sport": sport, "prospective_start": start, "established": start is not None, "bar_published": published,
-           "candidates": {}, "totals": {"all": zero(), "confirmatory": zero(), "exploratory": zero()}, "distinct_graded_items": 0}
+           "bar_basis": BAR_BASIS_NOTE if published else None, "candidates": {}, "totals": {"all": zero(), "confirmatory": zero(), "exploratory": zero()}, "distinct_graded_items": 0}
     items = set()
     for c in cands:
         for market in sorted({r["market"] for r in rows + raw if r["model"] == c}):
@@ -3298,7 +3306,7 @@ def forward_pair_counts(path: Optional[Path], sport: str, protocol_id: Optional[
                     if r["market"] == market and info[r["model"]]["role"] == "incumbent":
                         n[r["model"]] = n.get(r["model"], 0) + 1
                 bar = max(n, key=lambda m: (n[m], m)) if n else None
-            have = {r["game_id"] for r in rows if r["model"] == c and r["market"] == market}
+            have = {r["game_id"] for r in by_key.get((c, market), [])}
             late = {r["game_id"] for r in raw if r["model"] == c and r["market"] == market} - have
             pr = forward_pairs(rows, c, bar, market, late=late, require_information_time=published)
             cls: dict = {}
@@ -3308,16 +3316,15 @@ def forward_pair_counts(path: Optional[Path], sport: str, protocol_id: Optional[
                 if r["game_id"] in graded:
                     items.add((market, r["game_id"], _lk(r["line"])))
             for k, key in (("unpaired_timing", "unpaired_timing"), ("unpaired_line", "unpaired_line"),
-                           ("unpaired_orientation", "unpaired_orientation"), ("missing", "missing"), ("as_of_late", "as_of_late"),
+                           ("missing", "missing"), ("as_of_late", "as_of_late"),
                            ("invalid_information", "invalid_no_information_time")):
                 for g in pr[k]:
                     cls[g] = key
-            bar_games = {r["game_id"] for r in rows if r["model"] == bar and r["market"] == market}
+            bar_games = {r["game_id"] for r in by_key.get((bar, market), [])}
             for g in have - bar_games:           # candidate forecasts of games the bar has no row for
-                mine = [r for r in rows if r["model"] == c and r["market"] == market and r["game_id"] == g]
-                cls[g] = ("invalid_no_information_time" if published and all(information_problem(r) for r in mine)
+                cls[g] = ("invalid_no_information_time" if published and all(information_problem(r) for r in by_game[(c, market, g)])
                           else "no_published_bar")
-            starts = {r["game_id"]: r["start_at"] for r in rows + raw if r["market"] == market}
+            starts = {r["game_id"]: r["start_at"] for r in raw if r["market"] == market}
             per = out["candidates"].setdefault(c, {}).setdefault(market, {"bar": bar, "all": zero(), "confirmatory": zero(),
                                                                           "exploratory": zero()})
             for g, key in cls.items():
@@ -3426,8 +3433,7 @@ def _no_published_bar(fallback: Optional[str]) -> dict:
     return {"decision": "reject", "reason": "the published forecast has no scored forward rows for this market: no comparison is "
             "made against a research member in its place", "cohort": 0, "forecast": 0, "coverage": 0.0, "pairing": FORWARD_PAIRING,
             "bar": fallback, "bar_fallback": True, "bar_published": False, "games": 0, "paired_games": 0, "missing_games": 0,
-            "as_of_late_games": 0, "unpaired_games": 0, "unpaired_timing_games": 0, "unpaired_line_games": 0,
-            "unpaired_orientation_games": 0, "invalid_no_information_time_games": 0, "unpaired_share": 0.0,
+            "as_of_late_games": 0, "unpaired_games": 0, "unpaired_timing_games": 0, "unpaired_line_games": 0, "invalid_no_information_time_games": 0, "unpaired_share": 0.0,
             "max_gap_minutes": None, "candidate_later_pairs": 0, "max_candidate_later_minutes": None}
 
 
@@ -3479,7 +3485,6 @@ def _forward_stage(path, adapter: dict, protocol_id, *, since=None, until=None) 
                     "paired_games": pr["paired_games"], "missing_games": len(pr["missing"]),
                     "as_of_late_games": len(pr["as_of_late"]), "unpaired_games": len(pr["unpaired"]),
                     "unpaired_timing_games": len(pr["unpaired_timing"]), "unpaired_line_games": len(pr["unpaired_line"]),
-                    "unpaired_orientation_games": len(pr["unpaired_orientation"]),
                     "invalid_no_information_time_games": len(pr["invalid_information"]),
                     "unpaired_share": ((len(pr["unpaired"]) + len(pr["as_of_late"]) + len(pr["invalid_information"])) / cohort)
                     if cohort else 0.0,
@@ -3555,11 +3560,12 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
     sportsbook, the bar and the pairs); earlier games are evaluated apart as `exploratory` and never reach a criterion."""
     cut = prospective_start(adapter)
     prospective = {"start": cut, "established": cut is not None}
+    basis = BAR_BASIS_NOTE if adapter.get("published_bar") else None
     if cut is None:                    # the repaired comparison has no prospective start yet: nothing is confirmatory
         early = _forward_stage(path, adapter, protocol_id)
         why = ("the prospective start of the repaired comparison (FORWARD_PAIRING['published_bar_from']) is not established: "
                "nothing is confirmatory, every forecast is waiting or exploratory")
-        return {"status": "prospective_start_not_established", "prospective": prospective,
+        return {"status": "prospective_start_not_established", "prospective": prospective, "bar_basis": basis,
                 "exploratory": None if early is None else {"note": why + "; reported for information only", "evaluation": early},
                 "recommendation": promotion_recommendation(adapter["sport"], {"candidates": [], "markets": {}},
                                                            empty=("prospective_start_not_established", why[0].upper() + why[1:]))}
@@ -3570,7 +3576,7 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
                 "information only, never counted toward a promotion criterion",
         "evaluation": early}
     if ev is None:
-        return {"status": "no_forward_forecasts", "exploratory": exploratory, "prospective": prospective,
+        return {"status": "no_forward_forecasts", "exploratory": exploratory, "prospective": prospective, "bar_basis": basis,
                 "recommendation": promotion_recommendation(adapter["sport"], {"candidates": [], "markets": {}})}
     conn = forward_connect(path)
     try:
@@ -3591,7 +3597,7 @@ def forward_evaluate(path: Optional[Path], adapter: dict, protocol_id: Optional[
     finally:
         conn.close()
     by_model, _ = forward_records(path, adapter["sport"], protocol_id, since=cut)
-    return {"status": "evaluated", "prospective": prospective, "evaluation": ev, "recommendation": rec, "exploratory": exploratory,
+    return {"status": "evaluated", "prospective": prospective, "bar_basis": basis, "evaluation": ev, "recommendation": rec, "exploratory": exploratory,
             "graded": sum(1 for recs in by_model.values() for r in recs if r["outcome"] is not None),
             "ungraded": sum(1 for recs in by_model.values() for r in recs if r["outcome"] is None)}
 

@@ -868,11 +868,11 @@ export interface AutoresearchV3 {
   forward_status?: Record<string, AutoresearchForwardStatus> | null;
 }
 export interface PairCounts {
-  valid_pairs: number; valid_pairs_graded: number; unpaired_timing: number; unpaired_line: number; unpaired_orientation: number;
+  valid_pairs: number; valid_pairs_graded: number; unpaired_timing: number; unpaired_line: number;
   missing: number; as_of_late: number; invalid_no_information_time: number; no_published_bar: number;
 }
 export interface AutoresearchPairing {
-  prospective_start: string | null; established: boolean; bar_published: boolean; distinct_graded_items: number;
+  prospective_start: string | null; established: boolean; bar_published: boolean; bar_basis: string | null; distinct_graded_items: number;
   totals: { all: PairCounts; confirmatory: PairCounts; exploratory: PairCounts };
   error?: string;
 }

@@ -395,23 +395,30 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   and Telegram show, and `paired_graded_items` was a join with no timing or line rule.
   (a) *Bar.* NBA/NHL record the model `published`: every `game_forecasts` row of status `forecast` for a game still ahead and its
   current start (`candidates_view.upcoming_published`; preseason and `missing` rows are not forecasts; the latest run is the
-  `coverage.canonical` selection, tested). Each row carries its market, line (`bookmaker` / `reference_model`), side orientation
-  (a = home / over, b = away / under; `SIDE_ORIENTATION`, tested against `markets.side_labels`) and information time in the new
-  `basis` column (JSON; added by `ALTER`, existing rows keep NULL). Information time = the producing run's own time
+  `coverage.canonical` selection, tested). Each row carries its market, line (`bookmaker` / `reference_model`)
+  and information time in the new
+  `basis` column (JSON; added by `ALTER`, existing rows keep NULL). The side orientation (a = home / over) is fixed by the market
+  definition and stored only as documentation (`orientation_by_definition`); no pairing check claims to verify it. Information time = the producing run's own time
   (`source_generated_at`, else the row's `generated_at`; never later than the row's). `FORWARD_PAIRING["bar"]` names `published`
   for every NBA/NHL market. The research members stay recorded and are shown per candidate as `context_incumbents` (pair counts
   only, labelled "context only, not the published forecast"); with no scored published rows the evaluator does NOT fall back to a
   member: the candidate's decision is `reject` ("the published forecast has no scored forward rows") and it counts nothing.
-  The pairing numbers (as-of 60 min, at most 10 min before, never after, same line) are unchanged.
+  The pairing numbers (as-of 60 min, at most 10 min before, never after, same line) are unchanged. Pairs against the published bar also need the same KIND
+  of line (bookmaker vs the model's own reference line) wherever both rows state it; a mismatch is `unpaired_line`.
+  **The bar is the published forecast as of 60 minutes before the start (the forward as-of rule: the latest published run made by
+  then), not necessarily the last forecast published or sent on the cards before the start** (`BAR_BASIS_NOTE`, shown by the API
+  and the page). The `published` model keeps every `model_version` it ever had (other models: the latest definition only).
   (b) *Eligibility.* For an adapter with `published_bar` a candidate row counts only with a stated information time equal to its
   stored cutoff (`basis.information_at`). Rows recorded before the repair (no `basis`) are labelled "invalid: no information time
-  (pre-repair)" and excluded from valid counts and every criterion; a different side orientation is `unpaired_orientation`. The
+  (pre-repair)" and excluded from valid counts and every criterion. The
   pairing criterion's unpaired share includes these games. Nothing is deleted or rewritten.
   (c) *Counts.* `autoresearch.forward_pair_counts` (used by `/api/research/autoresearch` -> `v3.forward.<sport>.pairing`) classifies
-  every game with the evaluator's own `forward_pairs`: valid pairs (graded), unpaired by timing / line / side, missing, as-of-late,
+  every game with the evaluator's own `forward_pairs`: valid pairs (graded), unpaired by timing / line, missing, as-of-late,
   invalid (no information time), no published row; for games at/after the prospective start (confirmatory), before it
   (exploratory; with no start, all of them) and all. `paired_graded_items` is now the distinct graded items of VALID pairs; the old
-  join is kept as `raw_joined_graded_items` for audit only.
+  join is kept as `raw_joined_graded_items` for audit only. The page's counts are cached per sport while the store file (and its WAL:
+  path, mtime_ns, size) and `FORWARD_PAIRING` are unchanged; an exception while counting one sport makes that sport `failed` with the
+  reason, never the endpoint.
   (d) *Prospective start.* `FORWARD_PAIRING["published_bar_from"]` (outside `PROTOCOL_V3`; protocol ids verified unchanged) is
   **None = not established** in this commit: `forward_evaluate` returns `prospective_start_not_established`, no look is logged and
   everything is exploratory. It will be set in a separate dated commit, to a FUTURE start, only after live verification; never
