@@ -156,3 +156,14 @@ TensorFlow in the research environment (`pool-fit-deep`) and stored as plain Num
 artifact without either library and skips the candidate, with the reason, when no artifact exists for the season. Their
 code lives in `candidates/deep.py`, outside the files that define every other candidate's identity.
 
+
+## Inputs frozen at the served forecast's information time (2026-11-26; ported from the delivery line, owner decision 2026-11-23)
+
+The two-hour cycle calls the pool minutes after the published forecast. `candidates.live.record(information_at=..., served=...)` now
+reads every input as of the cycle's `as_of`, never later: results, box scores/shots, goalie listings, eligibility (only games the
+served forecast covered, and only while their start is unchanged), the sportsbook line/quote (a core cohort's line is used only when
+its quote was retrieved at or before `as_of`; a no-quote cohort only when it is of the same cycle, within 10 minutes) and the feature
+walk. Each row stores `inputs.information_at` and keeps its real write time (`generated_at`). A later information time than the
+recording time is refused. Candidate `model_version` and `registry.definition()` are unchanged. Rows written before this change carry
+no `information_at` and are never relabelled. The forward reader and pairing rule (candidate information time never after the
+bar's) live in the delivery line's `autoresearch.py` / `candidates_view.py`; this release only supplies the stamped rows.
