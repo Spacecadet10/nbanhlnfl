@@ -22,7 +22,9 @@ BUILD_RULES.md (zsh push note, delivery-before-live ordering), docs/ADAPTIVE_SYS
    Check `launchctl list | grep nba-predictor` and the process list.
 3. Plists first, if jobs or their exit-code handling change (`adaptive-train`, `nhl-daily`, `ncaab-daily`: 0/1/3). Copy the template from scripts/launchd/
    to ~/Library/LaunchAgents, keep the old ones (e.g. `plists-before/`), bootout + bootstrap. The new shell text accepts the old codes, so plists go BEFORE code.
-4. Pre-release backup (nightly runner command); verify journal and integrity; note the folder (e.g. ~/nba-predictor-backups/stores/<UTC stamp>).
+4. Pre-release backup, from `~/nba-predictor-backup-runner`: `NBA_DATA_DIR=~/Desktop/nbanhlnfl/data PYTHONPATH=~/nba-predictor-backup-runner/backend
+   ~/nba-predictor-delivery/backend/.venv/bin/python scripts/backup_nightly.py --root ~/nba-predictor-backups` (exit 2 = no mirror drive, expected);
+   check `journal_verify_ok` and every `integrity: ok`; note the folder (~/nba-predictor-backups/stores/<UTC stamp>).
 5. Push the branch first with explicit 40-hex hashes. In zsh `$X:refs` is parsed as a modifier: write `"${X}:refs/heads/<branch>"`, never `$X:refs/...`.
 6. In the checkout: `git checkout --detach <commit>` (never commit inside a release checkout). Frontend changed: `cd frontend && npm run build`.
 7. `python -m app.release pin` in that checkout, ONLY for a commit a pushed branch holds (it refuses a commit no branch holds).
