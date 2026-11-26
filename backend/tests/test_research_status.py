@@ -1240,7 +1240,10 @@ def test_forward_summary_labels_each_sport_and_counts_paired_graded_items(tmp_pa
                   "'forward_status=candidates_recording candidates=1')")
     c.close()
     s = rs.forward_summary(p)
-    assert s["nba"]["status"] == "candidates_recording" and s["nba"]["paired_graded_items"] == 1 and s["nba"]["graded_games"] == 1
+    # 2026-11-26 (owner requirement 2): the count is the evaluator's own pairing, not a join. This nba pair is a candidate with no
+    # information time against no published row, so it is not a valid pair; the old join (1) is kept only as raw_joined_graded_items.
+    assert s["nba"]["status"] == "candidates_recording" and s["nba"]["paired_graded_items"] == 0 and s["nba"]["graded_games"] == 1
+    assert s["nba"]["raw_joined_graded_items"] == 1
     assert s["ncaab"]["status"] == "not_run" and "paired_graded_items" not in s["ncaab"]
     assert s["ncaab"]["incumbent_forecasts"]["rows"] == 1 and "candidate_forecasts" not in s["ncaab"]
 

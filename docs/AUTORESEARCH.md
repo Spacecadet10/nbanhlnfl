@@ -390,6 +390,43 @@ games starting at or after `FORWARD_PAIRING["prospective_from"]` = 2026-11-24T00
   Pairing COUNTS on Nov 21-22 (exploratory, a copy of the data): against the named NBA primary 2-4 of 12 games per market did
   not pair (17-33%, above the 10% pairing criterion); every pair had the candidate 3-5 min later (same cycle). The rule was not
   tuned after seeing this; if it keeps NBA candidates unpairable, that is reported, not fixed by moving thresholds after a look.
+- **The published forecast is the bar; counts and statuses (amendment 2026-11-26, before any repaired comparison).** Audit
+  finding: the NBA/NHL bar was a research cohort member (`research-v2:elo`, `research-v3:points_normal`), not the row the cards
+  and Telegram show, and `paired_graded_items` was a join with no timing or line rule.
+  (a) *Bar.* NBA/NHL record the model `published`: every `game_forecasts` row of status `forecast` for a game still ahead and its
+  current start (`candidates_view.upcoming_published`; preseason and `missing` rows are not forecasts; the latest run is the
+  `coverage.canonical` selection, tested). Each row carries its market, line (`bookmaker` / `reference_model`), side orientation
+  (a = home / over, b = away / under; `SIDE_ORIENTATION`, tested against `markets.side_labels`) and information time in the new
+  `basis` column (JSON; added by `ALTER`, existing rows keep NULL). Information time = the producing run's own time
+  (`source_generated_at`, else the row's `generated_at`; never later than the row's). `FORWARD_PAIRING["bar"]` names `published`
+  for every NBA/NHL market. The research members stay recorded and are shown per candidate as `context_incumbents` (pair counts
+  only, labelled "context only, not the published forecast"); with no scored published rows the evaluator does NOT fall back to a
+  member: the candidate's decision is `reject` ("the published forecast has no scored forward rows") and it counts nothing.
+  The pairing numbers (as-of 60 min, at most 10 min before, never after, same line) are unchanged.
+  (b) *Eligibility.* For an adapter with `published_bar` a candidate row counts only with a stated information time equal to its
+  stored cutoff (`basis.information_at`). Rows recorded before the repair (no `basis`) are labelled "invalid: no information time
+  (pre-repair)" and excluded from valid counts and every criterion; a different side orientation is `unpaired_orientation`. The
+  pairing criterion's unpaired share includes these games. Nothing is deleted or rewritten.
+  (c) *Counts.* `autoresearch.forward_pair_counts` (used by `/api/research/autoresearch` -> `v3.forward.<sport>.pairing`) classifies
+  every game with the evaluator's own `forward_pairs`: valid pairs (graded), unpaired by timing / line / side, missing, as-of-late,
+  invalid (no information time), no published row; for games at/after the prospective start (confirmatory), before it
+  (exploratory; with no start, all of them) and all. `paired_graded_items` is now the distinct graded items of VALID pairs; the old
+  join is kept as `raw_joined_graded_items` for audit only.
+  (d) *Prospective start.* `FORWARD_PAIRING["published_bar_from"]` (outside `PROTOCOL_V3`; protocol ids verified unchanged) is
+  **None = not established** in this commit: `forward_evaluate` returns `prospective_start_not_established`, no look is logged and
+  everything is exploratory. It will be set in a separate dated commit, to a FUTURE start, only after live verification; never
+  backdated. Games starting before it never count (tested; a game starting exactly at it counts). The rule is by game start: a game
+  starting within 2 h after the start may have been forecast before it; that is allowed, and the start is set accordingly.
+  (e) *Status per sport* (`forward_status.py`, `v3.forward_status`): `no candidate` | `waiting` | `invalid comparison` | `failed` |
+  `recording valid evidence`, with the reason and the baseline and candidate paths. Baselines: NBA/NHL the published forecast;
+  NCAAB a re-implementation of the sealed decision at the recorder's own clock (`ncaab_cards.research_forecast_upcoming`, cutoff =
+  record time) and NFL the incumbent recomputed at record time (`nfl_challengers.research_forecast_upcoming`): neither is the
+  published forecast and a comparison against them is an `invalid comparison`; Soccer 1X2/double chance/draw no bet is the stored
+  published forecast (`soccer_live_forecasts`), goals/BTTS/corners are recomputed, and no soccer candidate exists. `failed` also
+  covers a record/grade job that failed or has not run for 3 h and a missing or unreadable store.
+  (f) *Not changed:* the promotion criteria, including `full_coverage` (`fw["coverage"] == 1.0`), which is reported as before.
+  Open: the as-of rule scores the published run made by start - 60 min, which can differ from the last forecast published before
+  the start; and the coverage ledger writes a new row only when a cycle's decision changes.
 - **Research load during games (2026-11-23).** Verified behaviour before this change: a sport's research step waited for that
   sport's own games (2.5 h before, 4 h lookback; Soccer only 0.75 h before, no lookback) and for any sport's kick-off within
   0.5 h, but NOT for other sports' games already in progress. Now every research step also refuses while any sport's game that

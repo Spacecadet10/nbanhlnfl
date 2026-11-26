@@ -864,9 +864,24 @@ export interface AutoresearchV3 {
   wrapper_state?: { sport: string; last_attempt_utc: string; last_outcome: string; last_success_utc: string; last_reason: string }[] | null;
   /** Forward test per sport (research store, read-only): status says whether candidates are recorded, waiting, none passed or unsupported. */
   forward?: Record<string, AutoresearchForward> | null;
+  /** Per sport, all five: the forward status (no candidate / waiting / invalid comparison / failed / recording valid evidence), why, and the baseline and candidate paths. */
+  forward_status?: Record<string, AutoresearchForwardStatus> | null;
+}
+export interface PairCounts {
+  valid_pairs: number; valid_pairs_graded: number; unpaired_timing: number; unpaired_line: number; unpaired_orientation: number;
+  missing: number; as_of_late: number; invalid_no_information_time: number; no_published_bar: number;
+}
+export interface AutoresearchPairing {
+  prospective_start: string | null; established: boolean; bar_published: boolean; distinct_graded_items: number;
+  totals: { all: PairCounts; confirmatory: PairCounts; exploratory: PairCounts };
+  error?: string;
+}
+export interface AutoresearchForwardStatus {
+  status: 'no candidate' | 'waiting' | 'invalid comparison' | 'failed' | 'recording valid evidence'; reason: string;
+  baseline: { published: boolean | string; label: string; code: string }; candidate: { label: string }; pairing?: AutoresearchPairing;
 }
 export interface AutoresearchForward {
-  status?: string; label?: string; grading?: string; graded_games?: number; paired_graded_items?: number; suspect_models?: Record<string, number>;
+  status?: string; label?: string; grading?: string; graded_games?: number; paired_graded_items?: number; raw_joined_graded_items?: number; pairing?: AutoresearchPairing; suspect_models?: Record<string, number>;
   candidate_forecasts?: { rows: number; models: number; games: number }; incumbent_forecasts?: { rows: number; models: number; games: number };
   last_record?: { at: string; outcome: string; detail: string }; last_grade?: { at: string; outcome: string; detail: string };
 }

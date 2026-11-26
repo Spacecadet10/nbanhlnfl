@@ -68,6 +68,16 @@ test('Autoresearch v3: no_candidates is never a success, reference-line keeps ne
   assert.doesNotMatch(src, /no_candidates: '(Evaluated|Success)/);
 });
 
+test('Autoresearch v3: every sport shows its forward status, reason and baseline; a re-implemented bar is never called the published forecast', () => {
+  const src = readFileSync(join(import.meta.dirname, 'Autoresearch.tsx'), 'utf8');
+  assert.match(src, /Forward status per sport/);
+  assert.match(src, /v\.forward_status/);
+  assert.match(src, /NOT the published forecast/);
+  assert.match(src, /start not established: nothing confirmatory/);
+  assert.match(src, /pre-repair/);
+  assert.doesNotMatch(src, /raw stored rows/);                           // the old naive join is no longer shown
+});
+
 test('the research page shows the audit: reasons, invalid trials, unverified sports, and an unusable audit file', () => {
   const src = readFileSync(join(import.meta.dirname, 'Autoresearch.tsx'), 'utf8');
   assert.match(src, /d\.audit\.error/);

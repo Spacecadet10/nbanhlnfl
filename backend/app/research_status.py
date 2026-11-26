@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from . import research_audit
+from . import forward_status, research_audit
 
 NOTE = ("Research only. Trials search the validation seasons of a read-only data snapshot; a 'keep' means a candidate beat "
         "the incumbent there (exploratory, repeated search), not that it is approved or used. Forecasts never come from "
@@ -214,8 +214,11 @@ GRADING_LABELS = {"graded": "graded new results", "waiting_for_results": "waitin
 
 def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
     """Per sport, from the research forward store (read-only, never created here): the last recorder/grader runs and their
-    stated forward_status, candidate vs current-model forecast counts, graded games, and paired graded items (a candidate and
-    the current model forecast the same game, market and line before the start). None when the store does not exist."""
+    stated forward_status, candidate vs current-model forecast counts, graded games, and `pairing`: valid pairs, unpaired
+    (timing, line, side), missing, as-of-late and rows without an information time, counted by the evaluator's own pairing
+    (autoresearch.forward_pair_counts) with the same eligibility, for games after the prospective start (confirmatory) and
+    before it (exploratory). `paired_graded_items` is the distinct graded items of VALID pairs; `raw_joined_graded_items` is the
+    old naive join, kept for audit only. None when the store does not exist."""
     import sqlite3
     if path is None:
         from . import config
@@ -246,7 +249,7 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
                         "AND i.line_key = c.line_key AND i.role = 'incumbent' JOIN rf_grades g ON g.sport = c.sport "
                         "AND g.game_id = c.game_id AND g.market = c.market AND g.line_key = c.line_key "
                         "WHERE c.role = 'candidate' GROUP BY c.sport"):
-                    out.setdefault(r["sport"], {})["paired_graded_items"] = r["n"]
+                    out.setdefault(r["sport"], {})["raw_joined_graded_items"] = r["n"]      # not eligibility-checked: audit only
             # certainty (autoresearch.degenerate): side a or b <= 1e-6, or any outcome >= 1 - 1e-6; a zero push/draw is fine
             for r in conn.execute("SELECT sport, model, role, COUNT(*) n FROM rf_forecasts WHERE p_a <= ? OR p_a >= ? OR p_b <= ? "
                                   "OR p_b >= ? OR (p_mid IS NOT NULL AND p_mid >= ?) GROUP BY sport, model, role",
@@ -256,6 +259,16 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
         return {"error": f"{type(exc).__name__}: {exc}"}
     finally:
         conn.close()
+    # Pairing counts: the evaluator's own pairing (autoresearch.forward_pair_counts), never a join. Only sports with candidate
+    # rows have anything to pair; the store is opened read-only.
+    from . import autoresearch
+    for s, v in out.items():
+        if v.get("candidate_forecasts"):
+            try:
+                v["pairing"] = autoresearch.forward_pair_counts(path, s, readonly=True)
+                v["paired_graded_items"] = v["pairing"]["distinct_graded_items"]
+            except sqlite3.Error as exc:
+                v["pairing"] = {"error": f"{type(exc).__name__}: {exc}"}
     for s, v in out.items():
         detail = (v.get("last_record") or {}).get("detail") or ""
         stated = next((w.split("=", 1)[1] for w in detail.split() if w.startswith("forward_status=")), None)
@@ -299,6 +312,7 @@ def v3_status(root: Path) -> Optional[dict]:
     if last and isinstance(last.get("combined"), dict):     # an older evaluator let a v2 success stand for a v3 refusal
         last = last | {"combined": {s: c | {"outcome": _combined((c.get("v3") or {}).get("outcome"), (c.get("v2") or {}).get("outcome"),
                                                                  c.get("outcome"))} for s, c in last["combined"].items()}}
+    fwd = forward_summary()
     return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports, "wrapper_state": daily_state(),
-            "forward": forward_summary(),
+            "forward": fwd, "forward_status": forward_status.sport_statuses(fwd),
             "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport", "combined", "v2")}}
