@@ -27,17 +27,19 @@ def ts(minutes, seconds=0):
 
 
 def put(path, model, role, run_at, info, line, pa, *, gid="g1", start=START, market="total", sport="nba", version="v",
-        basis="auto", orientation=None, mid=None):
+        basis="auto", mid=None, line_source=None):
     """One forward row. basis 'auto': a published row / a pool candidate row carrying its information time; None: a row
     recorded before the repair (no basis at all)."""
     if basis == "auto":
         basis = {"kind": "published" if model == ar.PUBLISHED else "pool_candidate", "information_at": info,
-                 "orientation": orientation or ar.SIDE_ORIENTATION[market]}
+                 "orientation_by_definition": list(ar.SIDE_ORIENTATION[market])}
     probs = {"a": pa, "b": 1 - pa} if mid is None else {"a": pa, "mid": mid, "b": 1 - pa - mid}
     r = {"game_id": gid, "season": 2027, "start_at": start, "forecast_cutoff": info or run_at, "forecast_at": run_at,
          "market": market, "line": line, "probs": probs, "outcome": None, "model_version": version}
     if basis is not None:
         r["basis"] = basis
+    if line_source:
+        r["line_source"] = line_source
     out = ar.forward_record(path, sport=sport, protocol_id="p", model=model, role=role, model_version=version, data_version="d",
                             forecasted_at=run_at, records=[r], now=run_at)
     assert out["inserted"] == 1, out
@@ -45,11 +47,12 @@ def put(path, model, role, run_at, info, line, pa, *, gid="g1", start=START, mar
 
 
 def pair_row(path, gid, *, bar_info=ts(0), cand_info=None, cand_run=None, bar_line=150.5, cand_line=150.5, cand_basis="auto",
-             cand_orientation=None, start=START, sport="nba", market="total", cand="cand", bar=ar.PUBLISHED, mid=None):
+             cand_line_source=None, bar_line_source=None, start=START, sport="nba", market="total", cand="cand", bar=ar.PUBLISHED, mid=None):
     cand_info_ = cand_info if cand_info is not None else bar_info
-    put(path, bar, "incumbent", bar_info, bar_info, bar_line, 0.5, gid=gid, start=start, sport=sport, market=market, mid=mid)
+    put(path, bar, "incumbent", bar_info, bar_info, bar_line, 0.5, gid=gid, start=start, sport=sport, market=market, mid=mid,
+        line_source=bar_line_source)
     put(path, cand, "candidate", cand_run or cand_info_, cand_info_, cand_line, 0.6, gid=gid, start=start, sport=sport,
-        market=market, basis=cand_basis, orientation=cand_orientation, mid=mid)
+        market=market, basis=cand_basis, mid=mid, line_source=cand_line_source)
 
 
 def grade(path, gids, sport="nba", market="total", line=150.5, outcome="a"):
@@ -110,7 +113,7 @@ def test_the_recorder_records_the_published_forecast_as_the_incumbent_with_side_
     for m, r in by.items():
         assert r["forecast_cutoff"] == r["forecast_at"] == "2026-10-12T21:30:00Z"
         assert r["basis"]["kind"] == "published" and r["basis"]["information_at"] == r["forecast_cutoff"]
-        assert tuple(r["basis"]["orientation"]) == ar.SIDE_ORIENTATION[m] and r["basis"]["source"] == "primary_recorded"
+        assert tuple(r["basis"]["orientation_by_definition"]) == ar.SIDE_ORIENTATION[m] and r["basis"]["source"] == "primary_recorded"
     p = tmp_path / "research" / ar.FORWARD_FILE
     out = ar.forward_record(p, sport="nhl", protocol_id="p", model=ar.PUBLISHED, role="incumbent", model_version="x",
                             data_version="d", forecasted_at="2026-10-12T21:40:00Z", records=recs, now="2026-10-12T21:40:00Z")
@@ -186,14 +189,16 @@ def test_a_candidate_one_second_later_than_the_published_row_is_unpaired_and_ten
     assert pr["candidate_later_pairs"] == 0 and ar.FORWARD_PAIRING["max_candidate_later_minutes"] == 0   # the rule is unchanged
 
 
-def test_a_different_line_or_side_orientation_is_unpaired_and_classified(tmp_path):
+def test_a_different_line_or_line_source_is_unpaired_and_a_side_check_is_not_claimed(tmp_path):
     p = tmp_path / "t.sqlite"
-    pair_row(p, "ok")
+    pair_row(p, "ok", bar_line_source="bookmaker", cand_line_source="bookmaker")
     pair_row(p, "line", cand_line=151.5)
-    pair_row(p, "side", cand_orientation=("under", "push", "over"))        # the candidate's a/b are the opposite way round
+    pair_row(p, "source", bar_line_source="reference_model", cand_line_source="bookmaker")   # same number, different kind of line
+    pair_row(p, "unstated", bar_line_source="bookmaker")                                     # a row that does not state it: pairs
     pr = ar.forward_pairs(rows_of(p), "cand", ar.PUBLISHED, "total", require_information_time=True)
-    assert pr["paired_games"] == 1 and pr["unpaired_line"] == ["line"] and pr["unpaired_orientation"] == ["side"]
-    assert sorted(pr["unpaired"]) == ["line", "side"] and pr["unpaired_timing"] == []
+    assert pr["paired_games"] == 2 and sorted(pr["unpaired_line"]) == ["line", "source"] and pr["unpaired_timing"] == []
+    # a/b are fixed by the market's definition (SIDE_ORIENTATION, tested against markets.side_labels); pairing does not claim to check it
+    assert "unpaired_orientation" not in pr and "unpaired_orientation" not in ar.PAIR_COUNT_KEYS
 
 
 def test_a_candidate_without_an_information_time_never_pairs_and_is_labelled_not_missing(tmp_path):
@@ -214,7 +219,7 @@ def test_a_stored_cutoff_that_disagrees_with_the_stated_information_time_is_inva
     p = tmp_path / "t.sqlite"
     pair_row(p, "g1")
     put(p, "cand", "candidate", ts(0), ts(0), 150.5, 0.6, gid="g2", basis={"kind": "pool_candidate", "information_at": ts(-5),
-                                                                          "orientation": ar.SIDE_ORIENTATION["total"]})
+                                                                          "orientation_by_definition": list(ar.SIDE_ORIENTATION["total"])})
     put(p, ar.PUBLISHED, "incumbent", ts(0), ts(0), 150.5, 0.5, gid="g2")
     pr = ar.forward_pairs(rows_of(p), "cand", ar.PUBLISHED, "total", require_information_time=True)
     assert pr["invalid_information"] == ["g2"] and pr["paired_games"] == 1
@@ -239,7 +244,7 @@ def test_pair_counts_use_the_pairing_function_and_separate_every_ineligible_cate
     t = c["totals"]["confirmatory"]
     assert (t["valid_pairs"], t["valid_pairs_graded"], t["unpaired_timing"], t["unpaired_line"], t["missing"],
             t["invalid_no_information_time"], t["no_published_bar"]) == (2, 1, 1, 1, 1, 2, 0)
-    assert t["unpaired_orientation"] == 0 and t["as_of_late"] == 0
+    assert t["as_of_late"] == 0
     assert c["totals"]["exploratory"]["valid_pairs"] == 0 and c["totals"]["all"]["valid_pairs"] == 2
     forward = ar._forward_stage(p, {"sport": "nba", "data_version": "d", "markets": {"total": {"kind": "line"}},
                                     "unsupported": {}, "models": {}, "published_bar": True, "periods": {}}, "p")
@@ -546,3 +551,90 @@ def test_the_api_shows_the_counts_and_a_status_with_its_reason_for_all_five_spor
     assert fs["nba"]["status"] == "waiting" and fs["nba"]["reason"] and fs["ncaab"]["status"] in ("no candidate", "failed")
     assert v3["forward"]["nba"]["pairing"]["totals"]["exploratory"]["valid_pairs"] == 5
     assert v3["forward"]["nba"]["paired_graded_items"] == 5
+
+
+# --- review fixes (2026-11-26): cache, isolation of a failing sport, versions of the published model, bar label ------------------------
+def _store_with_runs(tmp_path, sports=("nba",)):
+    p = tmp_path / "research" / ar.FORWARD_FILE
+    p.parent.mkdir(exist_ok=True)
+    pair_row(p, "ok1")
+    _runs(p, _ok_runs(list(sports)))
+    return p
+
+
+def test_the_pairing_counts_are_cached_by_store_identity_and_recomputed_when_the_store_or_the_rule_changes(tmp_path, monkeypatch):
+    p = _store_with_runs(tmp_path)
+    calls = []
+    real = ar.forward_pair_counts
+    monkeypatch.setattr(ar, "forward_pair_counts", lambda *a, **k: calls.append(a[1]) or real(*a, **k))
+    rs._PAIRING_CACHE.clear()
+    first = rs.forward_summary(p)["nba"]["pairing"]
+    again = rs.forward_summary(p)["nba"]["pairing"]
+    assert calls == ["nba"] and first == again                          # second request: no recomputation
+    pair_row(p, "ok2")                                                  # the store grew: recomputed
+    assert rs.forward_summary(p)["nba"]["pairing"]["totals"]["all"]["valid_pairs"] == 2 and calls == ["nba", "nba"]
+    monkeypatch.setitem(ar.FORWARD_PAIRING, "published_bar_from", ts(-100000))      # the rule changed: recomputed
+    rs.forward_summary(p)
+    assert calls == ["nba", "nba", "nba"]
+
+
+def test_a_failing_pairing_makes_that_sport_failed_and_never_the_whole_page(tmp_path, monkeypatch):
+    p = _store_with_runs(tmp_path, ("nba", "nhl"))
+    pair_row(p, "n1", sport="nhl")
+    real = ar.forward_pair_counts
+
+    def boom(path, sport, *a, **k):
+        if sport == "nba":
+            raise RuntimeError("bad row")
+        return real(path, sport, *a, **k)
+    monkeypatch.setattr(ar, "forward_pair_counts", boom)
+    rs._PAIRING_CACHE.clear()
+    s = rs.forward_summary(p)
+    assert "bad row" in s["nba"]["pairing"]["error"] and s["nhl"]["pairing"]["totals"]["all"]["valid_pairs"] == 1
+    st = status_of(p)
+    assert st["nba"]["status"] == "failed" and "bad row" in st["nba"]["reason"] and st["nhl"]["status"] != "failed"
+    monkeypatch.setenv("NBA_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("NBA_API_MODE", "real")
+    exp = tmp_path / "exp"
+    (exp / "v3" / "pid" / "nba").mkdir(parents=True)
+    (exp / "v3" / "pid" / "nba" / "state.json").write_text(json.dumps({"sport": "nba", "protocol_id": "pid", "at": ts(0)}))
+    monkeypatch.setenv("NBA_AUTORESEARCH_DIR", str(exp))
+    monkeypatch.setattr(main.app, "dependency_overrides", {})
+    r = TestClient(main.app).get("/api/research/autoresearch")
+    assert r.status_code == 200 and r.json()["v3"]["forward_status"]["nba"]["status"] == "failed"
+
+
+def test_candidate_games_without_a_published_row_are_classified_in_one_pass(tmp_path):
+    p = tmp_path / "t.sqlite"
+    for i in range(300):                                               # candidate games the bar has no row for
+        put(p, "cand", "candidate", ts(0), ts(0), 150.5, 0.6, gid=f"x{i}", basis=None)
+    pair_row(p, "ok")
+    c = ar.forward_pair_counts(p, "nba", start=None)["totals"]["all"]
+    assert c["invalid_no_information_time"] == 300 and c["valid_pairs"] == 1
+
+
+def test_a_new_model_version_of_the_published_forecast_never_drops_its_earlier_rows(tmp_path):
+    p = tmp_path / "t.sqlite"
+    for gid, ver, at in (("a", "v1", ts(0)), ("b", "v2", ts(10))):
+        put(p, ar.PUBLISHED, "incumbent", at, at, 150.5, 0.5, gid=gid, version=ver)
+        put(p, "cand", "candidate", at, at, 150.5, 0.6, gid=gid)
+    rows = rows_of(p)
+    assert {r["model_version"] for r in rows if r["model"] == ar.PUBLISHED} == {"v1", "v2"}     # both series stay
+    assert ar.forward_pair_counts(p, "nba", start=None)["totals"]["all"]["valid_pairs"] == 2
+    put(p, "elo", "incumbent", ts(0), ts(0), 150.5, 0.5, gid="a", version="m1", basis=None)       # other models: latest version only
+    put(p, "elo", "incumbent", ts(10), ts(10), 150.5, 0.5, gid="b", version="m2", basis=None)
+    assert {r["model_version"] for r in rows_of(p) if r["model"] == "elo"} == {"m2"}
+
+
+def test_the_bar_is_labelled_as_the_published_forecast_at_the_fixed_instant_not_the_last_card(tmp_path):
+    p = tmp_path / "research" / ar.FORWARD_FILE
+    p.parent.mkdir()
+    pair_row(p, "ok1")
+    _runs(p, _ok_runs(["nba"]))
+    note = ar.BAR_BASIS_NOTE
+    assert "60 minutes before the start" in note and "not necessarily the last forecast published" in note
+    assert ar.forward_pair_counts(p, "nba", start=None)["bar_basis"] == note
+    assert note in status_of(p)["nba"]["baseline"]["label"] and note in status_of(p)["nhl"]["baseline"]["label"]
+    src = open(ar.__file__).read()
+    ts_src = open(ar.__file__.replace("autoresearch.py", "../../frontend/src/components/Autoresearch.tsx")).read()
+    assert "BAR_BASIS_NOTE" in src and "bar_basis" in ts_src

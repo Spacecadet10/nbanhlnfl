@@ -212,6 +212,33 @@ GRADING_LABELS = {"graded": "graded new results", "waiting_for_results": "waitin
                   "evaluated": "graded new results", "no_candidates": "nothing graded (run before 2026-11-23)"}
 
 
+_PAIRING_CACHE: dict = {}
+
+
+def _pairing(path: Path, sport: str) -> dict:
+    """The evaluator's pairing counts for one sport, cached while the store (path, mtime_ns and size of the file and its WAL)
+    and the pairing rule (FORWARD_PAIRING) are unchanged: the page is requested often and the store only grows. Any exception
+    becomes {"error": ...} for this sport."""
+    from . import autoresearch
+    try:
+        p = Path(path).resolve()
+        stamp = [json.dumps(autoresearch.FORWARD_PAIRING, sort_keys=True, default=str)]
+        for f in (p, p.with_name(p.name + "-wal")):
+            st = f.stat() if f.exists() else None
+            stamp.append((st.st_mtime_ns, st.st_size) if st else None)
+        key = (str(p), sport)
+        hit = _PAIRING_CACHE.get(key)
+        if hit and hit[0] == stamp:
+            return hit[1]
+        out = autoresearch.forward_pair_counts(p, sport, readonly=True)
+        if len(_PAIRING_CACHE) > 32:
+            _PAIRING_CACHE.clear()
+        _PAIRING_CACHE[key] = (stamp, out)
+        return out
+    except Exception as exc:                      # noqa: BLE001 (reported, per sport)
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
     """Per sport, from the research forward store (read-only, never created here): the last recorder/grader runs and their
     stated forward_status, candidate vs current-model forecast counts, graded games, and `pairing`: valid pairs, unpaired
@@ -261,14 +288,11 @@ def forward_summary(path: Optional[Path] = None) -> Optional[dict]:
         conn.close()
     # Pairing counts: the evaluator's own pairing (autoresearch.forward_pair_counts), never a join. Only sports with candidate
     # rows have anything to pair; the store is opened read-only.
-    from . import autoresearch
     for s, v in out.items():
         if v.get("candidate_forecasts"):
-            try:
-                v["pairing"] = autoresearch.forward_pair_counts(path, s, readonly=True)
+            v["pairing"] = _pairing(path, s)         # one sport's failure is that sport's `failed`, never the whole page
+            if "error" not in v["pairing"]:
                 v["paired_graded_items"] = v["pairing"]["distinct_graded_items"]
-            except sqlite3.Error as exc:
-                v["pairing"] = {"error": f"{type(exc).__name__}: {exc}"}
     for s, v in out.items():
         detail = (v.get("last_record") or {}).get("detail") or ""
         stated = next((w.split("=", 1)[1] for w in detail.split() if w.startswith("forward_status=")), None)

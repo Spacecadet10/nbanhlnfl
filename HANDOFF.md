@@ -10,6 +10,9 @@
   (`paired_graded_items` 1 -> 0, plus `raw_joined_graded_items == 1`): the old number was the naive join this task replaces.
 - On the Nov 25 backup copy: nba 748 and nhl 462 candidate game-market units invalid (no information time), 0 valid pairs; old join said 127 / 114.
   NCAAB/NFL/Soccer: no candidate. Published rows recorded into the COPY equal coverage.canonical for 75/75 NBA and 96/96 NHL game-markets.
+- Review fixes (Opus review of 67e5904): pairing counts cached by store identity and per-sport exception isolation; same line KIND required;
+  the orientation check was removed (it could not fail; a/b is fixed by the market definition, stored as documentation); bar labelled
+  "published as of start - 60 min, not necessarily the last card"; the `published` model keeps all model_versions.
 - Needs: the live-checkout pool freeze (information_at) before any valid pair can exist; then, after live verification, a separate dated commit
   setting `published_bar_from` to a FUTURE start. Open: the as-of rule scores the published run made by start - 60 min, not necessarily the last published one.
 
