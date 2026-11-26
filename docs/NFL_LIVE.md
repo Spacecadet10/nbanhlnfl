@@ -1,6 +1,8 @@
 > **NOTE 2026-11-26 (added later; behaviour not changed).** The Telegram Recommended pick for NFL does not apply the frozen 75% winner rule described
 > below: per the 2026-11-26 colour/ranking audit, 12 of 16 recommended NFL winners were under 75%, and a total was recommended. The frozen rule applies to the
-> model's own winner evaluation, not to this card selection.
+> model's own winner evaluation, not to this card selection. Since 2026-11-12 the card uses tickets.card_choice (owner-authorised context-card-v1, see
+> docs/TELEGRAM.md note); the NFL game page still shows nfl_live.recommended (frozen winner threshold). The two surfaces can differ
+> until the owner decides whether the frozen threshold should restrict the card.
 
 # NFL live operation — 2026-11-02
 

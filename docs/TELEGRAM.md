@@ -42,6 +42,16 @@ available. launchd does not overlap instances of the same job. It reads this che
 path configured for existing live jobs. Preview servers are not required. Internet access and upstream forecast/source
 jobs remain necessary; this is not a cloud24/7 service.
 
+> **NOTE 2026-11-26 (owner ruling; behaviour not changed).** Colour and recommendation eligibility are separate. The bucket colour
+> (bucket-record-v1, threshold_overview.bucket_colour) is display only and never decides which pick is recommended. Since the owner's
+> 2026-11-12 authorisation (docs/evidence/card-output-2026-11-12/REVIEW.md) the Recommended pick of every scheduled card is
+> tickets.card_choice (`context-card-v1`): excluded are team totals (except soccer), NCAAB spread/total (failed validation) and moved or
+> uncheckable lines; the rest rank by (no warnings, support, sportsbook probability else app probability, exact record, app probability).
+> It does not apply the NFL frozen winner threshold (still used by the NFL game page, nfl_live.recommended) or the 2026-11-01
+> NO_PROVEN_SKILL "never a best pick" note, which describe the older Best Pick; whether either should restrict the card is an owner decision.
+> Soccer: a later card for the same match can recommend a different market (e.g. a goals pick, then double chance once 1X2 exists);
+> no rule covers this yet (owner decision). The paragraph below describes the pre-2026-11-12 Best Pick.
+
 One message summarizes a game's currently recorded pregame markets and the app's existing strong Best Pick, if any, under a prominent “Recommended pick” heading. Messages are delivered as locally rendered PNG cards with a highlighted recommendation and stacked market panels, without icons. Experimental opposite signals stay separate. Install the optional `notifications` backend dependency (Pillow); this host uses `uv pip install --python backend/.venv/bin/python 'Pillow>=10.4,<14'`. The underlying validated/escaped message is retained in the receipt ledger. Rendering completes before a delivery is claimed; image upload uses multipart `sendPhoto`, not a public image URL.
 Only scheduled games starting within two hours, with a pending canonical forecast genuinely generated in that window,
 are eligible. Source refresh failures/staleness suppress delivery. No final, in-progress, reconstructed or demo pick is
