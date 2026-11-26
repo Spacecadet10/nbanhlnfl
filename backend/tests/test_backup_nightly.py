@@ -281,66 +281,87 @@ def pool_files(base):
     return {str(p.relative_to(base)) for p in base.rglob("*") if p.is_file()}
 
 
+def test_a_retrained_history_checkpoint_is_kept_per_version_and_restored_without_a_conflict(tmp_path):
+    # history-<definition>.pkl is the adaptive job's mutable checkpoint (adaptive.save_history rewrites it each retrain; no fit
+    # row refers to it). Each version is kept once, content-addressed, and each night restores its own version.
+    data, root, warned = tmp_path / "data", tmp_path / "backups", []
+    _store(data)
+    adaptive(data, {"nba/history-d1.pkl": b"A" * 100})
+    nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=warned.append)
+    adaptive(data, {"nba/history-d1.pkl": b"X" * 120})
+    out = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=warned.append)
+    assert out["pool"]["conflicts"] == [] and not any("changed under the same name" in w for w in warned)
+    for stamp, blob in (("20261116T043000Z", b"A" * 100), ("20261117T043000Z", b"X" * 120)):
+        man = json.loads((root / "stores" / stamp / "pool-manifest.json").read_text())
+        assert man["files"]["adaptive/nba/history-d1.pkl"] == hashlib.sha256(blob).hexdigest()
+        dest = tmp_path / ("restored-" + stamp)
+        assert nb.collect_pool(root / "stores" / stamp, root / "pool", dest) == 2
+        assert (dest / "adaptive/nba/history-d1.pkl").read_bytes() == blob
+        assert (dest / "adaptive/nba/history-d1.pkl.sha256").read_text().split()[0] == hashlib.sha256(blob).hexdigest()
+    again = nb.nightly(data, root, mirror=None, stamp="20261118T043000Z", repo_root=tmp_path / "r", notify=warned.append)
+    assert again["pool"]["copied"] == 0 and again["pool"]["present"] == 2          # an unchanged version is not copied twice
+
+
 def test_pickles_go_to_a_shared_pool_once_and_not_into_every_nights_tarball(tmp_path):
     data, root = tmp_path / "data", tmp_path / "backups"
     _store(data)
-    adaptive(data, {"nba/history-a.pkl": b"A" * 1000, "nhl/combiner/c-1.pkl": b"C" * 500})
+    adaptive(data, {"nba/fit-a.pkl": b"A" * 1000, "nhl/combiner/c-1.pkl": b"C" * 500})
     one = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
     assert one["pool"]["copied"] == 4 and one["pool"]["conflicts"] == []          # 2 pickles + 2 sidecars
     two = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
     assert two["pool"]["copied"] == 0 and two["pool"]["present"] == 4
-    adaptive(data, {"nba/history-b.pkl": b"B" * 10})                              # a new pickle: only it is copied
+    adaptive(data, {"nba/fit-b.pkl": b"B" * 10})                              # a new pickle: only it is copied
     three = nb.nightly(data, root, mirror=None, stamp="20261118T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
     assert three["pool"]["copied"] == 2
-    assert (root / "pool" / "adaptive" / "nba" / "history-a.pkl").read_bytes() == b"A" * 1000
+    assert (root / "pool" / "adaptive" / "nba" / "fit-a.pkl").read_bytes() == b"A" * 1000
     for stamp in ("20261116T043000Z", "20261118T043000Z"):
         with tarfile.open(root / "stores" / stamp / "files.tar.gz") as t:
             assert not any("research/adaptive" in n for n in t.getnames())
     man = json.loads((root / "stores" / "20261118T043000Z" / "pool-manifest.json").read_text())
-    assert man["files"]["adaptive/nba/history-b.pkl"] == hashlib.sha256(b"B" * 10).hexdigest()
+    assert man["files"]["adaptive/nba/fit-b.pkl"] == hashlib.sha256(b"B" * 10).hexdigest()
     assert len(man["files"]) == 6
 
 
 def test_a_changed_pickle_under_the_same_name_is_reported_and_never_overwrites_the_pool(tmp_path):
     data, root, warned = tmp_path / "data", tmp_path / "backups", []
     _store(data)
-    adaptive(data, {"nba/history-a.pkl": b"A" * 100})
+    adaptive(data, {"nba/fit-a.pkl": b"A" * 100})
     nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=warned.append)
-    adaptive(data, {"nba/history-a.pkl": b"X" * 100})
+    adaptive(data, {"nba/fit-a.pkl": b"X" * 100})
     out = nb.nightly(data, root, mirror=None, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=warned.append)
-    assert out["pool"]["conflicts"] == ["adaptive/nba/history-a.pkl", "adaptive/nba/history-a.pkl.sha256"]
-    assert (root / "pool" / "adaptive" / "nba" / "history-a.pkl").read_bytes() == b"A" * 100
-    assert any("history-a.pkl" in w for w in warned)
+    assert out["pool"]["conflicts"] == ["adaptive/nba/fit-a.pkl", "adaptive/nba/fit-a.pkl.sha256"]
+    assert (root / "pool" / "adaptive" / "nba" / "fit-a.pkl").read_bytes() == b"A" * 100
+    assert any("fit-a.pkl" in w for w in warned)
     man = json.loads((root / "stores" / "20261117T043000Z" / "pool-manifest.json").read_text())
-    assert "adaptive/nba/history-a.pkl" not in man["files"] or man["files"]["adaptive/nba/history-a.pkl"] == hashlib.sha256(b"A" * 100).hexdigest()
+    assert "adaptive/nba/fit-a.pkl" not in man["files"] or man["files"]["adaptive/nba/fit-a.pkl"] == hashlib.sha256(b"A" * 100).hexdigest()
 
 
 def test_a_pickle_that_does_not_match_its_sidecar_is_not_pooled(tmp_path):
     data, root = tmp_path / "data", tmp_path / "backups"
     _store(data)
-    adaptive(data, {"nba/history-a.pkl": b"A" * 100})
-    (data / "research/adaptive/nba/history-a.pkl.sha256").write_text("0" * 64 + "\n")
+    adaptive(data, {"nba/fit-a.pkl": b"A" * 100})
+    (data / "research/adaptive/nba/fit-a.pkl.sha256").write_text("0" * 64 + "\n")
     out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
-    assert out["pool"]["conflicts"] == ["adaptive/nba/history-a.pkl"] and not (root / "pool/adaptive/nba/history-a.pkl").exists()
+    assert out["pool"]["conflicts"] == ["adaptive/nba/fit-a.pkl"] and not (root / "pool/adaptive/nba/fit-a.pkl").exists()
 
 
 def test_the_mirror_pool_receives_only_new_files_and_a_restore_collects_the_referenced_set_verified(tmp_path):
     data, root, offsite = tmp_path / "data", tmp_path / "backups", tmp_path / "offsite"
     _store(data)
     offsite.mkdir()
-    adaptive(data, {"nba/history-a.pkl": b"A" * 1000})
+    adaptive(data, {"nba/fit-a.pkl": b"A" * 1000})
     one = nb.nightly(data, root, mirror=offsite, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
     assert one["status"] == "ok" and one["pool_mirrored"]["copied"] == 2
     two = nb.nightly(data, root, mirror=offsite, stamp="20261117T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
     assert two["pool_mirrored"]["copied"] == 0
-    adaptive(data, {"nba/history-b.pkl": b"B" * 20})
+    adaptive(data, {"nba/fit-b.pkl": b"B" * 20})
     three = nb.nightly(data, root, mirror=offsite, stamp="20261118T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
     assert three["pool_mirrored"]["copied"] == 2
     assert pool_files(offsite / "pool") == pool_files(root / "pool")
     # restore from the off-machine copy: the pool of that night's manifest, hashes verified
     got = nb.collect_pool(offsite / "20261117T043000Z", offsite / "pool", tmp_path / "restored")
-    assert got == 2 and (tmp_path / "restored/adaptive/nba/history-a.pkl").read_bytes() == b"A" * 1000
-    (offsite / "pool/adaptive/nba/history-a.pkl").write_bytes(b"damaged")
+    assert got == 2 and (tmp_path / "restored/adaptive/nba/fit-a.pkl").read_bytes() == b"A" * 1000
+    (offsite / "pool/adaptive/nba/fit-a.pkl").write_bytes(b"damaged")
     import pytest
     with pytest.raises(backup.BackupError):
         nb.collect_pool(offsite / "20261117T043000Z", offsite / "pool", tmp_path / "restored2")

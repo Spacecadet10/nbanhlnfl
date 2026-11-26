@@ -36,7 +36,7 @@ from app import backup, config, journal  # noqa: E402
 # Non-secret files kept beside the stores (patterns are relative to the repo root, the data folder, the LaunchAgents folder).
 # An allowlist, so a credential file (.env*) is never picked up. The adaptive model pickles (hundreds of MB, retrained by
 # the adaptive job, content-addressed, so a run's *.pkl and its .sha256 are immutable) are NOT in files.tar.gz: they go to
-# the shared pool `<root>/pool/adaptive/` once (see _pool); lock files and the adaptive snapshots are not copied.
+# the shared pool `<root>/pool/adaptive/` once (see _pool; the mutable history-*.pkl checkpoint is kept per version); lock files and the adaptive snapshots are not copied.
 # SQLite files below are copied with the backup API.
 EXTRA_PATTERNS = (("repo", "docs/telegram_record.json"), ("repo", "docs/preregistration/**/*"),
                   ("data", "research/telegram_history.json"), ("data", "research/line-state-*.pkl"),
@@ -182,15 +182,25 @@ def _file_sha(path: Path) -> str:
     return backup.sha256(path)
 
 
+CHECKPOINTS = "checkpoints"
+
+
+def _is_checkpoint(path: Path) -> bool:
+    """adaptive.save_history's mutable checkpoint `history-<definition>.pkl` or its `.sha256` sidecar."""
+    return path.name.startswith("history-") and (path.name.endswith(".pkl") or path.name.endswith(".pkl.sha256"))
+
+
 def _pool(data_dir: Path, root: Path, folder: Path) -> dict:
     """Copies each adaptive pickle (and its .sha256 sidecar) to `<root>/pool/adaptive/<relative path>` only if absent, checked
     against the sidecar (pickles) and a fresh hash of the copy. A file already in the pool is never overwritten: one whose
     content differs from the source, or a pickle that does not match its own sidecar, is listed in `conflicts`. Writes
     `pool-manifest.json` in the night's folder: every pool path this night references with its sha256 (a restore's exact set).
-    Pool files are never deleted here."""
+    Pool files are never deleted here. Exception: the adaptive job's mutable checkpoint `history-<definition>.pkl` (and its
+    sidecar; adaptive.save_history rewrites both each retrain, no fit row refers to them) is kept per version at
+    `<root>/pool/checkpoints/<sha256>`, recorded in the manifest's `stored_at`, so a retrain is not a conflict."""
     base, pool = Path(data_dir) / "research" / "adaptive", Path(root) / "pool" / "adaptive"
     copied = present = nbytes = 0
-    conflicts, files = [], {}
+    conflicts, files, stored_at = [], {}, {}
     sources = sorted({p for g in POOL_GLOBS for p in base.glob(g)}) if base.is_dir() else []
     for src in sources:
         if not src.is_file() or src.is_symlink() or ".env" in src.name:
@@ -202,6 +212,9 @@ def _pool(data_dir: Path, root: Path, folder: Path) -> dict:
             conflicts.append(key)                       # the pickle changed after its sidecar was written: not trusted
             continue
         dest = pool / rel
+        if _is_checkpoint(src):
+            dest = Path(root) / "pool" / CHECKPOINTS / digest
+            stored_at[key] = f"{CHECKPOINTS}/{digest}"
         if dest.exists():
             if dest.stat().st_size != src.stat().st_size or _file_sha(dest) != digest:
                 conflicts.append(key)
@@ -219,7 +232,8 @@ def _pool(data_dir: Path, root: Path, folder: Path) -> dict:
             copied += 1
             nbytes += dest.stat().st_size
         files[key] = digest
-    (folder / "pool-manifest.json").write_text(json.dumps({"pool": "pool", "files": files}, indent=2, sort_keys=True))
+    (folder / "pool-manifest.json").write_text(json.dumps({"pool": "pool", "files": files, "stored_at": stored_at},
+                                                          indent=2, sort_keys=True))
     return {"copied": copied, "present": present, "bytes_copied": nbytes, "referenced": len(files), "conflicts": conflicts}
 
 
@@ -251,15 +265,16 @@ def _mirror_pool(root: Path, mirror: Path) -> dict:
 def collect_pool(backup_folder: Path, pool_root: Path, dest: Path) -> int:
     """Restore helper: copies every pool file the night's `pool-manifest.json` references from `pool_root` (the local
     `<root>/pool` or the mirror's `<mirror>/pool`) to `dest/<path>`, each verified against the manifest sha256."""
-    files = json.loads((Path(backup_folder) / "pool-manifest.json").read_text())["files"]
+    manifest = json.loads((Path(backup_folder) / "pool-manifest.json").read_text())
+    files, stored_at = manifest["files"], manifest.get("stored_at", {})
     for key, digest in files.items():
-        src = Path(pool_root) / key
+        src = Path(pool_root) / stored_at.get(key, key)
         if not src.is_file() or _file_sha(src) != digest:
             raise backup.BackupError(f"Pool file {key} is missing or does not match the manifest ({src})")
     for key in files:
         target = Path(dest) / key
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(Path(pool_root) / key, target)
+        shutil.copyfile(Path(pool_root) / stored_at.get(key, key), target)
     return len(files)
 
 
