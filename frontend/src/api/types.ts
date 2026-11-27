@@ -1337,7 +1337,7 @@ export interface PcVersion { event: 'seen' | 'sent'; version_no: number | null; 
   recommended: number | null; on_card: number | null; basis: string }
 export interface PcRow { sport: string; game_id: string; market: string; market_title: string; forecast_id: string; percentage: string; side: string; line: number | null; grade: string; start_at: string;
   game_date: string; generated_at: string; matchup: string | null; pick: string | null; model_version: string | null; final_score: string | null; colour: string; recovered_colour: string;
-  unknown_reason: string | null; support: PcSupport | null; price: number | null; recommended: boolean | null; selection_differs: boolean; versions: PcVersion[]; sent_at?: string; message_id?: number | null }
+  unknown_reason: string | null; support: PcSupport | null; price: number | null; recommended: boolean | null; recommendation_status?: 'counted' | 'superseded' | null; recommendation_note?: string | null; selection_differs: boolean; versions: PcVersion[]; sent_at?: string; message_id?: number | null }
 export interface PcReport { sport: string; view: string; record: string; as_of: string; note: string; colour_rule: string; legend: string; rule_live_since: string; tracking_start: string | null; backfilled_from: string | null;
   sports: { sport: string; status: string; tracking_start: string | null; backfilled_from: string | null; upcoming: number; markets: { market: string; title: string }[] }[];
   summary: { total: PcTally; live: Record<string, PcTally>; recovered: Record<string, PcTally>; cross: Record<string, number>; adds_up: boolean };

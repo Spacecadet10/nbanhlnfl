@@ -51,7 +51,7 @@ function Rows({ rows, record }: { rows: PcRow[]; record: string }) {
       <td data-label="Date">{calendarDate(r.game_date, FULL_DATE)}</td>
       <td data-label="Game"><span>{sportName(r.sport)} · {r.matchup ?? r.game_id}</span></td>
       <td data-label="Market">{r.market_title}</td>
-      <td data-label="Pick"><span><strong>{r.pick ?? r.side}</strong> {r.percentage}%{r.recommended && <span className="badge"> Recommended</span>}</span></td>
+      <td data-label="Pick"><span><strong>{r.pick ?? r.side}</strong> {r.percentage}%{r.recommended && r.recommendation_status !== 'superseded' && <span className="badge"> Recommended</span>}{r.recommendation_status === 'superseded' && <span className="badge"> Recommended earlier, {r.recommendation_note ?? 'superseded, not counted'}</span>}</span></td>
       <td data-label="Colour then"><Colour c={record === 'live' ? r.colour : r.recovered_colour} />{colourThenText(r, record) && <><br /><span className="small muted">{colourThenText(r, record)}</span></>}</td>
       <td data-label="Result">{r.final_score ?? <span className="muted">No result yet</span>}</td>
       <td data-label="Grade"><span className={gradeClass(r.grade)}>{gradeLabel(r.grade)}</span></td>

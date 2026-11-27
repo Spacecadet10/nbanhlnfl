@@ -525,6 +525,9 @@ def _version(s: dict) -> dict:
                               "colour", "wins", "losses", "recovered_colour", "recovered_wins", "recovered_losses", "recommended", "on_card", "basis")}
 
 
+SUPERSEDED_NOTE = "superseded, not counted"
+
+
 def classify(sport: str, items: list, snaps: list, published: list, regrade: Callable, starts: Optional[dict] = None,
              now: Optional[str] = None, label: Optional[Callable] = None) -> dict:
     """{'all', 'recommended', 'sent', 'excluded'}. `items`: the forecast of record per started game and market (one each).
@@ -561,6 +564,7 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         late = s is not None and s not in before
         row = known(it, s) if s is not None and not late else unknown(it, it["start_at"], bool(before), late)
         row["versions"] = [_version(v) for v in mine]
+        row["recommendation_status"] = row["recommendation_note"] = None
         if s is not None and not late:         # the card's recommendation as it last stood before the start: at most one per game
             carded = [v for v in before if v["forecast_key"] == it["forecast_key"] and v["on_card"] and v["recommended"] is not None]
             row["recommended"] = bool(carded and carded[-1]["recommended"])
@@ -571,6 +575,8 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         keep = max(options, key=lambda o: o[:2])[2]
         for *_, row in options:
             row["recommended"] = row is keep
+            row["recommendation_status"] = "counted" if row is keep else "superseded"
+            row["recommendation_note"] = None if row is keep else SUPERSEDED_NOTE
     out["recommended"] = [r for r in out["all"] if r["recommended"]]
 
     sent_rows = {(r["delivery_key"], r["market"]): r for r in snaps if r["event"] == "sent"}
@@ -601,6 +607,15 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         row.update(delivery_key=p["delivery_key"], message_id=p["message_id"], sent_at=p["sent_at"], sent_basis=p["basis"],
                    recommended=bool(s["recommended"]) if s is not None else None, versions=[_version(v) for v in by_gm.get(gm, [])])
         out["sent"].append(row)
+    counted = {(r["game_id"], r["market"], r["forecast_key"]) for r in out["recommended"]}
+    counted_games = {r["game_id"] for r in out["recommended"]}
+    for row in out["sent"]:                    # a card's own result stays; only the match's one counted recommendation is in the record
+        if row["recommended"]:
+            row["recommendation_status"] = ("counted" if (row["game_id"], row["market"], row["forecast_key"]) in counted
+                                            else "superseded" if row["game_id"] in counted_games else None)
+        else:
+            row["recommendation_status"] = None
+        row["recommendation_note"] = SUPERSEDED_NOTE if row["recommendation_status"] == "superseded" else None
     out["excluded"] = dict(out["excluded"])
     return out
 

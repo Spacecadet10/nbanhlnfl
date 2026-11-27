@@ -806,6 +806,9 @@ WITHDRAWN_NOTE = ('The original card and both forecasts are kept. The earlier pi
                   'the record uses the latest pregame forecast.')
 
 
+UPDATE_PREFIX = 'Update · replaces earlier recommendation: '
+
+
 def _plain(line):
     return re.sub(r'<[^>]+>', '', line)
 
@@ -842,6 +845,23 @@ def withdrawal_plan(conn, chat_id, text, now):
     # Owner decision Nov 18 (review F1): only a confirmed 'sent' original is withdrawn; an uncertain or sending one keeps the
     # previous behaviour (the replacement card), so the best-pick record, which counts status='sent' cards, is unchanged.
     return original if original is not None and original['status'] == 'sent' else None
+
+
+def superseded_pick(conn, chat_id, key, text, now):
+    """Soccer only: the plain pick of the confirmed earlier card of this game that `text` replaces, or None. Decided from the ledger
+    alone (sent cards of this game, start and matchup, in send order, this key excluded): the latest earlier card's pick must differ
+    and must not have been withdrawn. The label is added to the text only; keys and card_identity do not change."""
+    identity = card_identity(text)
+    if not identity or not identity[0] == '<b>PROP51 PICKS · SOCCER</b>' or identity[3] in NO_PICK or UPDATE_PREFIX in text:
+        return None
+    since = (datetime.fromisoformat(now.replace('Z', '+00:00')) - timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    earlier = None
+    for row in conn.execute("SELECT delivery_key, text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND attempted_at<=? "
+                            "AND status='sent' ORDER BY attempted_at, rowid", (str(chat_id), since, now)):
+        other = card_identity(row['text'])
+        if row['delivery_key'] != key and other and other[:3] == identity[:3]:
+            earlier = None if other[3] in NO_PICK else (other[3], _plain(row['text'].split('\n')[row['text'].split('\n').index('<b>Recommended pick</b>') + 1]))
+    return earlier[1] if earlier and earlier[0] != identity[3] else None
 
 
 def withdrawal_message(original, text, context):
@@ -951,6 +971,15 @@ def deliver_card(bot, conn, chat_id, key, text, now, *, context=None):
                      and 'Context comparison · provisional lean' in text
                      and 'Context comparison · provisional lean' not in row['text'])):
                 return 'already_sent_for_game'
+    if identity:
+        try:    # owner 2026-11-26: a soccer card that changes the recommendation says so (text only; key and identity unchanged)
+            earlier = superseded_pick(conn, chat_id, key, text, now)
+            if earlier:
+                lines = text.split('\n')
+                lines.insert(lines.index('<b>Recommended pick</b>') + 2, escape(UPDATE_PREFIX + earlier))
+                text = '\n'.join(lines)
+        except Exception as exc:
+            print(f'update label skipped (card unaffected): {type(exc).__name__}', file=sys.stderr, flush=True)
     return deliver(bot, conn, chat_id, key, text, now)
 
 
@@ -975,7 +1004,8 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, sen
         else:
             if caption is None:
                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
-                caption = ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'PROP51 GAME CARD · {league} · single game, not a parlay ticket\nRecommended pick and market breakdown for this one game. Combined parlay tickets arrive separately.'
+                update = next((_plain(x) for x in text.split('\n') if x.startswith(UPDATE_PREFIX)), None)
+                caption = (f'{update}\n' if update else '') + ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'PROP51 GAME CARD · {league} · single game, not a parlay ticket\nRecommended pick and market breakdown for this one game. Combined parlay tickets arrive separately.'
             message = bot.call('sendPhoto', {'chat_id': str(chat_id), 'caption': caption}, photo=photo)
     except DeliveryError as exc:
         status = 'uncertain' if exc.uncertain else 'retry' if exc.retry_after is not None else 'failed'

@@ -1,3 +1,9 @@
+> **NOTE 2026-11-26 (owner decision, soccer update label).** A soccer card whose recommended pick differs from the latest confirmed earlier card of the same
+> match carries one line under the pick: `Update · replaces earlier recommendation: <earlier pick>` (also first in the photo caption and in the card image's detail).
+> Decided from the ledger (`telegram.superseded_pick`); delivery keys, `card_identity` and dedupe are unchanged, both cards stay stored, and a withdrawn earlier
+> pick gets no label. History views show the earlier card's own result and mark it `superseded, not counted`; the match's latest recommendation is the one counted.
+> The NFL game page uses the same `tickets.card_choice` on the same picks (`telegram.prepare_picks`).
+
 > **NOTE 2026-11-26 (added later; behaviour not changed).** The "Recommended pick" on a card does not come from the strong Best Pick described below. It
 > comes from `tickets.card_choice` (method `context-card-v1`; backend/app/tickets.py, telegram.py), labelled on the card as a context comparison and
 > provisional lean, not a ticket. Text below that says otherwise is outdated.

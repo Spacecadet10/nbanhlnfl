@@ -707,3 +707,45 @@ def test_soccer_many_markets_and_long_names_render_without_overflow():
     assert len(text.split('<b>Model '))-1==len(SOCCER_MARKETS)
     im=Image.open(BytesIO(render_card(text)))
     assert im.width==1080 and im.height<7000
+
+
+def _soccer_card(pick, fid=1):
+    d = strong_report(pick, forecast_id=fid)
+    key, text = tg.message_batches(d, '123')[0]
+    return key, text.replace('PROP51 PICKS · NBA', 'PROP51 PICKS · SOCCER')
+
+
+def test_soccer_later_card_with_a_different_pick_is_labelled_an_update_and_both_are_kept(tmp_path):
+    """Owner 2026-11-26: the later card says it replaces the earlier recommendation; keys, identity and parsers are unchanged."""
+    k1, t1 = _soccer_card('Over 2.5 goals')
+    k2, t2 = _soccer_card('Double chance Home or Draw', fid=2)
+    bot = Bot()
+    with tg.ledger(tmp_path / 'u.sqlite') as conn:
+        assert tg.deliver_card(bot, conn, '123', k1, t1, NOW, context={'sport': 'soccer'}) == 'sent'
+        assert tg.deliver_card(bot, conn, '123', k2, t2, '2026-11-02T20:30:00Z', context={'sport': 'soccer'}) == 'sent'
+        rows = {r['delivery_key']: r['text'] for r in conn.execute('SELECT delivery_key,text FROM deliveries')}
+    assert set(rows) == {k1, k2} and rows[k1] == t1                      # first card untouched, keys unchanged
+    assert tg.UPDATE_PREFIX + 'Over 2.5 goals' in rows[k2] and tg.UPDATE_PREFIX not in rows[k1]
+    assert 'Over 2.5 goals' in bot.sends[1]['caption'] and tg.UPDATE_PREFIX in bot.sends[1]['caption']
+    assert tg.card_identity(rows[k2]) == tg.card_identity(t2)           # dedupe identity unchanged by the label
+    assert tg._blocks(rows[k2]) == tg._blocks(t2)       # the card-text market parser reads both alike
+
+
+def test_soccer_same_pick_again_or_first_card_gets_no_update_label(tmp_path):
+    k1, t1 = _soccer_card('Over 2.5 goals')
+    k3, t3 = _soccer_card('Over 2.5 goals', fid=3)
+    bot = Bot()
+    with tg.ledger(tmp_path / 'u2.sqlite') as conn:
+        assert tg.deliver_card(bot, conn, '123', k1, t1, NOW) == 'sent'
+        assert tg.deliver_card(bot, conn, '123', k3, t3, NOW) == 'already_sent_for_game'
+    assert tg.UPDATE_PREFIX not in bot.sends[0]['caption'] and len(bot.sends) == 1
+
+
+def test_nba_different_pick_is_not_labelled(tmp_path):
+    k1, t1 = tg.message_batches(strong_report(), '123')[0]
+    k2, t2 = tg.message_batches(strong_report('WSH +10.5', forecast_id=2), '123')[0]
+    bot = Bot()
+    with tg.ledger(tmp_path / 'u3.sqlite') as conn:
+        tg.deliver_card(bot, conn, '123', k1, t1, NOW)
+        tg.deliver_card(bot, conn, '123', k2, t2, NOW)
+        assert all(tg.UPDATE_PREFIX not in r['text'] for r in conn.execute('SELECT text FROM deliveries'))

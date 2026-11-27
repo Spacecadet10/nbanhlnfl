@@ -566,3 +566,19 @@ def test_an_unstorable_number_or_a_text_price_costs_only_itself():
     assert [r["game_id"] for r in rows()] == ["good"]
     assert ps.observe("nba", rep({**total(), "game_id": "g1", "forecast_id": 5}), T, store=quotes(q(a="x", b="y"))) == 1
     assert rows()[-1]["price_reason"] == "quotes_unreadable"
+
+
+def test_a_superseded_recommendation_is_shown_not_counted_and_the_latest_one_stands(monkeypatch):
+    """Owner 2026-11-26: both cards keep their own result; only the latest recommendation of a match is the counted one."""
+    a, b = pick(fid=1), pick(fid=2, market="total", line=220.5, h=hist(market="total", src="bookmaker"))
+    monkeypatch.setattr(ps, "_recommended", lambda report, picks: {"g1": ("winner", "1")})
+    ps.observe("nba", rep(a), T)
+    monkeypatch.setattr(ps, "_recommended", lambda report, picks: {"g1": ("total", "2")})
+    ps.observe("nba", rep(b), T + timedelta(minutes=25))
+    out = classify([item(grade="win"), item(market="total", fid="2", grade="loss", side="b")])
+    by = {r["market"]: r for r in out["all"]}
+    assert [r["market"] for r in out["recommended"]] == ["total"]                         # one counted per match: the latest
+    assert (by["total"]["recommendation_status"], by["winner"]["recommendation_status"]) == ("counted", "superseded")
+    assert by["winner"]["grade"] == "win" and by["winner"]["recommended"] is False        # its own result is still shown
+    assert by["winner"]["recommendation_note"] == "superseded, not counted"
+    assert len(rows()) == 2                                                               # nothing rewritten

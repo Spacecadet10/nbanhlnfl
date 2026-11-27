@@ -213,11 +213,12 @@ def render_card(message):
     # Owner request Nov 11: one plain "who is playing" line under the pick, only when there is something to say.
     lineup=next((line.removeprefix('Lineup: ') for line in lines[rec+2:markets] if line.startswith('Lineup: ')),None)
     from .telegram import (STRONGEST_PREFIX, BLOCK_EXTRA_PREFIXES, COLOUR_PREFIX, EVIDENCE_PREFIX, SAMPLE_NOTE_PREFIX, GREEN_MARK,
-                           RED_MARK)
+                           RED_MARK, UPDATE_PREFIX)
     strongest = next((line for line in lines[rec+2:markets] if line.startswith(STRONGEST_PREFIX)), None)
     pick_size=72 if len(lines[rec+1])<22 else 48
     detail=next((line for line in lines[rec+2:markets] if line and line!='━━━━━━━━━━━━━━'
-                 and not line.startswith(('Lineup: ', STRONGEST_PREFIX, EVIDENCE_PREFIX))),'')
+                 and not line.startswith(('Lineup: ', STRONGEST_PREFIX, EVIDENCE_PREFIX, UPDATE_PREFIX))),'')
+    update=next((line for line in lines[rec+2:markets] if line.startswith(UPDATE_PREFIX)),'')
     # The pick's own exact-% record (colour mark, W-L, rate, sample size), one more line of the panel under the detail.
     evidence=next((line for line in lines[rec+2:markets] if line.startswith(EVIDENCE_PREFIX)),'')
     # Card colouring: the recommended pick's model % carries its market block's marker; drawn coloured below, never as an emoji.
@@ -225,6 +226,7 @@ def render_card(message):
         found = re.search(rf'(\d+\.\d%) ({GREEN_MARK}|{RED_MARK})', text)
         return (text[:found.start()] + found.group(1) + text[found.end():] if found else text), found
     detail, mark = unmark(detail)
+    detail = (update + '. ' + detail) if update else detail     # an update card states what it replaces before its reason
     evidence, ev_mark = unmark(evidence)
     def rows(text,width,size,bold=False):
         n,row=0,''
