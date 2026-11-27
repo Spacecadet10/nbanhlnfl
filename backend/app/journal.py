@@ -125,6 +125,78 @@ def export(data_dir: Path, journal_dir: Path, *, now: Optional[str] = None) -> d
         os.close(lock)
 
 
+def _compare(lines: dict, live: dict) -> dict:
+    tampered = sorted(pk for pk, e in lines.items() if _sha(e["row"]) != e["sha256"])
+    return {"journaled": len(lines), "in_store": len(live),
+            "missing": sorted(set(live) - set(lines)),
+            "journal_only": sorted(set(lines) - set(live)),
+            "tampered": tampered,
+            "differs": sorted(pk for pk in set(lines) & set(live)
+                              if pk not in tampered and lines[pk]["sha256"] != _sha(live[pk]))}
+
+
+def _bad(report: dict) -> bool:
+    return any(report[k] for k in ("missing", "journal_only", "tampered", "differs"))
+
+
+def export_and_verify(data_dir: Path, journal_dir: Path, *, now: Optional[str] = None, _after_snapshot=None) -> dict:
+    """Export, then verify, against ONE read snapshot per store (a single read transaction), holding the journal lock
+    throughout so no other export appends meanwhile. Rows written to a store after its snapshot are neither exported nor
+    reported missing; the next export takes them. (Separate export() and verify() read the live store at two moments, so a
+    row inserted in between was reported missing: the Nov 24 and Nov 27 false failures.) `_after_snapshot`: test hook."""
+    _check_dirs(data_dir, journal_dir)
+    journal_dir = Path(journal_dir)
+    journal_dir.mkdir(parents=True, exist_ok=True)
+    stamp = now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lock = os.open(journal_dir / ".journal.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise JournalError("Another journal export is running") from None
+        stores, exported, checked, ok = _stores(data_dir), {}, {}, True
+        sports = set(stores) | {p.name for p in journal_dir.iterdir() if p.is_dir()}
+        for sport in sorted(sports):
+            snap = {}
+            if sport in stores:
+                conn = _open(stores[sport])
+                try:
+                    conn.execute("BEGIN")
+                    for table, pk in _tables(conn).items():
+                        snap[table] = {r[pk]: {k: _value(r[k]) for k in r.keys()}
+                                       for r in conn.execute(f'SELECT * FROM "{table}" ORDER BY "{pk}"')}
+                    conn.execute("COMMIT")
+                finally:
+                    conn.close()
+                if _after_snapshot:
+                    _after_snapshot()
+            counts, tables = {}, {}
+            for table in sorted(set(snap) | {p.stem for p in (journal_dir / sport).glob("*.jsonl")}):
+                target = journal_dir / sport / f"{table}.jsonl"
+                live = snap.get(table, {})
+                have = {e["pk"] for e in _read(target)}
+                new = [(pk, row) for pk, row in live.items() if pk not in have]
+                if new:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with open(target, "a") as f:
+                        f.write("".join(json.dumps({"pk": pk, "row": row, "sha256": _sha(row), "exported_at": stamp},
+                                                   sort_keys=True) + "\n" for pk, row in new))
+                        f.flush()
+                        os.fsync(f.fileno())
+                if table in snap:
+                    counts[table] = len(new)
+                report = _compare({e["pk"]: e for e in _read(target)}, live)
+                ok = ok and not _bad(report)
+                tables[table] = report
+            if sport in stores:
+                exported[sport] = counts
+            checked[sport] = tables
+        return {"export": {"status": "ok", "journal": str(journal_dir), "sports": exported},
+                "verify": {"ok": ok, "sports": checked}}
+    finally:
+        os.close(lock)
+
+
 def verify(data_dir: Path, journal_dir: Path) -> dict:
     """Compares the journal with the stores, row by row."""
     _check_dirs(data_dir, journal_dir)
@@ -144,15 +216,8 @@ def verify(data_dir: Path, journal_dir: Path) -> dict:
         names = set(db_rows) | {p.stem for p in (Path(journal_dir) / sport).glob("*.jsonl")}
         for table in sorted(names):
             lines = {e["pk"]: e for e in _read(Path(journal_dir) / sport / f"{table}.jsonl")}
-            live = db_rows.get(table, {})
-            tampered = sorted(pk for pk, e in lines.items() if _sha(e["row"]) != e["sha256"])
-            report = {"journaled": len(lines), "in_store": len(live),
-                      "missing": sorted(set(live) - set(lines)),
-                      "journal_only": sorted(set(lines) - set(live)),
-                      "tampered": tampered,
-                      "differs": sorted(pk for pk in set(lines) & set(live)
-                                        if pk not in tampered and lines[pk]["sha256"] != _sha(live[pk]))}
-            if any(report[k] for k in ("missing", "journal_only", "tampered", "differs")):
+            report = _compare(lines, db_rows.get(table, {}))
+            if _bad(report):
                 ok = False
             tables[table] = report
         result[sport] = tables
