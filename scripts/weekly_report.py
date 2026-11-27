@@ -357,6 +357,7 @@ def _challenger_counts(data_dir: Path, stores: dict) -> list:
             pols = list(cc.execute("SELECT policy_id, COUNT(*) AS n, COUNT(DISTINCT game_id) AS g, COUNT(DISTINCT spec_name) AS s "
                                    "FROM challenger_forecasts WHERE policy_id LIKE ? GROUP BY policy_id ORDER BY policy_id", (f'{sport}-%',)))
             scored, claims = {}, set()
+            retired = {r['policy_id'] for r in pols if r['policy_id'] in learning_challengers.RETIRED}
             store = stores.get(sport)
             if pols and store is not None:
                 try:
@@ -364,11 +365,17 @@ def _challenger_counts(data_dir: Path, stores: dict) -> list:
                     for g in out['groups']:
                         if not g['policy_id'].startswith(f'{sport}-'):      # a claim never leaks across sports
                             continue
+                        if g['policy_id'] in learning_challengers.RETIRED:   # retired rows never set a claim for the other policies
+                            continue
                         scored[g['policy_id']] = scored.get(g['policy_id'], 0) + g['n_scored']
                         claims.add('no claim' if g['claim'].startswith('no claim') else 'sample size reached: preregistered rule applies')
                 except Exception as exc:                                    # the report never dies on the learning section
                     claims.add(f'scoring unavailable ({type(exc).__name__}: {str(exc)[:80]})')
             for r in pols:
+                if r['policy_id'] in retired:
+                    lines.append(f"- {r['policy_id']}: rows recorded n={r['n']}; games n={r['g']}; specs n={r['s']}; "
+                                 f"excluded: {learning_challengers.RETIRED[r['policy_id']]}.")
+                    continue
                 lines.append(f"- {r['policy_id']}: rows recorded n={r['n']}; games n={r['g']}; specs n={r['s']}; settled and scored "
                              f"n={scored.get(r['policy_id'], 0)} (paired with the served forecast); "
                              f"{'; '.join(sorted(claims)) or 'no claim: scoring needs the sport store'} until a preregistered sample size is reached.")

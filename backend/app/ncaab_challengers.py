@@ -2,7 +2,7 @@
 
 NCAAB serving is frozen (models/ncaab_frozen_decision.json). Nothing here edits, refits or replaces it: the served rating
 state (college.state at the cycle's clock) supplies each game's means, exactly as the served forecast reads them, and only
-the calibration and the sigmas applied to those means are refit. Variants (reference/learning_policies/ncaab-challengers-v1.json):
+the calibration and the sigmas applied to those means are refit. Variants (reference/learning_policies/ncaab-challengers-v2.json; v1, priced at the recorder's own clock, is retired):
 
 * C1  winner (sigma + Platt), spread (sigma), total (running_points, sigma) refit weekly; fitted WITHOUT the spent test seasons.
 * C2  as C1 but fitted on every season with results (the owner allows fitting on the spent test seasons; evidence still
@@ -11,10 +11,13 @@ the calibration and the sigmas applied to those means are refit. Variants (refer
       model already in the codebase (college.market_moments); no new model family.
 * C4  team-total sigmas (home and away, derived from the college_eff margin/total sigmas and their correlation) refit as C1.
 
-Point in time: a fit uses only results with result_available_at <= the start (Monday 00:00 UTC) of the cycle's ISO week, walked
-forward (backtest.run, each game predicted from earlier results only), so it is cacheable per week and never newer than the
-cycle. The cycle is the served NCAAB near-tipoff one: games tipping off within two hours of `now`, accepted by
-near_tipoff.predict_now, each priced at the line the served market forecast uses (market_live.forecast). Rows go to the
+Point in time: each (game, market) is priced AS OF the information time of the published bar it is compared with (the latest
+run of that market in game_forecasts by start - 60 min, information time min(source_generated_at, generated_at)), at the bar's own
+line, with cutoff_at = that time; the rating state is college.state at that time, and a fit uses only results with
+result_available_at <= the start (Monday 00:00 UTC) of that time's ISO week, walked forward (backtest.run, each game predicted from
+earlier results only), so it is cacheable per week and never newer than the bar. The cycle is the served NCAAB near-tipoff one:
+games tipping off within two hours of `now`, accepted by near_tipoff.predict_now; a game whose bar is not yet fixed (before
+start - 60 min) or that has none is skipped with a reason and retried. Rows go to the
 challenger store only (learning_challengers); game_forecasts, market_forecasts, candidate_forecasts and the card tables are
 never written, and the sport store is opened read-only.
 
@@ -205,11 +208,15 @@ def _bars(conn, accepted: list, now: str, out: dict) -> dict:
             out["skipped"][gid] = f"bar_not_fixed: the published bar is the latest run by {asof.strftime(FMT)}"
             continue
         latest = {}
-        for market, line, gen, src in conn.execute(
-                "SELECT market, line, generated_at, source_generated_at FROM game_forecasts WHERE game_id=? AND status='forecast' "
-                "AND tipoff_at=? ORDER BY generated_at, forecast_id", (gid, tip)):
-            if _t(gen) <= asof:
-                latest[market] = (min(_t(src or gen), _t(gen)), line)
+        try:
+            for market, line, gen, src in conn.execute(
+                    "SELECT market, line, generated_at, source_generated_at FROM game_forecasts WHERE game_id=? AND status='forecast' "
+                    "AND tipoff_at=? ORDER BY generated_at, forecast_id", (gid, tip)):
+                if _t(gen) <= asof:
+                    latest[market] = (min(_t(src or gen), _t(gen)), line)
+        except ValueError as exc:                      # one unreadable time skips this game, never the cycle
+            out["skipped"][gid] = f"bar_unreadable_time: {exc}"
+            continue
         if not latest:
             out["skipped"][gid] = "no_published_bar"
             continue

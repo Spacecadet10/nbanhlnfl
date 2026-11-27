@@ -410,12 +410,12 @@ def test_ncaab_has_the_same_sections_as_nfl_counts_only(tmp_path, monkeypatch):
 def test_learning_section_reports_counts_per_policy_without_a_claim(tmp_path, monkeypatch):
     m = wr()
     data = setup(tmp_path, 3, monkeypatch, m)[0]
-    seed_challengers(data, [('ncaab-challengers-v1', 'g1', 'winner', None), ('ncaab-challengers-v1', 'g2', 'winner', None),
+    seed_challengers(data, [('ncaab-challengers-v2', 'g1', 'winner', None), ('ncaab-challengers-v2', 'g2', 'winner', None),
                             ('nfl-challengers-v1', 'n1', 'spread', -3.5), ('soccer-challengers-v1', 'm1', 'soccer_btts', None)])
     text = page(m, tmp_path, data)
     s5 = section(text, 5)
     assert 'Learning' in text.split('## 5.')[1].split('\n')[0]
-    assert re.search(r'ncaab-challengers-v1: rows recorded n=2; games n=2', s5), s5
+    assert re.search(r'ncaab-challengers-v2: rows recorded n=2; games n=2', s5), s5
     assert re.search(r'nfl-challengers-v1: rows recorded n=1; games n=1', s5) and re.search(r'soccer-challengers-v1: rows recorded n=1', s5)
     assert 'settled and scored n=0' in s5 or 'no settled' in s5
     assert 'no claim' in s5.lower()
@@ -443,13 +443,13 @@ def test_learning_section_failure_never_breaks_the_report(tmp_path, monkeypatch)
 def test_learning_scoring_is_per_sport_and_an_error_never_kills_the_report(tmp_path, monkeypatch):
     m = wr()
     data = setup(tmp_path, 3, monkeypatch, m)[0]
-    seed_challengers(data, [('nfl-challengers-v1', 'n1', 'spread', -3.5), ('ncaab-challengers-v1', 'g1', 'winner', None)])
+    seed_challengers(data, [('nfl-challengers-v1', 'n1', 'spread', -3.5), ('ncaab-challengers-v2', 'g1', 'winner', None)])
     sqlite3.connect(data / 'ncaab.sqlite').close()
     seen = []
     def fake(store, cc, prefix=None):
         seen.append(prefix)
         if prefix == 'nfl-':
-            return {'groups': [{'policy_id': 'ncaab-challengers-v1', 'n_scored': 99, 'claim': 'sample size reached: apply the rule'},
+            return {'groups': [{'policy_id': 'ncaab-challengers-v2', 'n_scored': 99, 'claim': 'sample size reached: apply the rule'},
                                {'policy_id': 'nfl-challengers-v1', 'n_scored': 2, 'claim': 'no claim: x'}]}
         raise RuntimeError('boom')
     monkeypatch.setattr(m.learning_eval, 'evaluate', fake)
@@ -457,6 +457,25 @@ def test_learning_scoring_is_per_sport_and_an_error_never_kills_the_report(tmp_p
     s5 = section(page(m, tmp_path, data), 5)
     assert 'nfl-challengers-v1: rows recorded n=1; games n=1; specs n=1; settled and scored n=2' in s5 and 'sample size reached' not in s5
     assert 'scoring unavailable (RuntimeError: boom)' in s5 and 'nfl-' in seen
+
+
+def test_retired_v1_rows_are_labelled_excluded_and_never_colour_the_v2_claim_real_evaluate(tmp_path, monkeypatch):
+    m = wr()
+    data = setup(tmp_path, 3, monkeypatch, m)[0]
+    seed_challengers(data, [('ncaab-challengers-v1', 'g1', 'winner', None), ('ncaab-challengers-v1', 'g2', 'winner', None),
+                            ('ncaab-challengers-v2', 'g3', 'winner', None)])
+    db = sqlite3.connect(data / 'ncaab.sqlite')
+    db.execute("CREATE TABLE IF NOT EXISTS games (game_id TEXT, status TEXT, home_score INT, away_score INT, tipoff_at TEXT)")
+    db.execute("CREATE TABLE IF NOT EXISTS game_forecasts (game_id TEXT, market TEXT, status TEXT, tipoff_at TEXT, generated_at TEXT, "
+               "source_generated_at TEXT, line REAL, p_a REAL, p_mid REAL, p_b REAL, forecast_id INTEGER PRIMARY KEY)")
+    db.execute("INSERT INTO games VALUES ('g3', 'scheduled', NULL, NULL, '2026-12-30T23:00:00Z')")
+    db.commit()
+    db.close()
+    s5 = section(page(m, tmp_path, data), 5)
+    v1 = [l for l in s5.split('\n') if l.startswith('- ncaab-challengers-v1')]
+    v2 = [l for l in s5.split('\n') if l.startswith('- ncaab-challengers-v2')]
+    assert len(v1) == 1 and 'rows recorded n=2' in v1[0] and 'excluded: pre-as-of (574ba5f)' in v1[0]
+    assert len(v2) == 1 and 'rows recorded n=1' in v2[0] and 'no claim' in v2[0] and 'sample size reached' not in s5 and 'excluded' not in v2[0]
 
 
 @pytest.fixture(autouse=True)

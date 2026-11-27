@@ -131,8 +131,11 @@ def _ncaab_states(data_dir: Path, market: str, store, challengers: dict) -> dict
         out["evaluated"] = no("no challenger rows to settle")
         return out
     try:
-        n = cc.execute("SELECT COUNT(*) FROM challenger_forecasts WHERE policy_id LIKE 'ncaab-%' AND market=?", (market,)).fetchone()[0]
-        ids = [r[0] for r in cc.execute("SELECT DISTINCT game_id FROM challenger_forecasts WHERE policy_id LIKE 'ncaab-%' AND market=?", (market,))]
+        from . import learning_challengers
+        gone = tuple(learning_challengers.RETIRED)               # pre-as-of rows are excluded, as in forward_status
+        keep = f"policy_id LIKE 'ncaab-%' AND policy_id NOT IN ({','.join('?' * len(gone))}) AND market=?"
+        n = cc.execute(f"SELECT COUNT(*) FROM challenger_forecasts WHERE {keep}", (*gone, market)).fetchone()[0]
+        ids = [r[0] for r in cc.execute(f"SELECT DISTINCT game_id FROM challenger_forecasts WHERE {keep}", (*gone, market))]
     except sqlite3.Error as exc:
         cc.close()
         u = _s("unknown", f"unknown: {exc}")

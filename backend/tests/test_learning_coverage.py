@@ -237,7 +237,7 @@ def test_evaluated_counts_scored_pairs_with_an_incumbent_not_just_final_games(en
     cc = ch.open_store(data / "research" / "challengers.sqlite")
     cc.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
                "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES "
-               "('ncaab-challengers-v1','s','spec_a','{}','h','d','ncaab:final1','winner',NULL,.6,0,.4,'2026-11-18T18:30:00Z','2026-11-18T20:00:00Z','2026-11-18T18:30:00Z','v','m')")
+               "('ncaab-challengers-v2','s','spec_a','{}','h','d','ncaab:final1','winner',NULL,.6,0,.4,'2026-11-18T18:30:00Z','2026-11-18T20:00:00Z','2026-11-18T18:30:00Z','v','m')")
     cc.close()
     store = make_store(data, "ncaab")
     store.execute("PRAGMA foreign_keys = OFF")
@@ -248,7 +248,7 @@ def test_evaluated_counts_scored_pairs_with_an_incumbent_not_just_final_games(en
     store.close()
     r = row(lc.coverage(data, agents), "ncaab", "winner")
     assert r["evaluated"]["state"] == "no" and "no scored pair" in r["evaluated"]["detail"]       # final, but no served incumbent to pair with
-    group = {"policy_id": "ncaab-challengers-v1", "market": "winner", "n_scored": 3, "n_no_incumbent": 0}
+    group = {"policy_id": "ncaab-challengers-v2", "market": "winner", "n_scored": 3, "n_no_incumbent": 0}
     monkeypatch.setattr(le, "evaluate", lambda store, cc, prefix=None: {"groups": [group, {**group, "market": "spread", "n_scored": 9}]})
     r = row(lc.coverage(data, agents), "ncaab", "winner")
     assert r["evaluated"]["state"] == "yes" and "3 scored pair" in r["evaluated"]["detail"]
@@ -268,3 +268,21 @@ def test_blocked_text_matches_learning_implemented_for_ncaab(env):
     r = row(lc.coverage(*env), "ncaab", "winner")
     text = " ".join(r["blocked_reason"])
     assert r["learning_implemented"] is True and "adaptive-v1 is not used" in text and "challenger learning is implemented" in text and "not scheduled" in text
+
+
+def test_retired_policy_rows_do_not_count_as_recording_prospectively(env):
+    data, agents = env
+    from app import learning_challengers as ch
+    cc = ch.open_store(data / "research" / "challengers.sqlite")
+    cc.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+               "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES "
+               "('ncaab-challengers-v1','s','spec_a','{}','h','d','ncaab:old','winner',NULL,.6,0,.4,'2026-11-18T18:30:00Z','2026-11-18T20:00:00Z','2026-11-18T18:30:00Z','v','m')")
+    cc.commit()
+    assert row(lc.coverage(data, agents), "ncaab", "winner")["recording_prospectively"]["state"] == "no"      # pre-as-of rows are excluded
+    cc.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+               "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version) VALUES "
+               "('ncaab-challengers-v2','s2','spec_a','{}','h','d','ncaab:new','winner',NULL,.6,0,.4,'2026-11-18T18:30:00Z','2026-11-18T20:00:00Z','2026-11-18T18:30:00Z','v','m')")
+    cc.commit()
+    cc.close()
+    d = row(lc.coverage(data, agents), "ncaab", "winner")["recording_prospectively"]
+    assert d["state"] == "yes" and "1 challenger rows" in d["detail"]

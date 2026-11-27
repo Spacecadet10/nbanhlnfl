@@ -349,7 +349,7 @@ def test_old_refit_files_and_abandoned_temp_files_are_pruned_keeping_this_and_th
 # files these fingerprints hash are untouched by the research work; the
 # research code lives in ncaab_cards.py and nfl_challengers.py, which no live fingerprint hashes.
 DEPLOYED_MIN_FIT_GAMES = 2000
-FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "74f78a0c", "nfl_live.definition": "b6074877a7e7ccfe",
+FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "9ccdacaa", "nfl_live.definition": "b6074877a7e7ccfe",
                         "best_pick_record.RECORDER_SHA256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
                         "selector.version": "selector-v1:SELF"}
 
@@ -444,3 +444,11 @@ def test_rows_of_the_retired_v1_policy_stay_labelled_excluded_and_never_paired_o
     assert len(old) == 1 and old[0]["n_excluded"] == 1 and old[0]["n_paired"] == 0 and old[0]["n_scored"] == 0
     assert "pre-as-of (574ba5f), excluded" in old[0]["claim"]
     assert res["pairing"] == {"paired": 9, "unpaired": {}}                          # the v2 rows only
+
+
+def test_an_unreadable_published_time_skips_that_game_not_the_cycle(store, tmp_path):
+    _drop_ledger_triggers(store)
+    store.execute("UPDATE game_forecasts SET source_generated_at='garbage' WHERE market='spread'")
+    store.commit()
+    out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
+    assert "bar_unreadable_time" in out["skipped"][GAME] and out["status"] == "partial" and out["created"] == 0
