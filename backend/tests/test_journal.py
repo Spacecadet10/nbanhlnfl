@@ -111,3 +111,19 @@ def test_the_one_snapshot_check_still_reports_a_changed_journal_line(store, tmp_
     p.write_text(p.read_text().replace("0.6", "0.7"))
     out = journal.export_and_verify(data, tmp_path / "journal")
     assert not out["verify"]["ok"] and out["verify"]["sports"]["nba"]["predictions"]["tampered"]
+
+
+def test_the_nightly_check_waits_for_a_running_journal_export_instead_of_aborting(store, tmp_path):
+    import fcntl, os, threading, time
+    data, conn = store
+    ledger.record(conn, _forecast())
+    jdir = tmp_path / "journal"
+    jdir.mkdir()
+    fd = os.open(jdir / ".journal.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(fd, fcntl.LOCK_EX)                                  # the 15-minute export is running
+    with pytest.raises(journal.JournalError):
+        journal.export_and_verify(data, jdir, wait_s=0.2)
+    threading.Thread(target=lambda: (time.sleep(0.3), fcntl.flock(fd, fcntl.LOCK_UN))).start()
+    out = journal.export_and_verify(data, jdir, wait_s=5)
+    os.close(fd)
+    assert out["verify"]["ok"] and out["export"]["sports"]["nba"]["predictions"] == 1
