@@ -354,6 +354,8 @@ def test_live_fingerprints_are_unchanged_from_commit_1179494_by_the_ops_work():
     from app import nfl_live, ncaab_challengers, selector
     from app.candidates import registry
     assert nfl_live.definition() == "b6074877a7e7ccfe"
-    assert ncaab_challengers.fit_code_version() == "24ec6d25"
+    # ncaab_challengers.fit_code_version is the research refit-cache key (not a served identity). It moved deliberately on
+    # 2026-11-27 (ncaab-asof: challengers priced as of the published bar, policy v2): 24ec6d25 -> 9ccdacaa.
+    assert ncaab_challengers.fit_code_version() == "9ccdacaa"
     assert selector.version() == "selector-v1:d472eb466923"
     assert [registry.definition(s) for s in list(registry.SPECS)[:2]] == ["f38e254260ec3c2e", "4ad9c718bc18a1de"]
