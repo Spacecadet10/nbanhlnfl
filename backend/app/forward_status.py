@@ -133,3 +133,32 @@ def sport_statuses(summary: Optional[dict], now: Optional[str] = None) -> dict:
     (None = no store). `now` (UTC, tests) defaults to the clock."""
     moment = _parse(now) if now else datetime.now(timezone.utc)
     return {s: _one(s, summary, moment) | {"baseline": BASELINE[s], "candidate": CANDIDATE[s]} for s in FIVE}
+
+
+CHALLENGER_SPORTS = ("ncaab", "nfl", "soccer")
+CHALLENGER_NOTE = ("PROSPECTIVE, no claim: challengers are recorded by the research-only learning job and compared with the published "
+                   "forecast at read time (python -m app.learning_eval --sport <sport>: paired, unpaired with a reason, scored). "
+                   "Registration or recording is not promotion; this status is never 'passed'.")
+
+
+def challenger_statuses(path=None) -> dict:
+    """{sport: {"status": waiting | recording | failed, "rows", "games", "last_recorded_at", "note"}} for the sports whose challengers
+    are recorded (research/challengers.sqlite, read-only). `waiting`: no row yet (store missing included); `recording`: rows exist;
+    `failed`: the store is unreadable. Nothing here pairs or scores, and nothing is ever `passed`."""
+    from . import learning_challengers as lc
+    out = {s: {"status": "waiting", "rows": 0, "games": 0, "last_recorded_at": None, "note": CHALLENGER_NOTE} for s in CHALLENGER_SPORTS}
+    try:
+        conn = lc.open_ro(path or lc.store_path())
+        if conn is None:
+            return out
+        try:
+            for s in CHALLENGER_SPORTS:
+                n, games, last = conn.execute("SELECT count(*), count(DISTINCT game_id), max(recorded_at) FROM challenger_forecasts "
+                                              "WHERE policy_id LIKE ? ESCAPE '\\'", (f"{s}-%",)).fetchone()
+                if n:
+                    out[s] |= {"status": "recording", "rows": n, "games": games, "last_recorded_at": last}
+        finally:
+            conn.close()
+    except Exception as exc:               # a status page never raises
+        return {s: v | {"status": "failed", "reason": f"the challenger store is unreadable: {type(exc).__name__}: {exc}"} for s, v in out.items()}
+    return out

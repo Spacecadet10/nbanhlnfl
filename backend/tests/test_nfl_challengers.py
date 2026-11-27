@@ -75,9 +75,20 @@ def test_records_at_the_served_lines_once_without_touching_served_tables(live_st
     assert {r["market"] for r in rows} == set(served)
     for r in rows:
         s = served[r["market"]]
-        assert r["line"] == s["line"] and r["generated_at"] == NOW and r["policy_id"] == "nfl-challengers-v1"
+        assert r["line"] == s["line"] and r["generated_at"] <= NOW and r["policy_id"] == "nfl-challengers-v1"
         assert abs(r["p_a"] + r["p_mid"] + r["p_b"] - 1) < 1e-6
     assert nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now="2026-11-02T23:01:00Z")["created"] == 0
+
+
+def test_rows_carry_the_frozen_cutoff_as_their_information_time(live_store, tmp_path):
+    """The challenger model uses only results available at kickoff - 120 min, however late the recorder runs: its information time
+    is that cutoff (never the record clock), so it is never later than the served forecast made at the cutoff."""
+    c = live_store
+    nfl_live.record(c, now=NOW)
+    nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
+    rows = rows_of(tmp_path / "ch.sqlite")
+    cutoff = nfl_eval.cutoff_for(START)
+    assert rows and all(r["cutoff_at"] == cutoff and r["generated_at"] == cutoff and r["recorded_at"] > r["generated_at"] for r in rows)
 
 
 def test_each_variant_differs_from_the_served_forecast(live_store, tmp_path):
@@ -94,15 +105,26 @@ def test_each_variant_differs_from_the_served_forecast(live_store, tmp_path):
 
 def test_evaluation_scores_against_the_served_row_and_claims_nothing(live_store, tmp_path):
     c = live_store
-    nfl_live.record(c, now=NOW)
+    at_cutoff = "2026-11-02T22:15:30Z"                                  # served 30 s after the frozen cutoff (kickoff - 120 min), as in production
+    nfl_live.record(c, now=at_cutoff)
     nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
     cc = lc.open_ro(tmp_path / "ch.sqlite")
     out = le.evaluate(c, cc)
-    assert out["groups"] and all(g["n_scored"] == 0 and g["n_unsettled"] == 1 for g in out["groups"])
+    assert out["groups"] and all(g["n_scored"] == 0 and g["n_unsettled"] == 1 and g["n_paired"] == 1 for g in out["groups"])
+    assert out["pairing"]["unpaired"] == {} and out["pairing"]["paired"] == len(out["groups"])
     c.execute("UPDATE games SET status='final', home_score=27, away_score=20, result_available_at='2026-11-03T04:00:00Z' WHERE game_id='nfl:live'")
     out = le.evaluate(c, cc)
     assert all(g["n_scored"] == 1 and g["n_no_incumbent"] == 0 for g in out["groups"]), out["groups"]
     assert all("no claim" in g["claim"] and g["log_loss_diff"] is not None for g in out["groups"])
+
+
+def test_a_served_row_made_long_after_the_cutoff_is_unpaired_with_a_reason_not_dropped(live_store, tmp_path):
+    c = live_store
+    nfl_live.record(c, now=NOW)                                         # 45 minutes after the cutoff: beyond the 10-minute pairing gap
+    nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
+    out = le.evaluate(c, lc.open_ro(tmp_path / "ch.sqlite"))
+    assert out["groups"] and all(g["n_paired"] == 0 and g["unpaired"] == {"gap": 1} for g in out["groups"])
+    assert out["pairing"] == {"paired": 0, "unpaired": {"gap": len(out["groups"])}}
 
 
 def test_a_dry_run_does_not_write_the_nfl_access_log_and_the_latest_served_row_wins(live_store, tmp_path):

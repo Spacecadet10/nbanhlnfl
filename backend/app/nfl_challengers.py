@@ -152,7 +152,8 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
                             continue
                         pa, pm = round(probs[0], 9), round(probs[1], 9)
                         rows.append({"game_id": g["game_id"], "market": market, "line": served[g["game_id"]][market]["line"],
-                                     "p": (pa, pm, round(1 - pa - pm, 9)), "generated_at": now, "tipoff_at": g["tipoff_at"]})
+                                     "p": (pa, pm, round(1 - pa - pm, 9)), "generated_at": cutoff, "cutoff_at": cutoff,   # information time: only
+                                     "tipoff_at": g["tipoff_at"]})                                          # results available at the cutoff were used
             except Exception as exc:
                 out["errors"][c.spec.name] = f"{type(exc).__name__}: {exc}"
                 continue

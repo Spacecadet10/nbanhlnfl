@@ -265,7 +265,7 @@ def open_ro(path: Path) -> Optional[sqlite3.Connection]:
 
 def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_version: str, now: str, dry_run: bool, out: dict,
                 cutoff_at: Optional[str] = None) -> None:
-    """Append one challenger's forecast rows (dicts: game_id, market, line, p, generated_at, tipoff_at) to the store, once per
+    """Append one challenger's forecast rows (dicts: game_id, market, line, p, generated_at, tipoff_at, optional cutoff_at) to the store, once per
     (policy, spec, game, market, line): the first cutoff wins. Dry runs only count. `out` collects created/would_record/errors."""
     store = open_ro(path) if dry_run else open_store(path)
     try:
@@ -287,7 +287,7 @@ def append_rows(path: Path, pol, c, rows: list, *, definition: str, dataset_vers
                         "market, line, p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at) "
                         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (pol.policy_id, pol.sha, c.spec.name, c.spec_json, c.spec_hash, definition, f["game_id"], f["market"], f["line"],
-                         *f["p"], cutoff_at or now, f["tipoff_at"], f["generated_at"], dataset_version, f"challenger:{c.spec.name}:{definition}", utc_now()))
+                         *f["p"], f.get("cutoff_at") or cutoff_at or now, f["tipoff_at"], f["generated_at"], dataset_version, f"challenger:{c.spec.name}:{definition}", utc_now()))
                     out["created"] += 1
                 except sqlite3.Error as exc:
                     out["errors"][f"{c.spec.name}:{f['game_id']}:{f['market']}"] = f"{type(exc).__name__}: {exc}"

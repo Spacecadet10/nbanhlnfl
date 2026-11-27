@@ -2,6 +2,7 @@
 exit nonzero if any failed, one backup of an existing store, no backup on a dry run or when the store does not exist."""
 import json
 import os
+import plistlib
 import stat
 import subprocess
 import sys
@@ -45,19 +46,19 @@ def run(env, *args):
 def test_one_json_line_per_sport_through_the_light_guard(env, tmp_path):
     r, lines = run(env)
     assert r.returncode == 0
-    assert [x["sport"] for x in lines] == ["nba", "nhl", "ncaab", "soccer", "nfl"]
+    assert [x["sport"] for x in lines] == ["ncaab", "nfl", "soccer"]
     assert all(x["rc"] == 0 and x["created"] == 3 and x["eligible_games"] == 2 and "wall_s" in x for x in lines)
     calls = (tmp_path / "calls").read_text().splitlines()
-    assert len(calls) == 5 and all("--light" in c and "--max-minutes 2" in c and "--max-rss-gb 1.5" in c and "--nice 10" in c for c in calls)
-    assert "--name challengers-soccer" in calls[3]
+    assert len(calls) == 3 and all("--light" in c and "--max-minutes 2" in c and "--max-rss-gb 1.5" in c and "--nice 10" in c for c in calls)
+    assert "--name challengers-soccer" in calls[2]
 
 
 def test_a_failing_sport_does_not_stop_the_next_and_the_exit_is_nonzero(env):
-    env["LC_FAIL"] = "nhl"
+    env["LC_FAIL"] = "nfl"
     r, lines = run(env)
     assert r.returncode == 1
-    assert [x["rc"] for x in lines] == [0, 1, 0, 0, 0] and lines[1]["status"] == "failed"
-    assert "boom nhl" in r.stderr
+    assert [x["rc"] for x in lines] == [0, 1, 0] and lines[1]["status"] == "failed"
+    assert "boom nfl" in r.stderr
 
 
 def test_extra_arguments_reach_the_recorder_and_sports_can_be_limited(env, tmp_path):
@@ -81,3 +82,11 @@ def test_the_real_script_and_the_real_guard_against_a_temp_data_dir(tmp_path):
     assert all(x["rc"] != 0 for x in lines)
     runs = (data / "research" / "learning-runs.jsonl").read_text().splitlines()
     assert any('"name": "challengers-nba"' in x for x in runs) and not (data / ".learning-heavy.lock").exists()
+
+
+def test_the_scheduled_sports_are_ncaab_nfl_and_soccer_only():
+    script = (ROOT / "scripts" / "learning_challengers_cycle.sh").read_text()
+    plist = (ROOT / "scripts" / "launchd" / "com.nba-predictor.learning-challengers.plist").read_text()
+    assert 'SPORTS=${LC_SPORTS:-"ncaab nfl soccer"}' in script
+    assert "<key>LC_SPORTS</key>\n\t\t<string>ncaab nfl soccer</string>" in plist
+    plistlib.loads(plist.encode())                                              # still a valid plist
