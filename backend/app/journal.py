@@ -19,6 +19,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -139,21 +140,28 @@ def _bad(report: dict) -> bool:
     return any(report[k] for k in ("missing", "journal_only", "tampered", "differs"))
 
 
-def export_and_verify(data_dir: Path, journal_dir: Path, *, now: Optional[str] = None, _after_snapshot=None) -> dict:
+def export_and_verify(data_dir: Path, journal_dir: Path, *, now: Optional[str] = None, wait_s: float = 0,
+                      _after_snapshot=None) -> dict:
     """Export, then verify, against ONE read snapshot per store (a single read transaction), holding the journal lock
     throughout so no other export appends meanwhile. Rows written to a store after its snapshot are neither exported nor
     reported missing; the next export takes them. (Separate export() and verify() read the live store at two moments, so a
-    row inserted in between was reported missing: the Nov 24 and Nov 27 false failures.) `_after_snapshot`: test hook."""
+    row inserted in between was reported missing: the Nov 24 and Nov 27 false failures.) `wait_s`: how long to wait for a
+    running export (the 15-minute job) to release the lock before refusing. `_after_snapshot`: test hook."""
     _check_dirs(data_dir, journal_dir)
     journal_dir = Path(journal_dir)
     journal_dir.mkdir(parents=True, exist_ok=True)
     stamp = now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lock = os.open(journal_dir / ".journal.lock", os.O_RDWR | os.O_CREAT, 0o644)
     try:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise JournalError("Another journal export is running") from None
+        deadline = time.monotonic() + wait_s
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise JournalError("Another journal export is running") from None
+                time.sleep(0.1)
         stores, exported, checked, ok = _stores(data_dir), {}, {}, True
         sports = set(stores) | {p.name for p in journal_dir.iterdir() if p.is_dir()}
         for sport in sorted(sports):

@@ -352,7 +352,7 @@ def nightly(data_dir: Path, root: Path, *, mirror, stamp=None, ledger=None, repo
             prune_apply: bool = False, notify=notify_owner) -> dict:
     stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     jdir = Path(root) / "journal"
-    both = journal.export_and_verify(data_dir, jdir)          # one read snapshot per store: no false "missing" rows
+    both = journal.export_and_verify(data_dir, jdir, wait_s=600)          # one read snapshot per store: no false "missing" rows
     exported, checked = both["export"], both["verify"]
     made = backup.run(data_dir, Path(root) / "stores", stamp=stamp)
     folder = Path(made["dir"])
