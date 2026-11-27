@@ -166,8 +166,25 @@ def test_a_pregame_soccer_1x2_row_that_stores_the_kickoff_as_cutoff_uses_the_rea
     store = sqlite3.connect(":memory:")
     store.execute("CREATE TABLE soccer_live_forecasts (match_id, version, generated_at, p_home, p_draw, p_away, cutoff_at)")
     kick = "2026-11-25T20:00:00Z"
+    store.execute("CREATE TABLE soccer_matches (match_id, competition_id)")
+    store.execute("INSERT INTO soccer_matches VALUES ('m', 'eng.1')")
     store.execute("INSERT INTO soccer_live_forecasts VALUES ('m', 1, '2026-11-25T18:25:00Z', 0.5, 0.3, 0.2, ?)", (kick,))   # kickoff stored as cutoff
     row = {"policy_id": "soccer-challengers-v1", "market": "soccer_1x2", "game_id": "m", "tipoff_at": kick, "line": None,
            "cutoff_at": "2026-11-25T06:00:00Z"}
     assert le._published_soccer(store, row) == [("2026-11-25T06:00:00Z", "2026-11-25T18:25:00Z", None, [0.5, 0.3, 0.2])]
     assert le.pair(row, le._published_soccer(store, row)) == ([0.5, 0.3, 0.2], None)
+
+
+def test_soccer_1x2_day_cutoff_uses_the_matchs_local_date_as_the_served_code_does():
+    """A 00:30 Berlin kickoff (23:30Z the day before) is dated by its LOCAL day: its cutoff is that local day's 06:00Z."""
+    store = sqlite3.connect(":memory:")
+    store.execute("CREATE TABLE soccer_live_forecasts (match_id, version, generated_at, p_home, p_draw, p_away, cutoff_at)")
+    store.execute("CREATE TABLE soccer_matches (match_id, competition_id)")
+    kick = "2026-11-25T23:30:00Z"
+    store.execute("INSERT INTO soccer_matches VALUES ('m', 'ger.1')")
+    store.execute("INSERT INTO soccer_live_forecasts VALUES ('m', 1, '2026-11-25T22:00:00Z', 0.5, 0.3, 0.2, ?)", (kick,))
+    row = {"policy_id": "soccer-challengers-v1", "market": "soccer_1x2", "game_id": "m", "tipoff_at": kick, "line": None,
+           "cutoff_at": "2026-11-26T06:00:00Z"}                               # the challenger's cutoff: local date 2026-11-26
+    runs = le._published_soccer(store, row)
+    assert runs[0][0] == "2026-11-25T22:00:00Z"                               # generated before the local-day cutoff: its information time is its own
+    assert le.pair({**row, "cutoff_at": "2026-11-25T22:00:00Z"}, runs)[1] is None

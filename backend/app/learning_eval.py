@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from . import combine, config, learning_challengers as lc, markets, nfl_eval, soccer_markets as sm
+from . import combine, config, learning_challengers as lc, markets, nfl_eval, soccer_eval, soccer_live, soccer_markets as sm
 
 LABEL = ("PROSPECTIVE, NO CLAIM until the preregistered sample size is reached: these are paired differences on the games "
          "settled so far, with counts, not evidence that a challenger is better. Registration is not promotion.")
@@ -48,9 +48,10 @@ def _published_soccer(store, row) -> list:
     """Soccer: every published run of the same match: the served 1X2 (Elo) triple, or the served Poisson goals joint priced at the
     challenger's own line: [(information_at, made_at, line, p)], oldest first. Information time: the goals joint's cutoff_at is the real
     data cutoff (06:00 UTC of its day; its inputs are exactly those settled by then). A live 1X2 row stores the KICKOFF as cutoff_at
-    (labelling risk, learning-evidence skill; a day-level row stores its real cutoff and that is used); its model reads inputs through min(generated_at, 06:00 UTC of the match day)."""
+    (labelling risk, learning-evidence skill; a day-level row stores its real cutoff and that is used); its model reads inputs through min(generated_at, 06:00 UTC of the match's LOCAL date, as the served code dates it)."""
     if row["market"] == "soccer_1x2":
-        day_cutoff = f"{row['tipoff_at'][:10]}T06:00:00Z"
+        comp = store.execute("SELECT competition_id FROM soccer_matches WHERE match_id=?", (row["game_id"],)).fetchone()
+        day_cutoff = soccer_eval.cutoff_for(soccer_live.local_date(row["tipoff_at"], comp[0])) if comp else f"{row['tipoff_at'][:10]}T06:00:00Z"
         return [(min(r[0], day_cutoff) if r[4] == row["tipoff_at"] else r[4], r[0], None, [r[1], r[2], r[3]]) for r in store.execute(
             "SELECT generated_at, p_home, p_draw, p_away, cutoff_at FROM soccer_live_forecasts WHERE match_id=? ORDER BY generated_at, version",
             (row["game_id"],))]
