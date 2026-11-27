@@ -14,7 +14,7 @@ import time
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -850,7 +850,8 @@ def withdrawal_plan(conn, chat_id, text, now):
 def superseded_pick(conn, chat_id, key, text, now):
     """Soccer only: the plain pick of the confirmed earlier card of this game that `text` replaces, or None. Decided from the ledger
     alone (sent cards of this game, start and matchup, in send order, this key excluded): the latest earlier card's pick must differ
-    and must not have been withdrawn. The label is added to the text only; keys and card_identity do not change."""
+    and must not have been withdrawn. The label is added to the text only; keys and card_identity do not change.
+    Earlier cards in 'uncertain'/'sending' get no label, deliberately (only confirmed sends count)."""
     identity = card_identity(text)
     if not identity or not identity[0] == '<b>PROP51 PICKS · SOCCER</b>' or identity[3] in NO_PICK or UPDATE_PREFIX in text:
         return None
@@ -859,8 +860,13 @@ def superseded_pick(conn, chat_id, key, text, now):
     for row in conn.execute("SELECT delivery_key, text FROM deliveries WHERE chat_id=? AND attempted_at>=? AND attempted_at<=? "
                             "AND status='sent' ORDER BY attempted_at, rowid", (str(chat_id), since, now)):
         other = card_identity(row['text'])
-        if row['delivery_key'] != key and other and other[:3] == identity[:3]:
-            earlier = None if other[3] in NO_PICK else (other[3], _plain(row['text'].split('\n')[row['text'].split('\n').index('<b>Recommended pick</b>') + 1]))
+        if row['delivery_key'].startswith('pick-withdrawn-v1:'):      # a sent withdrawal of this game's pick: nothing left to replace
+            parts = row['text'].split('\n')
+            if tuple(parts[1:3]) == tuple(identity[1:3]):
+                earlier = None
+        elif row['delivery_key'] != key and other and other[:3] == identity[:3]:
+            lines = row['text'].split('\n')
+            earlier = None if other[3] in NO_PICK else (other[3], unescape(_plain(lines[lines.index('<b>Recommended pick</b>') + 1])))
     return earlier[1] if earlier and earlier[0] != identity[3] else None
 
 
@@ -1004,7 +1010,7 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, sen
         else:
             if caption is None:
                 league = text.split('PROP51 PICKS · ', 1)[1].split('<', 1)[0]
-                update = next((_plain(x) for x in text.split('\n') if x.startswith(UPDATE_PREFIX)), None)
+                update = next((unescape(_plain(x)) for x in text.split('\n') if x.startswith(UPDATE_PREFIX)), None)
                 caption = (f'{update}\n' if update else '') + ('TEST PREVIEW — design example, not a new live pick.\n' if 'TEST PREVIEW' in text else '') + f'PROP51 GAME CARD · {league} · single game, not a parlay ticket\nRecommended pick and market breakdown for this one game. Combined parlay tickets arrive separately.'
             message = bot.call('sendPhoto', {'chat_id': str(chat_id), 'caption': caption}, photo=photo)
     except DeliveryError as exc:

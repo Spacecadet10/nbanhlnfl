@@ -323,7 +323,7 @@ function NflForecasts({ game: g, detail = false }: { game: NflGame; detail?: boo
       : first?.reason ?? 'No forecast was recorded for this game.'}</p>;
   }
   return <>
-    <div className="notice"><strong>Recommended pick: {g.recommended_pick ?? 'No supported pick'}</strong>
+    <div className="notice"><strong>Recommended pick: {g.recommended_pick ?? (g.recommendation_method ? 'No supported pick' : 'Not available')}</strong>
       <p className="small">{g.recommended_reason ? `${g.recommended_reason} ` : ''}Same context comparison as the Telegram card ({g.recommendation_method ?? 'context-card-v1'}); team totals are excluded and a pick whose original line moved is never recommended. It is a lean, not a proven edge.</p></div>
     {g.forecasts.map(c => <CanonicalBlock key={c.market} c={c} home={g.home} away={g.away} detail={detail} />)}
   </>;

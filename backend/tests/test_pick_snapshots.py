@@ -582,3 +582,16 @@ def test_a_superseded_recommendation_is_shown_not_counted_and_the_latest_one_sta
     assert by["winner"]["grade"] == "win" and by["winner"]["recommended"] is False        # its own result is still shown
     assert by["winner"]["recommendation_note"] == "superseded, not counted"
     assert len(rows()) == 2                                                               # nothing rewritten
+
+
+def test_same_recommended_pick_with_a_newer_forecast_version_is_not_superseded(tmp_path):
+    with tg.ledger(tmp_path / "l.sqlite") as conn:
+        conn.execute("INSERT INTO deliveries (delivery_key, chat_id, text, status, attempted_at, message_id) VALUES (?,?,?,?,?,?)",
+                     ("k1", "1", "t", "sent", "2026-11-25T20:05:00Z", 1))
+        ps.record_sent(conn, "nba", "k1", "g1", rep(pick(fid=1)), T)
+    ps.observe("nba", rep(pick(fid=2, gen="2026-11-25T20:10:00Z")), T + timedelta(minutes=15))
+    pub = [dict(delivery_key="k1", game_id="g1", market="winner", forecast_id="1", side="a", line=None, probability=.6, model_version="m1",
+                generated_at="2026-11-25T19:30:00Z", sent_at="2026-11-25T20:05:00Z", message_id=1, basis="live")]
+    out = ps.classify("nba", [item(fid="2")], rows(), pub, lambda s, i: "win", starts={"g1": START})
+    assert out["sent"][0]["forecast_key"] == "1" and out["recommended"][0]["forecast_key"] == "2"
+    assert out["sent"][0]["recommendation_status"] == "counted"
