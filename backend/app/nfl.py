@@ -4,6 +4,7 @@ NFL is registered for storage but not served (sports.DATA_ONLY): no model and no
 through /api/nfl/* (schedule, results, matchup facts, coverage), never through the served provider. Everything here
 reads or writes only a store whose identity is 'nfl'.
 """
+import functools
 import sqlite3
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
@@ -168,21 +169,46 @@ def _with_record_basis(conn: sqlite3.Connection, game: dict) -> None:
         return
 
 
-def _card_recommendations(conn: sqlite3.Connection, games: list[dict]) -> dict:
+def _one_read(fn):
+    """Run a page read under one read transaction (as Telegram's run does with BEGIN): forecasts and the pick see one snapshot."""
+    @functools.wraps(fn)
+    def wrapper(conn, *args, **kw):
+        began = not conn.in_transaction
+        if began:
+            conn.execute("BEGIN")
+        try:
+            return fn(conn, *args, **kw)
+        finally:
+            if began and conn.in_transaction:
+                conn.rollback()
+    return wrapper
+
+
+def _card_recommendations(conn: sqlite3.Connection, games: list[dict], view=None) -> dict:
     """{game_id: tickets.card_choice result} for games on one Eastern day: the same picks, enrichment and rule Telegram uses
-    (telegram.prepare_picks, pick_snapshots.card_choices). Owner 2026-11-26. Failed-validation and team-total exclusions live in card_choice."""
+    (telegram.prepare_picks, pick_snapshots.card_choices). Owner 2026-11-26. Failed-validation and team-total exclusions live in card_choice.
+    A started game is read as of its kickoff (never with quotes retrieved after the card could have been sent). `view` is the page's
+    own Views, reused when its stamp is the one needed. A game that cannot be read is absent (shown as not available)."""
+    out: dict = {}
     if not games:
-        return {}
-    try:
-        from . import pick_snapshots, record_basis, telegram
-        from .nfl_live import Views
-        day = datetime.strptime(_eastern_date(games[0]["kickoff"]), "%Y-%m-%d").date()
-        report = Views(conn).ranked_picks(day)
-        record_basis.decorate_report(conn, "nfl", report)
-        telegram.prepare_picks(conn, "nfl", report)
-        return pick_snapshots.card_choices(report, report["picks"])
-    except Exception:      # noqa: BLE001  (a recommendation problem never hides the forecasts)
-        return {}
+        return out
+    from . import pick_snapshots, record_basis, telegram
+    from .nfl_live import Views
+    views = {view.now: view} if view is not None else {}
+    base = view.now if view is not None else Views(conn).now
+    for g in games:
+        try:
+            as_of = min(base, g["kickoff"])
+            v = views.get(as_of) or views.setdefault(as_of, Views(conn, as_of))
+            day = datetime.strptime(_eastern_date(g["kickoff"]), "%Y-%m-%d").date()
+            report = v.ranked_picks(day)
+            report["picks"] = [p for p in report["picks"] if p["game_id"] == g["game_id"]]
+            record_basis.decorate_report(conn, "nfl", report)
+            telegram.prepare_picks(conn, "nfl", report)
+            out.update(pick_snapshots.card_choices(report, report["picks"]))
+        except Exception:      # noqa: BLE001  (a recommendation problem never hides the forecasts)
+            continue
+    return out
 
 
 def _attach_recommendation(game: dict, choices: dict) -> None:
@@ -192,6 +218,7 @@ def _attach_recommendation(game: dict, choices: dict) -> None:
     game["recommended_reason"] = c["reason"] if c else None
 
 
+@_one_read
 def games_on(conn: sqlite3.Connection, day: date) -> dict:
     """Games whose kickoff falls on this Eastern date, with the nearest earlier and later game dates for navigation."""
     _require_nfl(conn)
@@ -203,7 +230,7 @@ def games_on(conn: sqlite3.Connection, day: date) -> dict:
     from .nfl_live import Views
     view = Views(conn)
     out = [_with_sportsbook(conn, view.attach(_game(r))) for r in rows]
-    choices = _card_recommendations(conn, [g for g in out if "forecasts" in g])
+    choices = _card_recommendations(conn, [g for g in out if "forecasts" in g], view)
     for g in out:
         if "forecasts" in g:
             _attach_recommendation(g, choices)
@@ -211,6 +238,7 @@ def games_on(conn: sqlite3.Connection, day: date) -> dict:
             "next_date": later[0] if later else None, "last_refresh_at": last_refresh_at(conn)}
 
 
+@_one_read
 def game_detail(conn: sqlite3.Connection, game_id: str) -> Optional[dict]:
     """One game, the earlier meetings of the two teams and each team's latest final results before this kickoff
     (results only: what had happened, never a projection)."""
@@ -228,8 +256,9 @@ def game_detail(conn: sqlite3.Connection, game_id: str) -> Optional[dict]:
             f"{GAME_SQL} WHERE {eligible} AND (g.home_team_id = ? OR g.away_team_id = ?) ORDER BY g.tipoff_at DESC LIMIT ?",
             (r["tipoff_at"], team, team, RECENT))]
     from .nfl_live import Views
-    game = _with_sportsbook(conn, Views(conn).attach(_game(r)))
+    view = Views(conn)
+    game = _with_sportsbook(conn, view.attach(_game(r)))
     if "forecasts" in game:
-        _attach_recommendation(game, _card_recommendations(conn, [game]))
+        _attach_recommendation(game, _card_recommendations(conn, [game], view))
     return {"game": game, "head_to_head": [_game(x) for x in h2h], "home_recent": recent(r["home_id"]),
             "away_recent": recent(r["away_id"]), "capabilities": capabilities()}

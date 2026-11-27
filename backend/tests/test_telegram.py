@@ -749,3 +749,24 @@ def test_nba_different_pick_is_not_labelled(tmp_path):
         tg.deliver_card(bot, conn, '123', k1, t1, NOW)
         tg.deliver_card(bot, conn, '123', k2, t2, NOW)
         assert all(tg.UPDATE_PREFIX not in r['text'] for r in conn.execute('SELECT text FROM deliveries'))
+
+
+def test_update_label_not_added_after_a_withdrawal_and_ampersand_is_escaped_once(tmp_path):
+    k1, t1 = _soccer_card('Over 2.5 goals')
+    k2, t2 = _soccer_card('Double chance Home or Draw', fid=2)
+    with tg.ledger(tmp_path / 'w.sqlite') as conn:
+        tg.deliver_card(Bot(), conn, '123', k1, t1, NOW)
+        a, b, c = t1.split('\n')[:3]
+        conn.execute("INSERT INTO deliveries(delivery_key,chat_id,text,status,attempted_at) VALUES (?,?,?,?,?)",
+                     (tg.withdrawal_key({'delivery_key': k1}), '123', '\n'.join([a.replace('PICKS', 'UPDATE'), b, c, '', '<b>Pick withdrawn</b>']),
+                      'sent', '2026-11-02T20:10:00Z'))
+        assert tg.superseded_pick(conn, '123', k2, t2, '2026-11-02T20:30:00Z') is None
+    k3, t3 = _soccer_card('Over 2.5 goals & more', fid=3)
+    k4, t4 = _soccer_card('Double chance', fid=4)
+    bot = Bot()
+    with tg.ledger(tmp_path / 'e.sqlite') as conn:
+        tg.deliver_card(bot, conn, '123', k3, t3, NOW)
+        tg.deliver_card(bot, conn, '123', k4, t4, '2026-11-02T20:30:00Z')
+        text = conn.execute('SELECT text FROM deliveries WHERE delivery_key=?', (k4,)).fetchone()[0]
+    assert 'goals &amp; more' in text and '&amp;amp;' not in text
+    assert 'goals & more' in bot.sends[1]['caption']

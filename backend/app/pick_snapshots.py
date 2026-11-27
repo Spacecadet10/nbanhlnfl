@@ -607,11 +607,12 @@ def classify(sport: str, items: list, snaps: list, published: list, regrade: Cal
         row.update(delivery_key=p["delivery_key"], message_id=p["message_id"], sent_at=p["sent_at"], sent_basis=p["basis"],
                    recommended=bool(s["recommended"]) if s is not None else None, versions=[_version(v) for v in by_gm.get(gm, [])])
         out["sent"].append(row)
-    counted = {(r["game_id"], r["market"], r["forecast_key"]) for r in out["recommended"]}
+    pick_of = lambda r: (r["game_id"], r["market"], r["side"], r["line"])      # the recommendation itself, not its forecast version
+    counted = {pick_of(r) for r in out["recommended"]}
     counted_games = {r["game_id"] for r in out["recommended"]}
     for row in out["sent"]:                    # a card's own result stays; only the match's one counted recommendation is in the record
         if row["recommended"]:
-            row["recommendation_status"] = ("counted" if (row["game_id"], row["market"], row["forecast_key"]) in counted
+            row["recommendation_status"] = ("counted" if pick_of(row) in counted
                                             else "superseded" if row["game_id"] in counted_games else None)
         else:
             row["recommendation_status"] = None

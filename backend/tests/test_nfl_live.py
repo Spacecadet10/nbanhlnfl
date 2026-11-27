@@ -198,3 +198,18 @@ def test_nfl_page_keeps_failed_exclusions_and_no_pick_is_stated(live_store, monk
     monkeypatch.setattr(tickets, 'card_choice', lambda sport, picks: dict(method=tickets.CARD_METHOD, pick=None, reason='none', assessments=[]))
     game = nfl.game_detail(live_store, 'nfl:live')['game']
     assert game['recommended_pick'] is None and game['recommended_reason'] == 'none'
+
+
+def test_started_game_is_read_as_of_kickoff_and_a_failure_is_not_available(live_store, monkeypatch):
+    from app import tickets
+    nfl_live.record(live_store, now=NOW)
+    monkeypatch.setattr(db, 'utc_now', lambda: '2026-11-03T02:00:00Z')          # after kickoff
+    seen = []
+    real = tickets.quote_check
+    monkeypatch.setattr(tickets, 'quote_check', lambda conn, pick, stamp: (seen.append(stamp), real(conn, pick, stamp))[1])
+    game = nfl.game_detail(live_store, 'nfl:live')['game']
+    assert seen and set(seen) == {START}                                          # never post-send quotes
+    assert game['recommendation_method'] == tickets.CARD_METHOD
+    monkeypatch.setattr(tickets, 'card_choice', lambda *a: (_ for _ in ()).throw(RuntimeError('x')))
+    game = nfl.game_detail(live_store, 'nfl:live')['game']
+    assert game['recommended_pick'] is None and game['recommendation_method'] is None
