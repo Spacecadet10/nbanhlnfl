@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app import jobs, learning_challengers as lc, learning_eval as le, market_live, near_tipoff, ncaab_challengers as nc
+from app import coverage, jobs, learning_challengers as lc, learning_eval as le, market_live, near_tipoff, ncaab_challengers as nc
 from app.models import college
 from ncaab_support import GAME, NOW, add_game, add_quote, make_store, seed
 
@@ -186,10 +186,12 @@ def test_eval_scores_challengers_against_the_served_incumbent_at_read_time(store
     path = tmp_path / "research" / "challengers.sqlite"
     near_tipoff.predict_now(store, now=NOW, write=True)
     market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)
+    coverage.record(store, now=NOW)                                                       # the canonical published ledger the evaluator pairs with
     nc.record(store, path, policies=policies(), now=NOW)
     cc = lc.open_ro(path)
     out = le.evaluate(store, cc)
     assert "no claim" in out["label"].lower() and all(g["n_scored"] == 0 and g["n_unsettled"] == 1 for g in out["groups"])
+    assert out["pairing"] == {"paired": 9, "unpaired": {}}                         # every challenger row is paired with the published run
     store.execute("PRAGMA foreign_keys = OFF")
     store.execute("UPDATE games SET status='final', home_score=80, away_score=71, result_available_at='2026-11-18T03:00:00Z', "
                   "result_availability_basis='observed_retrieval' WHERE game_id=?", (GAME,))
@@ -207,6 +209,7 @@ def test_eval_pairs_only_at_the_served_line(store, tmp_path):
     path = tmp_path / "research" / "challengers.sqlite"
     near_tipoff.predict_now(store, now=NOW, write=True)
     market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)        # served at total 140.5
+    coverage.record(store, now=NOW)                                                       # the canonical published ledger the evaluator pairs with
     add_quote(store, GAME, "total", 141.5, -110, -110, "2026-11-17T22:10:00Z")                     # the book moves before the challengers run
     nc.record(store, path, policies=policies(), now=NOW)
     assert {r["line"] for r in rows_of(path) if r["market"] == "total"} == {140.5}                 # priced at the stored served line
@@ -257,6 +260,7 @@ def test_a_cache_file_without_fits_is_a_miss_not_an_error(store, tmp_path):
 def test_the_stored_served_line_is_priced_when_it_exists_and_the_choice_is_recorded(store, tmp_path):
     near_tipoff.predict_now(store, now=NOW, write=True)
     market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)        # stored served total 140.5
+    coverage.record(store, now=NOW)                                                       # the canonical published ledger the evaluator pairs with
     add_quote(store, GAME, "total", 141.5, -110, -110, "2026-11-17T22:10:00Z")                     # the book moves before the challengers run
     out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
     assert {r["line"] for r in rows_of(tmp_path / "c.sqlite") if r["market"] == "total"} == {140.5}
@@ -280,6 +284,7 @@ def _finalise_and_eval(store, path):
 def test_the_ncaab_incumbent_ignores_research_forecasts(store, tmp_path):
     near_tipoff.predict_now(store, now=NOW, write=True)
     market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)
+    coverage.record(store, now=NOW)                                                       # the canonical published ledger the evaluator pairs with
     nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
     cols = [r[1] for r in store.execute("PRAGMA table_info(market_forecasts)") if r[1] not in ("forecast_id",)]
     sel = ", ".join("'research-x' " if c == "model_version" else "'research-key' " if c == "idempotency_key" else

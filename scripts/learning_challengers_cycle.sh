@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prospective challenger recording, every sport, from the pinned delivery release (docs/ADAPTIVE_SYSTEM.md, challengers).
+# Prospective challenger recording for NCAAB, NFL and Soccer (owner decision 2026-11-26; NBA/NHL already have the candidate pool), from the pinned delivery release (docs/ADAPTIVE_SYSTEM.md, challengers).
 # Research only: appends rows to <data>/research/challengers.sqlite; never touches serving, cards, betting or the sport stores.
 # Each sport runs through `app.learning_run --light`: its own small lock (never the machine-wide heavy lock) and no game-window
 # deferral, because the recorder only prices games inside the two hours before tip-off. Wall 120 s, memory 1.5 GB, nice 10,
@@ -9,7 +9,7 @@ set -u
 LIVE=${LC_LIVE:-/Users/andry/nba-predictor-delivery}
 DATA=${LC_DATA:-/Users/andry/Desktop/nbanhlnfl/data}
 PY=${LC_PY:-$LIVE/backend/.venv/bin/python}
-SPORTS=${LC_SPORTS:-"nba nhl ncaab soccer nfl"}
+SPORTS=${LC_SPORTS:-"ncaab nfl soccer"}
 cd "${LC_BACKEND:-$LIVE/backend}" || exit 1
 export NBA_RELEASE_GUARD=${NBA_RELEASE_GUARD-1} NBA_RELEASE_ROOT=${NBA_RELEASE_ROOT-$LIVE} NBA_DATA_DIR="$DATA" \
   PYTHONDONTWRITEBYTECODE=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1

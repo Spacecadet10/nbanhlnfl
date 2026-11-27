@@ -339,4 +339,5 @@ def v3_status(root: Path) -> Optional[dict]:
     fwd = forward_summary()
     return {"protocol": "sports-research-v3", "note": V3_NOTE, "sports": sports, "wrapper_state": daily_state(),
             "forward": fwd, "forward_status": forward_status.sport_statuses(fwd),
+            "challengers": forward_status.challenger_statuses(),
             "last_daily": last and {k: last.get(k) for k in ("started_at", "finished_at", "outcomes", "budget_per_sport", "combined", "v2")}}

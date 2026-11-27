@@ -9,58 +9,97 @@ import argparse
 import json
 import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from . import combine, config, learning_challengers as lc, markets, soccer_markets as sm
+from . import combine, config, learning_challengers as lc, markets, nfl_eval, soccer_markets as sm
 
 LABEL = ("PROSPECTIVE, NO CLAIM until the preregistered sample size is reached: these are paired differences on the games "
          "settled so far, with counts, not evidence that a challenger is better. Registration is not promotion.")
 SIDE = {"a": 0, "mid": 1, "b": 2}
 
 
-def _served_ncaab(store, row) -> Optional[list]:
-    """NCAAB incumbent: the served near-tipoff forecast of the same game, market and exact line, the latest generated at or
-    before the challenger's cutoff (the winner: the stored near-tipoff win probability)."""
-    if row["market"] == "winner":
-        r = store.execute(
-            "SELECT p.home_win_prob FROM predictions p JOIN near_tipoff_forecasts n ON n.prediction_id = p.prediction_id "
-            "WHERE p.game_id=? AND p.run_type='live' AND n.tipoff_at=? AND p.generated_at<=? "
-            "ORDER BY p.generated_at DESC, p.prediction_id DESC LIMIT 1", (row["game_id"], row["tipoff_at"], row["cutoff_at"])).fetchone()
-        return None if r is None else [r[0], 0.0, 1 - r[0]]
-    r = store.execute(
-        "SELECT p_a, p_mid, p_b FROM market_forecasts WHERE game_id=? AND market=? AND line IS ? AND policy='near_tipoff' "
-        "AND run_type='live' AND tipoff_at=? AND generated_at<=? AND model_version NOT LIKE 'research-%' "
-        "ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
-        (row["game_id"], row["market"], row["line"], row["tipoff_at"], row["cutoff_at"])).fetchone()
-    return None if r is None else list(r)
-
-
-def _served_nfl(store, row) -> Optional[list]:
-    """NFL incumbent: the served live forecast of the same game, market and exact line made at or before the challenger's row."""
-    r = store.execute(
-        "SELECT p_a, p_mid, p_b FROM game_forecasts WHERE game_id=? AND market=? AND line IS ? AND order_version='nfl-live-v1' "
-        "AND status='forecast' AND tipoff_at=? AND generated_at<=? ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
-        (row["game_id"], row["market"], row["line"], row["tipoff_at"], row["cutoff_at"])).fetchone()
-    return None if r is None else list(r)
-
-
-def _served_soccer(store, row) -> Optional[list]:
-    """Soccer incumbent: the served 1X2 (Elo) triple, or the served Poisson goals joint priced at the challenger's own line."""
-    if row["market"] == "soccer_1x2":
-        r = store.execute("SELECT p_home, p_draw, p_away FROM soccer_live_forecasts WHERE match_id=? AND generated_at<=? "
-                          "ORDER BY version DESC LIMIT 1", (row["game_id"], row["generated_at"])).fetchone()
-        return None if r is None else list(r)
-    r = store.execute("SELECT joint_json FROM soccer_market_forecasts WHERE match_id=? AND family='goals' AND generated_at<=? "
-                      "ORDER BY version DESC LIMIT 1", (row["game_id"], row["generated_at"])).fetchone()
-    if r is None:
+def _ts(at) -> Optional[datetime]:
+    try:
+        return datetime.strptime(str(at), lc.FMT).replace(tzinfo=timezone.utc)
+    except ValueError:
         return None
-    joint = json.loads(r[0])
-    if row["market"] == "soccer_btts":
-        p = sm.probabilities(joint, "btts", "yes", None)
-        return [p["win"], 0.0, p["loss"]]
-    p = sm.probabilities(joint, row["market"][len("soccer_"):], "over", row["line"])
-    return [p["win"], p["push"], p["loss"]]
+
+
+def _published_ledger(store, row) -> list:
+    """NCAAB/NFL: every published run (game_forecasts, the canonical ledger the cards and Telegram show, status 'forecast') of the
+    same game, market and current start: [(information_at, made_at, line, p)], oldest first. Information time: the run that produced
+    the probability (source_generated_at, never later than the row), as for the NBA/NHL published bar; NFL: the frozen cutoff
+    (kickoff - 120 min) the sealed model reads its results at, however late the row was written."""
+    nfl = row["policy_id"].startswith("nfl-")
+    out = []
+    for gen, src, line, a, m, b in store.execute(
+            "SELECT generated_at, source_generated_at, line, p_a, p_mid, p_b FROM game_forecasts WHERE game_id=? AND market=? "
+            "AND status='forecast' AND tipoff_at=? ORDER BY generated_at, forecast_id", (row["game_id"], row["market"], row["tipoff_at"])):
+        info = min(src or gen, gen)
+        if nfl:
+            info = min(nfl_eval.cutoff_for(row["tipoff_at"]), gen)
+        out.append((info, gen, line, [a, m, b]))
+    return out
+
+
+def _published_soccer(store, row) -> list:
+    """Soccer: every published run of the same match: the served 1X2 (Elo) triple, or the served Poisson goals joint priced at the
+    challenger's own line: [(information_at, made_at, line, p)], oldest first. Information time: the goals joint's cutoff_at is the real
+    data cutoff (06:00 UTC of its day; its inputs are exactly those settled by then). A live 1X2 row stores the KICKOFF as cutoff_at
+    (labelling risk, learning-evidence skill; a day-level row stores its real cutoff and that is used); its model reads inputs through min(generated_at, 06:00 UTC of the match day)."""
+    if row["market"] == "soccer_1x2":
+        day_cutoff = f"{row['tipoff_at'][:10]}T06:00:00Z"
+        return [(min(r[0], day_cutoff) if r[4] == row["tipoff_at"] else r[4], r[0], None, [r[1], r[2], r[3]]) for r in store.execute(
+            "SELECT generated_at, p_home, p_draw, p_away, cutoff_at FROM soccer_live_forecasts WHERE match_id=? ORDER BY generated_at, version",
+            (row["game_id"],))]
+    out = []
+    for gen, cut, joint_json in store.execute("SELECT generated_at, cutoff_at, joint_json FROM soccer_market_forecasts WHERE match_id=? "
+                                              "AND family='goals' ORDER BY generated_at, version", (row["game_id"],)):
+        joint = json.loads(joint_json)
+        if row["market"] == "soccer_btts":
+            p = sm.probabilities(joint, "btts", "yes", None)
+            out.append((cut, gen, None, [p["win"], 0.0, p["loss"]]))
+        else:
+            p = sm.probabilities(joint, row["market"][len("soccer_"):], "over", row["line"])
+            out.append((cut, gen, row["line"], [p["win"], p["push"], p["loss"]]))
+    return out
+
+
+def _published(store, row) -> list:
+    return _published_soccer(store, row) if row["policy_id"].startswith("soccer-") else _published_ledger(store, row)
+
+
+def pair(row, runs: list) -> tuple:
+    """(published p, None) or (None, reason): the pairing rule of autoresearch.FORWARD_PAIRING, on INFORMATION times. The challenger's
+    is its cutoff_at; the published run's is stated in `_published_*`. A pair needs the published run's information time at or after
+    the challenger's and at most max_gap_minutes later (a challenger never knows more than the forecast it is compared with), the
+    same exact line, and the published row made by the fixed as-of instant (start - as_of_minutes). Reasons: no_published_row | line |
+    as_of_late (the challenger's information time is after the instant) | published_after_as_of | candidate_later (every eligible
+    published run knew less than the challenger) | gap (the first one at or after it is more than max_gap_minutes later)."""
+    from .autoresearch import FORWARD_PAIRING
+    if not runs:
+        return None, "no_published_row"
+    same = [r for r in runs if r[2] == row["line"]]
+    if not same:
+        return None, "line"
+    start, t = _ts(row["tipoff_at"]), _ts(row["cutoff_at"])
+    if start is None or t is None:
+        return None, "no_published_row"
+    as_of = start - timedelta(minutes=FORWARD_PAIRING["as_of_minutes"])
+    if t > as_of:
+        return None, "as_of_late"
+    eligible = [(_ts(r[0]), r) for r in same if _ts(r[0]) is not None and _ts(r[1]) is not None and _ts(r[1]) <= as_of]
+    if not eligible:
+        return None, "published_after_as_of"
+    gap = timedelta(minutes=FORWARD_PAIRING["max_gap_minutes"])
+    later = sorted((g, r[1], r) for g, r in eligible if g >= t)
+    if not later:
+        return None, "candidate_later"
+    if later[0][0] - t > gap:
+        return None, "gap"
+    return later[0][2][3], None
 
 
 def _soccer_side(store, row) -> str:
@@ -110,23 +149,26 @@ def _dnb(p, k: int) -> tuple:
     return ll, br
 
 
-def _incumbent(store, row) -> Optional[list]:
-    if row["policy_id"].startswith("ncaab-"):
-        return _served_ncaab(store, row)
-    if row["policy_id"].startswith("nfl-"):
-        return _served_nfl(store, row)
-    if row["policy_id"].startswith("soccer-"):
-        return _served_soccer(store, row)
+def _incumbent(store, row) -> tuple:
+    """(incumbent p, None) or (None, why it is unpaired). NCAAB/NFL/Soccer: the published run (see `pair`). Others: the primary
+    member of the latest core research cohort at the challenger's cutoff."""
+    if row["policy_id"].startswith(("ncaab-", "nfl-", "soccer-")):
+        return pair(row, _published(store, row))
     c = store.execute(
         "SELECT members, primary_name FROM research_cohorts WHERE game_id=? AND market=? AND line IS ? AND tipoff_at=? "
         "AND definition NOT LIKE '%:expanded-v1' AND generated_at<=? ORDER BY generated_at DESC, cohort_id DESC LIMIT 1",
         (row["game_id"], row["market"], row["line"], row["tipoff_at"], row["cutoff_at"])).fetchone()
     if c is None:
-        return None
+        return None, "no_incumbent"
     for m in json.loads(c["members"]):
         if m.get("name") == c["primary_name"] and m.get("p"):
-            return m["p"]
-    return None
+            return m["p"], None
+    return None, "no_incumbent"
+
+
+def _group() -> dict:
+    return {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0, "n_paired": 0, "unpaired": {},
+            "ll_c": [], "ll_i": [], "br_c": [], "br_i": []}
 
 
 def _mean(xs):
@@ -148,8 +190,12 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
         if once in seen:                 # a moving line records more rows: only the earliest counts, so n is games
             continue
         seen.add(once)
-        g = groups.setdefault(key, {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
-                                    "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
+        g = groups.setdefault(key, _group())
+        inc, why = _incumbent(store, r)          # every first row is paired or labelled unpaired with a reason, settled or not
+        if inc is None:
+            g["unpaired"][why] = g["unpaired"].get(why, 0) + 1
+        else:
+            g["n_paired"] += 1
         if r["policy_id"].startswith("soccer-"):
             side = _soccer_side(store, r)
         else:
@@ -167,7 +213,6 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
         if side in ("void", "unscorable"):
             g["n_void" if side == "void" else "n_unscorable"] += 1
             continue
-        inc = _incumbent(store, r)
         if inc is None:
             g["n_no_incumbent"] += 1
             continue
@@ -180,12 +225,11 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
         g["br_i"].append(combine.brier(inc, k))
         if r["market"] == "soccer_1x2":          # double chance and draw no bet: exact functions of the 1X2 triple, scored here, never stored
             def derived(name):
-                return groups.setdefault((r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], name),
-                                         {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0,
-                                          "ll_c": [], "ll_i": [], "br_c": [], "br_i": []})
+                return groups.setdefault((r["policy_id"], r["policy_sha"], r["spec_name"], r["spec_hash"], name), _group())
             d = derived("soccer_double_chance")
             (lc_, bc_), (li_, bi_) = _dc(c, k), _dc(inc, k)
             d["n_scored"] += 1
+            d["n_paired"] += 1
             d["ll_c"].append(lc_), d["ll_i"].append(li_), d["br_c"].append(bc_), d["br_i"].append(bi_)
             n = derived("soccer_draw_no_bet")
             if k == 1:                                  # a draw pushes: void, excluded
@@ -193,6 +237,7 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
             else:
                 (lc_, bc_), (li_, bi_) = _dnb(c, k), _dnb(inc, k)
                 n["n_scored"] += 1
+                n["n_paired"] += 1
                 n["ll_c"].append(lc_), n["ll_i"].append(li_), n["br_c"].append(bc_), n["br_i"].append(bi_)
     out = []
     for (pid, sha, name, h, market), g in groups.items():
@@ -202,11 +247,17 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
                  f"no claim: {n} of {target} preregistered games settled" if n < target else
                  "sample size reached: apply the preregistered decision rule, nothing is implied here")
         out.append({"policy_id": pid, "policy_sha": sha, "spec_name": name, "spec_hash": h, "market": market,
-                    **{k: g[k] for k in ("n_scored", "n_unsettled", "n_void", "n_unscorable", "n_no_incumbent")},
+                    **{k: g[k] for k in ("n_scored", "n_unsettled", "n_void", "n_unscorable", "n_no_incumbent", "n_paired", "unpaired")},
                     "log_loss_challenger": mc, "log_loss_incumbent": mi, "log_loss_diff": None if mc is None else mc - mi,
                     "brier_challenger": bc, "brier_incumbent": bi, "brier_diff": None if bc is None else bc - bi,
                     "preregistered_n": target, "claim": claim})
-    return {"label": LABEL, "groups": out}
+    pairing = {"paired": 0, "unpaired": {}}      # first rows per (policy, spec, game, market): paired with the published run, or why not
+    for g in out:
+        if g["market"] in lc.MARKETS:
+            pairing["paired"] += g["n_paired"]
+            for why, n in g["unpaired"].items():
+                pairing["unpaired"][why] = pairing["unpaired"].get(why, 0) + n
+    return {"label": LABEL, "groups": out, "pairing": pairing}
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -232,6 +283,10 @@ def main(argv: Optional[list] = None) -> int:
         b = "n/a" if g["brier_diff"] is None else f"{g['brier_diff']:+.4f}"
         print(f"{g['policy_id']} {g['spec_name']} {g['market']}: scored {g['n_scored']} unsettled {g['n_unsettled']} void {g['n_void']} "
               f"no_incumbent {g['n_no_incumbent']} | log loss diff {d} brier diff {b} | {g['claim']}")
+    if out["groups"]:
+        pr = out["pairing"]
+        print(f"{a.sport} pairing with the published forecast (rows, not games): paired {pr['paired']}, unpaired {sum(pr['unpaired'].values())} "
+              f"{json.dumps(pr['unpaired'], sort_keys=True)}")
     if not out["groups"]:
         print(out.get("note", "no challenger rows recorded for this sport yet"))
     return 0

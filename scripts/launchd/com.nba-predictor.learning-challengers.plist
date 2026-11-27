@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Prospective challenger recording (research only). Every 15 minutes, per sport (nba nhl ncaab soccer nfl), prices games inside
+<!-- Prospective challenger recording (research only). Every 15 minutes, per sport (ncaab nfl soccer only: owner decision 2026-11-26; NBA/NHL have the candidate pool), prices games inside
      their two-hour pre-tip-off window and appends rows to data/research/challengers.sqlite. It never touches serving, cards or
      betting, and never writes the sport stores. Runs through app.learning_run in light mode (own lock, no heavy lock, no game-window
      deferral, 120 s wall, 1.5 GB cap), on the delivery release with the release guard.
@@ -15,6 +15,8 @@
 <dict>
 	<key>EnvironmentVariables</key>
 	<dict>
+		<key>LC_SPORTS</key>
+		<string>ncaab nfl soccer</string>
 		<key>NBA_DATA_DIR</key>
 		<string>/Users/andry/Desktop/nbanhlnfl/data</string>
 		<key>NBA_RELEASE_GUARD</key>

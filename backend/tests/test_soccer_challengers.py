@@ -226,6 +226,7 @@ def test_evaluation_pairs_with_the_served_forecast_derives_double_chance_and_cla
     run(live, tmp_path)
     cc = lc.open_ro(tmp_path / "ch.sqlite")
     out = le.evaluate(live, cc)
+    assert out["pairing"]["unpaired"] == {} and out["pairing"]["paired"] > 0
     assert all(g["n_scored"] == 0 and g["n_unsettled"] >= 1 for g in out["groups"]) and out["groups"]
     ingest_day(live, TOMORROW, [final(90003, TOMORROW, IDS[0], IDS[2], 2, 1), final(90004, TOMORROW, IDS[4], IDS[5], 0, 0)],
                at=f"{TOMORROW.isoformat()}T23:00:00Z")

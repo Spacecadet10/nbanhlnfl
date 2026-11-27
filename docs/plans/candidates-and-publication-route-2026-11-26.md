@@ -13,8 +13,14 @@ No step here promises better accuracy: each step only makes a fair comparison po
   (NCAAB C1, C2, C4 calibration/sigma refits of the frozen NCAAB model, C3 the total priced by the existing college_eff model; NFL one-parameter Elo/points variants from nfl_eval grids; Soccer Dixon-Coles,
   half-life and dispersion variants of the served goals joint). Template scripts/launchd/com.nba-predictor.learning-challengers.plist says
   "Install (owner decision)". data/research/challengers.sqlite does not exist, so no challenger row has ever been recorded.
-  Their evaluator (app/learning_eval.py) pairs NCAAB/NFL/Soccer challengers with the served forecasts (NBA/NHL: the research-cohort primary),
-  but not under FORWARD_PAIRING (e.g. soccer pairs by generated_at <= cutoff with no 10-minute bound), and its results are not in forward_status.
+  Update 2026-11-26 (branch challenger-install): the owner decided to install the job for NCAAB, NFL and Soccer only (research only; no promotion; NBA/NHL keep the
+  candidate pool). The evaluator (app/learning_eval.py `pair`) now pairs each challenger row with the PUBLISHED run (game_forecasts for NCAAB/NFL; soccer_live_forecasts and the served goals
+  joint for Soccer) under FORWARD_PAIRING on INFORMATION times: challenger cutoff_at at or before the published run's information time and at most 10 minutes before it, same exact line, published
+  row made by start - 60 min. Published information time: NCAAB the run's source_generated_at; NFL the frozen kickoff - 120 min cutoff (the NFL recorder now stores that as its own cutoff_at/generated_at);
+  Soccer goals the real cutoff_at (06:00Z); Soccer 1X2 the real 06:00Z cutoff (a pregame row stores the kickoff as cutoff_at: labelling risk). Unpaired rows keep a reason (no_published_row, line, as_of_late,
+  published_after_as_of, candidate_later, gap), with per-sport counts printed by `python -m app.learning_eval`. Known limit: NCAAB challengers price at the recorder's own clock, so a row is paired only when the
+  recorder runs at or just before a published near-tipoff run (rehearsal: 14 of 27 paired, 13 candidate_later); the fix (price as of the published run's time) is not built. forward_status shows
+  v3["challengers"]: waiting until rows exist, then recording, never passed. FORWARD_PAIRING['published_bar_from'] stays None.
 - No code path promotes anything; coverage.py never takes adaptive forecast rows as canonical; promotion criteria are a proposal (PROMOTION_CRITERIA.md).
 
 ## Next implementation, in order (each step reviewed, tested, released separately)
@@ -26,7 +32,7 @@ No step here promises better accuracy: each step only makes a fair comparison po
    within 10 min before and never after the bar). forward_status then reports them for all five sports. These files are outside the
    served-identity list, but autoresearch.app_identity() hashes every app .py/.json: any edit starts a new model_version series for the
    NBA/NHL context incumbents and a new study-cache key. Plan that break deliberately (record before/after) and confirm with git diff --name-only.
-3. Owner decision: install the challenger job (light mode, 15 min, own lock; template exists). Until installed, status stays "no candidate".
+3. Owner decision made 2026-11-26: install the challenger job for ncaab nfl soccer (light mode, 15 min, own lock; plist prepared on challenger-install, installed by the lead after the release). Status stays "waiting" until rows exist.
 4. Verify on live games: rows carry information time, pairs counted valid, the job stays under its 120 s wall. Only then a dated commit sets
    a FUTURE start (never backdated). FORWARD_PAIRING["published_bar_from"] is one global value today: a per-sport start needs a small code change.
 5. One named contender per sport and market chosen BEFORE the start (preregistration in docs/preregistration/, hashed), the others exploratory.
