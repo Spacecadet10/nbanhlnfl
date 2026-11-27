@@ -10,24 +10,25 @@ No step here promises better accuracy: each step only makes a fair comparison po
 - Forward store (research/forward-candidates.sqlite): NCAAB, NFL and Soccer record only a baseline. NCAAB and NFL baselines are re-implementations
   computed at record time, not the published forecast; Soccer 1X2 is the published forecast, goals/BTTS/corners are recomputed. Status: "no candidate".
 - Prospective challengers are BUILT but NOT SCHEDULED: app/learning_challengers.py with policies in reference/learning_policies/
-  (NCAAB C1-C4 calibration/sigma refits of the frozen NCAAB model; NFL one-parameter Elo/points variants from nfl_eval grids; Soccer Dixon-Coles,
+  (NCAAB C1, C2, C4 calibration/sigma refits of the frozen NCAAB model, C3 the total priced by the existing college_eff model; NFL one-parameter Elo/points variants from nfl_eval grids; Soccer Dixon-Coles,
   half-life and dispersion variants of the served goals joint). Template scripts/launchd/com.nba-predictor.learning-challengers.plist says
   "Install (owner decision)". data/research/challengers.sqlite does not exist, so no challenger row has ever been recorded.
-  Their evaluator (app/learning_eval.py) pairs against research incumbents (NCAAB: the served near-tipoff forecast at the same line), not
-  uniformly against the published row, and its results are not in forward_status.
-- No code path promotes anything; coverage.py rejects adaptive fits; promotion criteria are a proposal (PROMOTION_CRITERIA.md).
+  Their evaluator (app/learning_eval.py) pairs NCAAB/NFL/Soccer challengers with the served forecasts (NBA/NHL: the research-cohort primary),
+  but not under FORWARD_PAIRING (e.g. soccer pairs by generated_at <= cutoff with no 10-minute bound), and its results are not in forward_status.
+- No code path promotes anything; coverage.py never takes adaptive forecast rows as canonical; promotion criteria are a proposal (PROMOTION_CRITERIA.md).
 
 ## Next implementation, in order (each step reviewed, tested, released separately)
 1. Bar = the published row for all three sports (forward store). NCAAB: record the served near-tipoff forecast read-only (as NBA/NHL `published`)
    at its own information time; NFL: the stored served nfl_live forecast at kickoff-120 min; Soccer goals/BTTS: the stored soccer_markets_live rows
    (not a recomputation). Re-implemented baselines stay as labelled context rows. Test: published rows equal the canonical served rows on a backup copy.
 2. Register challengers in the forward store instead of a second store: each learning_challengers policy writes forward rows with
-   inputs.information_at = the served cutoff, same game/market/line as the published row, under the existing FORWARD_PAIRING rule
-   (same line kind, information time within 10 min before and never after the bar). forward_status then reports them for all five sports.
-   No hashed file changes (learning_challengers, autoresearch, forward_status are unhashed; confirm with git diff --name-only before commit).
+   inputs.information_at = the served cutoff, under the existing FORWARD_PAIRING rule (same game, market, exact line and side; information time
+   within 10 min before and never after the bar). forward_status then reports them for all five sports. These files are outside the
+   served-identity list, but autoresearch.app_identity() hashes every app .py/.json: any edit starts a new model_version series for the
+   NBA/NHL context incumbents and a new study-cache key. Plan that break deliberately (record before/after) and confirm with git diff --name-only.
 3. Owner decision: install the challenger job (light mode, 15 min, own lock; template exists). Until installed, status stays "no candidate".
 4. Verify on live games: rows carry information time, pairs counted valid, the job stays under its 120 s wall. Only then a dated commit sets
-   FORWARD_PAIRING["published_bar_from"] to a FUTURE start for these sports (never backdated).
+   a FUTURE start (never backdated). FORWARD_PAIRING["published_bar_from"] is one global value today: a per-sport start needs a small code change.
 5. One named contender per sport and market chosen BEFORE the start (preregistration in docs/preregistration/, hashed), the others exploratory.
 
 ## Validated route from research to published predictions (what is missing)

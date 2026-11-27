@@ -18,6 +18,8 @@ A journal that disagrees with a store (a lost or changed row) exits 1 after the 
     PYTHONPATH=backend NBA_DATA_DIR=<data> backend/.venv/bin/python scripts/backup_nightly.py --root <dir> [--mirror <dir>]
 """
 import argparse
+import fcntl
+import hashlib
 import json
 import os
 import sqlite3
@@ -190,6 +192,36 @@ def _is_checkpoint(path: Path) -> bool:
     return path.name.startswith("history-") and (path.name.endswith(".pkl") or path.name.endswith(".pkl.sha256"))
 
 
+def _checkpoint_pair(pkl: Path):
+    """(pickle bytes, sidecar bytes) read together under adaptive.save_history's own lock (`<name>.lock`, flock; used only
+    if it already exists: the backup never creates files in the data folder), or None when they disagree (a save in progress
+    without the lock, or no sidecar)."""
+    side, lock = pkl.with_name(pkl.name + ".sha256"), pkl.with_name(pkl.name + ".lock")
+    fh = open(lock, "a") if lock.is_file() else None
+    try:
+        if fh:
+            fcntl.flock(fh, fcntl.LOCK_SH)
+        if not side.is_file():
+            return None
+        blob, side_blob = pkl.read_bytes(), side.read_bytes()
+    finally:
+        if fh:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+            fh.close()
+    return (blob, side_blob) if (side_blob.decode(errors="replace").split() or [""])[0] == hashlib.sha256(blob).hexdigest() else None
+
+
+def _write_verified(dest: Path, blob: bytes, digest: str, key: str) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name("." + dest.name + ".partial")
+    tmp.write_bytes(blob)
+    if _file_sha(tmp) != digest:
+        tmp.unlink()
+        raise backup.BackupError(f"The pool copy of {key} does not match its source hash; not kept")
+    os.chmod(tmp, 0o600)
+    tmp.rename(dest)
+
+
 def _pool(data_dir: Path, root: Path, folder: Path) -> dict:
     """Copies each adaptive pickle (and its .sha256 sidecar) to `<root>/pool/adaptive/<relative path>` only if absent, checked
     against the sidecar (pickles) and a fresh hash of the copy. A file already in the pool is never overwritten: one whose
@@ -206,15 +238,29 @@ def _pool(data_dir: Path, root: Path, folder: Path) -> dict:
         if not src.is_file() or src.is_symlink() or ".env" in src.name:
             continue
         rel, key = src.relative_to(base), f"adaptive/{src.relative_to(base)}"
+        if _is_checkpoint(src):
+            if src.suffix == ".pkl":                    # its sidecar is handled with it, as one pair read under the job's lock
+                pair = _checkpoint_pair(src)
+                if pair is None:
+                    conflicts.append(key)               # caught mid-write (pickle and sidecar disagree): not backed up tonight
+                    continue
+                for k, blob in ((key, pair[0]), (key + ".sha256", pair[1])):
+                    digest = hashlib.sha256(blob).hexdigest()
+                    dest = Path(root) / "pool" / CHECKPOINTS / digest
+                    if dest.exists():
+                        present += 1
+                    else:
+                        _write_verified(dest, blob, digest, k)
+                        copied += 1
+                        nbytes += len(blob)
+                    files[k], stored_at[k] = digest, f"{CHECKPOINTS}/{digest}"
+            continue
         digest = _file_sha(src)
         side = src.with_name(src.name + ".sha256")
         if src.suffix == ".pkl" and side.is_file() and (side.read_text().split() or [""])[0] != digest:
             conflicts.append(key)                       # the pickle changed after its sidecar was written: not trusted
             continue
         dest = pool / rel
-        if _is_checkpoint(src):
-            dest = Path(root) / "pool" / CHECKPOINTS / digest
-            stored_at[key] = f"{CHECKPOINTS}/{digest}"
         if dest.exists():
             if dest.stat().st_size != src.stat().st_size or _file_sha(dest) != digest:
                 conflicts.append(key)

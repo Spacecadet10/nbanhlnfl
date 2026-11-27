@@ -52,9 +52,10 @@ forecast that no longer equals the saved pick is unscorable. Units only with a s
 
 ## Colours
 Rule bucket-record-v1 is unchanged (green/red/neutral by the exact printed % bucket's W-L record). Always show W-L and n; n < 30 is a small
-sample (threshold_overview.MIN_LIVE_GRADED = 30 drives the label only; owner 2026-11-26: labels yes, a 30-result minimum gate is NOT approved).
-Colour is display only and never decides recommendation eligibility (owner 2026-11-26): the card's Recommended pick is tickets.card_choice
-(context-card-v1, owner-authorised 2026-11-12; docs/TELEGRAM.md note). Colours measure; they do not show green picks are profitable.
+sample label (threshold_overview.MIN_LIVE_GRADED = 30; it also picks the evidence band behind `rank`/`strong`). Owner 2026-11-26: labels yes,
+a 30-result minimum GATE is NOT approved. Colour is display only and never decides recommendation eligibility: the card's Recommended pick is
+tickets.card_choice (context-card-v1, owner-authorised 2026-11-12; docs/TELEGRAM.md note). The SAME exact-% record still feeds its rank and
+its "losing record" warning with only RANK_MIN_SETTLED = 3 results. Colours measure; they do not show green picks are profitable.
 
 ## Known train/serve gaps (F)
 Live NHL line markets force `empty_net: True` (market_live.py) unlike their seal; adaptive trains at model lines but serves at bookmaker lines.

@@ -302,6 +302,29 @@ def test_a_retrained_history_checkpoint_is_kept_per_version_and_restored_without
     assert again["pool"]["copied"] == 0 and again["pool"]["present"] == 2          # an unchanged version is not copied twice
 
 
+def test_a_checkpoint_caught_mid_write_is_reported_and_the_rest_of_the_pool_is_still_backed_up(tmp_path):
+    data, root = tmp_path / "data", tmp_path / "backups"
+    _store(data)
+    adaptive(data, {"nba/history-d1.pkl": b"A" * 100, "nhl/combiner/c-1.pkl": b"C" * 50})
+    (data / "research/adaptive/nba/history-d1.pkl").write_bytes(b"N" * 90)          # new bytes, old sidecar: a save in progress
+    out = nb.nightly(data, root, mirror=None, stamp="20261116T043000Z", repo_root=tmp_path / "r", notify=lambda m: None)
+    assert "error" not in out["pool"]
+    assert out["pool"]["conflicts"] == ["adaptive/nba/history-d1.pkl"]
+    man = json.loads((root / "stores" / "20261116T043000Z" / "pool-manifest.json").read_text())
+    assert set(man["files"]) == {"adaptive/nhl/combiner/c-1.pkl", "adaptive/nhl/combiner/c-1.pkl.sha256"}   # never a mismatched pair
+
+
+def test_a_manifest_written_before_checkpoints_existed_still_restores(tmp_path):
+    folder, pool = tmp_path / "night", tmp_path / "pool"
+    (pool / "adaptive/nba").mkdir(parents=True)
+    folder.mkdir()
+    (pool / "adaptive/nba/history-d1.pkl").write_bytes(b"A" * 10)
+    (folder / "pool-manifest.json").write_text(json.dumps({"pool": "pool", "files": {
+        "adaptive/nba/history-d1.pkl": hashlib.sha256(b"A" * 10).hexdigest()}}))
+    assert nb.collect_pool(folder, pool, tmp_path / "out") == 1
+    assert (tmp_path / "out/adaptive/nba/history-d1.pkl").read_bytes() == b"A" * 10
+
+
 def test_pickles_go_to_a_shared_pool_once_and_not_into_every_nights_tarball(tmp_path):
     data, root = tmp_path / "data", tmp_path / "backups"
     _store(data)
