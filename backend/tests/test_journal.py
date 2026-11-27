@@ -88,3 +88,26 @@ def test_the_journal_must_live_outside_the_data_folder(store):
     data, _ = store
     with pytest.raises(journal.JournalError):
         journal.export(data, data / "journal")
+
+
+def test_a_row_written_between_the_export_and_the_check_is_not_reported_missing_and_is_journaled_next_time(store, tmp_path):
+    # Nov 24 09:45Z and Nov 27 01:00Z: quotes inserted while the nightly backup ran made verify report them "missing" (a
+    # false failure: export and verify read the live store at two different moments). Export and check now read ONE snapshot.
+    data, conn = store
+    ledger.record(conn, _forecast())
+    late = lambda: ledger.record(conn, _forecast(model_version="late", home_win_prob=0.55))
+    out = journal.export_and_verify(data, tmp_path / "journal", _after_snapshot=late)
+    assert out["verify"]["ok"], out["verify"]
+    assert out["export"]["sports"]["nba"]["predictions"] == 1
+    again = journal.export_and_verify(data, tmp_path / "journal")
+    assert again["verify"]["ok"] and again["export"]["sports"]["nba"]["predictions"] == 1      # the late row, next run
+
+
+def test_the_one_snapshot_check_still_reports_a_changed_journal_line(store, tmp_path):
+    data, conn = store
+    ledger.record(conn, _forecast())
+    journal.export_and_verify(data, tmp_path / "journal")
+    p = tmp_path / "journal" / "nba" / "predictions.jsonl"
+    p.write_text(p.read_text().replace("0.6", "0.7"))
+    out = journal.export_and_verify(data, tmp_path / "journal")
+    assert not out["verify"]["ok"] and out["verify"]["sports"]["nba"]["predictions"]["tampered"]
