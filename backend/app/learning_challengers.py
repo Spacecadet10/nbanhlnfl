@@ -24,6 +24,7 @@ from .candidates import features, learners, live, registry
 from .db import utc_now
 
 POLICY_DIR = Path(__file__).parent / "reference" / "learning_policies"
+RETIRED = {"ncaab-challengers-v1": "pre-as-of (574ba5f), excluded: priced at the recorder's own clock, not as of a published bar; rows kept, never paired or scored"}
 SOURCES = ("existing_pool", "autoresearch_trial", "manual")
 SPORTS = ("nba", "nhl", "ncaab", "nfl", "soccer")
 SPORT_MODULES = {"ncaab": "ncaab_challengers", "nfl": "nfl_challengers", "soccer": "soccer_challengers"}   # own spec families and recorders

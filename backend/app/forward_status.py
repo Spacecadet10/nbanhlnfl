@@ -144,19 +144,28 @@ CHALLENGER_NOTE = ("PROSPECTIVE, no claim: challengers are recorded by the resea
 def challenger_statuses(path=None) -> dict:
     """{sport: {"status": waiting | recording | failed, "rows", "games", "last_recorded_at", "note"}} for the sports whose challengers
     are recorded (research/challengers.sqlite, read-only). `waiting`: no row yet (store missing included); `recording`: rows exist;
-    `failed`: the store is unreadable. Nothing here pairs or scores, and nothing is ever `passed`."""
+    `failed`: the store is unreadable. Rows of a retired policy (learning_challengers.RETIRED: pre-as-of) are counted apart in `pre_as_of_excluded` and never make a sport `recording`. Nothing here pairs or scores, and nothing is ever `passed`."""
     from . import learning_challengers as lc
-    out = {s: {"status": "waiting", "rows": 0, "games": 0, "last_recorded_at": None, "note": CHALLENGER_NOTE} for s in CHALLENGER_SPORTS}
+    out = {s: {"status": "waiting", "rows": 0, "games": 0, "last_recorded_at": None, "policies": {},
+                  "pre_as_of_excluded": 0, "note": CHALLENGER_NOTE} for s in CHALLENGER_SPORTS}
     try:
         conn = lc.open_ro(path or lc.store_path())
         if conn is None:
             return out
         try:
+            retired = tuple(lc.RETIRED)
+            marks = ",".join("?" * len(retired))
             for s in CHALLENGER_SPORTS:
-                n, games, last = conn.execute("SELECT count(*), count(DISTINCT game_id), max(recorded_at) FROM challenger_forecasts "
-                                              "WHERE policy_id LIKE ? ESCAPE '\\'", (f"{s}-%",)).fetchone()
+                n, games, last = conn.execute(
+                    f"SELECT count(*), count(DISTINCT game_id), max(recorded_at) FROM challenger_forecasts WHERE policy_id LIKE ? ESCAPE '\\' "
+                    f"AND policy_id NOT IN ({marks})", (f"{s}-%", *retired)).fetchone()
+                out[s]["pre_as_of_excluded"] = conn.execute(
+                    f"SELECT count(*) FROM challenger_forecasts WHERE policy_id LIKE ? ESCAPE '\\' AND policy_id IN ({marks})",
+                    (f"{s}-%", *retired)).fetchone()[0]
                 if n:
-                    out[s] |= {"status": "recording", "rows": n, "games": games, "last_recorded_at": last}
+                    out[s] |= {"status": "recording", "rows": n, "games": games, "last_recorded_at": last,
+                               "policies": dict(conn.execute(f"SELECT policy_id, count(*) FROM challenger_forecasts WHERE policy_id LIKE ? ESCAPE '\\' "
+                                                             f"AND policy_id NOT IN ({marks}) GROUP BY policy_id", (f"{s}-%", *retired)))}
         finally:
             conn.close()
     except Exception as exc:               # a status page never raises

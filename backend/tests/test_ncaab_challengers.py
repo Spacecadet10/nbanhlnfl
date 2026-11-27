@@ -63,7 +63,7 @@ def rows_of(path):
 def test_seeded_policy_has_four_distinct_variants_with_manual_provenance():
     pol = policies()[0]
     names = [c.spec.name for c in pol.challengers]
-    assert pol.policy_id == "ncaab-challengers-v1" and len(names) == len(set(names)) == 4
+    assert pol.policy_id == "ncaab-challengers-v2" and len(names) == len(set(names)) == 4
     assert {c.provenance["source"] for c in pol.challengers} == {"manual"}
     assert all(c.provenance["note"].strip() and c.preregistered_n is None for c in pol.challengers)
     fits = {c.spec.name: c.spec.extra["fit_seasons"] for c in pol.challengers}
@@ -72,9 +72,9 @@ def test_seeded_policy_has_four_distinct_variants_with_manual_provenance():
 
 
 def test_a_spec_with_unknown_fields_or_markets_is_refused(tmp_path):
-    pol = json.loads((Path(lc.POLICY_DIR) / "ncaab-challengers-v1.json").read_text())
+    pol = json.loads((Path(lc.POLICY_DIR) / "ncaab-challengers-v2.json").read_text())
     pol["challengers"][0]["spec"]["extra"]["markets"] = ["moneyline"]
-    p = tmp_path / "ncaab-challengers-v1.json"
+    p = tmp_path / "ncaab-challengers-v2.json"
     p.write_text(json.dumps(pol))
     with pytest.raises(lc.PolicyError, match="market"):
         lc.load_policy(p)
@@ -344,10 +344,12 @@ def test_old_refit_files_and_abandoned_temp_files_are_pruned_keeping_this_and_th
 
 
 # --- Live fingerprints must not move because of the research adapters ---------------------------------------------------
-# Values are those at 1179494 (the deployed code). Every file these fingerprints hash is untouched by the research work; the
+# Values are those at 1179494 (the deployed code), EXCEPT ncaab_challengers.fit_code_version: that module is no longer untouched
+# (as-of pricing, ncaab-asof branch), so its pin was moved on purpose; it only keys the refit cache and is no served identity. The other
+# files these fingerprints hash are untouched by the research work; the
 # research code lives in ncaab_cards.py and nfl_challengers.py, which no live fingerprint hashes.
 DEPLOYED_MIN_FIT_GAMES = 2000
-FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "b0baddd2", "nfl_live.definition": "b6074877a7e7ccfe",
+FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "74f78a0c", "nfl_live.definition": "b6074877a7e7ccfe",
                         "best_pick_record.RECORDER_SHA256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
                         "selector.version": "selector-v1:SELF"}
 
@@ -374,3 +376,71 @@ def test_no_fingerprint_site_reads_the_research_modules():
     assert "nfl_challengers" not in (app / "ncaab_challengers.py").read_text() and "ncaab_cards" not in (app / "nfl_live.py").read_text()
     # candidates/_code_digest hashes every app/models/*.py: no research file may sit there
     assert not [p.name for p in (app / "models").glob("*.py") if "research" in p.name]
+
+
+# ---- per-market bars, retired v1 rows, group isolation ----------------------------------------------------------------
+def _drop_ledger_triggers(store):
+    store.execute("PRAGMA foreign_keys = OFF")
+    for t in store.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='game_forecasts'").fetchall():
+        store.execute(f"DROP TRIGGER {t[0]}")
+
+
+def test_each_market_is_priced_at_its_own_bars_information_time_and_pairs_with_exactly_that_bar(store, tmp_path):
+    """Spread and winner bars move independently (coverage adds a row only when a market's content changes)."""
+    winner_at, old_spread_at = "2026-11-17T22:00:00Z", "2026-11-17T21:50:00Z"
+    _drop_ledger_triggers(store)
+    store.execute("UPDATE game_forecasts SET generated_at=?, source_generated_at=? WHERE market='winner'", (winner_at, winner_at))
+    cols = [r[1] for r in store.execute("PRAGMA table_info(game_forecasts)") if r[1] != "forecast_id"]
+    sel = ", ".join(f"'older-spread-run'" if c == "idempotency_key" else "0.9" if c == "p_a" else "0.0" if c == "p_mid" else "0.1" if c == "p_b"
+                    else f"'{old_spread_at}'" if c in ("generated_at", "source_generated_at") else c for c in cols)
+    store.execute(f"INSERT INTO game_forecasts ({', '.join(cols)}) SELECT {sel} FROM game_forecasts WHERE market='spread'")   # an older run, same line
+    store.commit()
+    path = tmp_path / "c.sqlite"
+    out = nc.record(store, path, policies=policies(), now=NOW)
+    rows = rows_of(path)
+    assert out["created"] == 9
+    at = {r["market"]: r["cutoff_at"] for r in rows}
+    assert at["winner"] == winner_at == {r["market"]: r["generated_at"] for r in rows}["winner"]
+    assert at["spread"] == NOW and at["total"] == NOW                       # not one minimum across the markets
+    res = le.evaluate(store, lc.open_ro(path))
+    assert res["pairing"] == {"paired": 9, "unpaired": {}}
+    for r in rows:                                                             # each row pairs with the bar it was priced for
+        bar = store.execute("SELECT p_a FROM game_forecasts WHERE market=? AND generated_at=? AND idempotency_key<>'older-spread-run'",
+                            (r["market"], r["cutoff_at"])).fetchone()
+        assert le._incumbent(store, r)[0][0] == bar[0] and bar[0] != 0.9
+
+
+def test_bar_outside_the_two_hour_window_is_skipped_per_market(store, tmp_path):
+    _drop_ledger_triggers(store)
+    store.execute("UPDATE game_forecasts SET generated_at='2026-11-17T20:00:00Z', source_generated_at='2026-11-17T20:00:00Z' WHERE market='winner'")
+    store.commit()
+    out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
+    assert f"{GAME}:winner" in out["skipped"] and "bar_outside_window" in out["skipped"][f"{GAME}:winner"]
+    assert {r["market"] for r in rows_of(tmp_path / "c.sqlite")} >= {"spread", "total"} and "winner" not in {r["market"] for r in rows_of(tmp_path / "c.sqlite")}
+
+
+def test_a_failing_information_time_group_is_recorded_and_the_next_one_still_runs(store, tmp_path, monkeypatch):
+    _drop_ledger_triggers(store)
+    store.execute("UPDATE game_forecasts SET generated_at='2026-11-17T22:00:00Z', source_generated_at='2026-11-17T22:00:00Z' WHERE market='winner'")
+    store.commit()
+    real = nc.refit
+    monkeypatch.setattr(nc, "refit", lambda conn, info, *a, **k: (_ for _ in ()).throw(RuntimeError("boom")) if info.startswith("2026-11-17T22:00") else real(conn, info, *a, **k))
+    out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
+    assert "boom" in out["errors"]["group:2026-11-17T22:00:00Z"] and out["status"] == "partial" and out["created"] > 0
+    assert set(out["fits_by_group"]) == {"2026-11-17T22:30:00Z"}
+
+
+def test_rows_of_the_retired_v1_policy_stay_labelled_excluded_and_never_paired_or_scored(store, tmp_path):
+    path = tmp_path / "c.sqlite"
+    nc.record(store, path, policies=policies(), now=NOW)
+    conn = lc.open_store(path)
+    conn.execute("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+                 "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at) VALUES "
+                 "('ncaab-challengers-v1','old','ncaab_refit_c1','{}','h','d',?, 'winner',NULL,0.6,0,0.4,?,'2026-11-17T23:30:00Z',?,'v','m',?)", (GAME, NOW, NOW, NOW))
+    conn.commit()
+    conn.close()
+    res = le.evaluate(store, lc.open_ro(path))
+    old = [g for g in res["groups"] if g["policy_id"] == "ncaab-challengers-v1"]
+    assert len(old) == 1 and old[0]["n_excluded"] == 1 and old[0]["n_paired"] == 0 and old[0]["n_scored"] == 0
+    assert "pre-as-of (574ba5f), excluded" in old[0]["claim"]
+    assert res["pairing"] == {"paired": 9, "unpaired": {}}                          # the v2 rows only

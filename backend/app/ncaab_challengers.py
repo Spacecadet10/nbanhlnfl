@@ -183,48 +183,55 @@ def price(sp: Spec, market: str, line: Optional[float], means: dict, sig: dict, 
     return college.market_probs(market, float(line), mean, sd)
 
 
+def _t(at: str) -> datetime:
+    return datetime.strptime(at, FMT).replace(tzinfo=timezone.utc)
+
+
 def _bars(conn, accepted: list, now: str, out: dict) -> dict:
-    """{game_id: (information_at, [(market, line)])}: the published bar of each game under FORWARD_PAIRING, from the canonical ledger
-    (game_forecasts, status 'forecast', the game's current start): the latest run made by start - as_of_minutes, per market, with its
-    information time min(source_generated_at, generated_at) (as in learning_eval). One information time per game: the earliest of its
-    markets' runs, so the challenger never knows more than any bar it is compared with. A game whose bar is not yet fixed (now is
-    before start - as_of_minutes) or that has no published run by then is skipped with a reason and retried next cycle."""
+    """{game_id: {market: (information_at, line)}}: the published bar of each (game, market) under FORWARD_PAIRING, from the canonical
+    ledger (game_forecasts, status 'forecast', the game's current start): the latest run of THAT market made by start - as_of_minutes,
+    with its information time min(source_generated_at, generated_at) (as in learning_eval). Markets move independently (a ledger row
+    is added only when a market's content changes), so each is priced at its own bar. A game whose bar is not yet fixed (now is before
+    start - as_of_minutes), with no published run by then, or whose market bar is more than two hours before the start (the store's
+    window trigger) is skipped with a reason and retried next cycle. Times are compared parsed."""
     from .autoresearch import FORWARD_PAIRING
     asof_min = timedelta(minutes=FORWARD_PAIRING["as_of_minutes"])
     bars = {}
     for gid in accepted:
-        tip = conn.execute("SELECT tipoff_at FROM games WHERE game_id=?", (gid,)).fetchone()
-        start = datetime.strptime(tip[0], FMT).replace(tzinfo=timezone.utc)
-        asof = (start - asof_min).strftime(FMT)
-        if now < asof:
-            out["skipped"][gid] = f"bar_not_fixed: the published bar is the latest run by {asof}"
+        tip = conn.execute("SELECT tipoff_at FROM games WHERE game_id=?", (gid,)).fetchone()[0]
+        start = _t(tip)
+        asof = start - asof_min
+        if _t(now) < asof:
+            out["skipped"][gid] = f"bar_not_fixed: the published bar is the latest run by {asof.strftime(FMT)}"
             continue
         latest = {}
         for market, line, gen, src in conn.execute(
                 "SELECT market, line, generated_at, source_generated_at FROM game_forecasts WHERE game_id=? AND status='forecast' "
-                "AND tipoff_at=? AND generated_at<=? ORDER BY generated_at, forecast_id", (gid, tip[0], asof)):
-            latest[market] = (min(src or gen, gen), line)
+                "AND tipoff_at=? ORDER BY generated_at, forecast_id", (gid, tip)):
+            if _t(gen) <= asof:
+                latest[market] = (min(_t(src or gen), _t(gen)), line)
         if not latest:
             out["skipped"][gid] = "no_published_bar"
             continue
-        info = min(i for i, _ in latest.values())
-        if info < (start - timedelta(hours=2)).strftime(FMT):
-            out["skipped"][gid] = f"bar_outside_window: information time {info} is more than two hours before the start"
-            continue
-        bars[gid] = (info, [(m, ln) for m, (_, ln) in sorted(latest.items())])
+        for market, (info, line) in sorted(latest.items()):
+            if info < start - timedelta(hours=2):
+                out["skipped"][f"{gid}:{market}"] = f"bar_outside_window: information time {info.strftime(FMT)} is more than two hours before the start"
+            else:
+                bars.setdefault(gid, {})[market] = (info.strftime(FMT), line)
     return bars
 
 
 def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_run: bool = False,
            cache_dir: Optional[Path] = None) -> dict:
-    """Challenger rows for NCAAB games tipping off within two hours of `now`, priced AS OF the information time of the published bar
-    they are compared with (never later): results, ratings and refit available at that instant, the bar's own lines, cutoff_at = that
-    time. `conn` is the NCAAB store, used read-only."""
+    """Challenger rows for NCAAB games tipping off within two hours of `now`, each (game, market) priced AS OF the information time of
+    the published bar it is compared with (never later): results, ratings and refit available at that instant, the bar's own line,
+    cutoff_at = that time. `conn` is the NCAAB store, used read-only. A failure in one information-time group is recorded and the
+    next group still runs."""
     now = now or utc_now()
     cache_dir = Path(cache_dir) if cache_dir else Path(path).parent / "challengers" / "ncaab"
     out = {"status": "success", "dry_run": dry_run, "now": now, "created": 0, "would_record": 0, "already_recorded": 0,
-           "eligible_games": 0, "skipped": {}, "errors": {}, "fits": {}, "fits_cache": None, "lines_from": {"published": 0},
-           "policies": [{"policy_id": p.policy_id, "sha": p.sha} for p in policies]}
+           "eligible_games": 0, "skipped": {}, "errors": {}, "fits": {}, "fits_by_group": {}, "fits_cache": None,
+           "lines_from": {"published": 0}, "policies": [{"policy_id": p.policy_id, "sha": p.sha} for p in policies]}
     try:
         lc.check_unique_names(policies)
         near = near_tipoff.predict_now(conn, now=now, write=False)
@@ -236,19 +243,23 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
         out["status"], out["errors"]["recorder"] = "failed", f"{type(exc).__name__}: {exc}"
         return out
     by_info: dict = {}
-    for gid, (info, markets) in bars.items():
-        by_info.setdefault(info, {})[gid] = markets
-    caches = []
+    for gid, markets in bars.items():
+        for market, (info, line) in markets.items():
+            by_info.setdefault(info, {}).setdefault(gid, []).append((market, line))
+    caches, failed = [], 0
     for info, group in sorted(by_info.items()):
         try:
             fits, cache, fingerprint, cutoff = refit(conn, info, cache_dir, write_cache=not dry_run)
             st = college.state(conn, info)
         except Exception as exc:
-            out["status"], out["errors"]["recorder"] = "failed", f"{type(exc).__name__}: {exc}"
-            return out
+            out["errors"][f"group:{info}"] = f"{type(exc).__name__}: {exc}"
+            failed += 1
+            continue
         caches.append(cache)
-        out["fits"] = out["fits"] or {k: {"n": v["n"], "seasons": v["seasons"], "cutoff": cutoff, **({"sigmas": v["sigmas"], "calibration": v["calibration"]} if "sigmas" in v else {"refused": v["refused"]})}
-                                      for k, v in fits.items()}
+        summary = {k: {"n": v["n"], "seasons": v["seasons"], "cutoff": cutoff, **({"sigmas": v["sigmas"], "calibration": v["calibration"]} if "sigmas" in v else {"refused": v["refused"]})}
+                   for k, v in fits.items()}
+        out["fits_by_group"][info] = summary
+        out["fits"] = out["fits"] or summary
         games = {}
         for gid in group:
             try:
@@ -280,6 +291,8 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
                                  "generated_at": info, "cutoff_at": info, "tipoff_at": games[gid][1]})
                 lc.append_rows(path, pol, c, rows, definition=definition, dataset_version=fingerprint, now=now,
                                dry_run=dry_run, out=out)
+    if by_info and failed == len(by_info):
+        out["status"] = "failed"
     out["fits_cache"] = None if not caches else "hit" if all(x == "hit" for x in caches) else "miss"
     if out["status"] == "success" and (out["errors"] or out["skipped"]):
         out["status"] = "partial"

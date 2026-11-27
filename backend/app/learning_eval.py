@@ -168,7 +168,7 @@ def _incumbent(store, row) -> tuple:
 
 
 def _group() -> dict:
-    return {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0, "n_paired": 0, "unpaired": {},
+    return {"n_scored": 0, "n_unsettled": 0, "n_void": 0, "n_unscorable": 0, "n_no_incumbent": 0, "n_paired": 0, "n_excluded": 0, "unpaired": {},
             "ll_c": [], "ll_i": [], "br_c": [], "br_i": []}
 
 
@@ -192,6 +192,9 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
             continue
         seen.add(once)
         g = groups.setdefault(key, _group())
+        if r["policy_id"] in lc.RETIRED:          # recorded before the as-of repair: kept, labelled, never paired, scored or counted
+            g["n_excluded"] += 1
+            continue
         inc, why = _incumbent(store, r)          # every first row is paired or labelled unpaired with a reason, settled or not
         if inc is None:
             g["unpaired"][why] = g["unpaired"].get(why, 0) + 1
@@ -244,11 +247,11 @@ def evaluate(store, cc, prefix: Optional[str] = None) -> dict:
     for (pid, sha, name, h, market), g in groups.items():
         n, target = g["n_scored"], prereg.get((sha, name))
         mc, mi, bc, bi = _mean(g["ll_c"]), _mean(g["ll_i"]), _mean(g["br_c"]), _mean(g["br_i"])
-        claim = ("no claim: no preregistered sample size is set" if target is None else
+        claim = (lc.RETIRED[pid] if pid in lc.RETIRED else "no claim: no preregistered sample size is set" if target is None else
                  f"no claim: {n} of {target} preregistered games settled" if n < target else
                  "sample size reached: apply the preregistered decision rule, nothing is implied here")
         out.append({"policy_id": pid, "policy_sha": sha, "spec_name": name, "spec_hash": h, "market": market,
-                    **{k: g[k] for k in ("n_scored", "n_unsettled", "n_void", "n_unscorable", "n_no_incumbent", "n_paired", "unpaired")},
+                    **{k: g[k] for k in ("n_scored", "n_unsettled", "n_void", "n_unscorable", "n_no_incumbent", "n_paired", "n_excluded", "unpaired")},
                     "log_loss_challenger": mc, "log_loss_incumbent": mi, "log_loss_diff": None if mc is None else mc - mi,
                     "brier_challenger": bc, "brier_incumbent": bi, "brier_diff": None if bc is None else bc - bi,
                     "preregistered_n": target, "claim": claim})

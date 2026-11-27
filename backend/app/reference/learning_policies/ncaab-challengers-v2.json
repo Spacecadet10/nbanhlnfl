@@ -1,0 +1,128 @@
+{
+  "policy_id": "ncaab-challengers-v2",
+  "sport": "ncaab",
+  "version": 2,
+  "description": "As ncaab-challengers-v1 (same four specs), recorded AS OF the published bar's information time: each (game, market) is priced with the results available at the information time of the latest published run by start-60 and cutoff_at is that time, so the pairing rule (FORWARD_PAIRING) can hold. v1 rows (recorded at the recorder's own clock, 574ba5f) stay in the store, labelled pre-as-of and excluded from every comparison. Prospective NCAAB challengers: refits of the frozen parameters recorded point-in-time within two hours of tip-off at the line the served forecast prices, in the separate challenger store, scored at read time against the served forecast. Registration is never promotion; nothing here reaches serving, cards or betting. C1 and C2 differ only in the fit sample (C2 includes the spent test seasons).",
+  "challengers": [
+    {
+      "spec": {
+        "name": "ncaab_refit_c1",
+        "head": "winner+spread+total",
+        "features": "college_eff+running_points",
+        "why": "C1: weekly refit of the winner Platt calibration and the margin/total sigmas on results available at the week start, excluding the spent test seasons 2025/2026.",
+        "sport": "ncaab",
+        "family": "frozen_refit",
+        "role": "candidate",
+        "refit": "week",
+        "extra": {
+          "markets": [
+            "winner",
+            "spread",
+            "total"
+          ],
+          "fit_seasons": "exclude_test",
+          "total_model": "running_points"
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I5 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T13:00:00Z",
+        "note": "Manual operator seed for the prospective NCAAB challengers (docs/NCAAB_PLAN.md): the served NCAAB models stay frozen; only calibration and sigmas are refit weekly, point-in-time. Owner decision 2026-11-18: challengers may be fitted on the already-spent test seasons 2025/2026; evidence comes only from rows recorded before tip-off."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "ncaab_refit_c2_incl_test",
+        "head": "winner+spread+total",
+        "features": "college_eff+running_points",
+        "why": "C2: the same refit as C1 but fitted on every season with results, explicitly including the spent test seasons (owner-allowed), so the effect of the extra seasons is visible.",
+        "sport": "ncaab",
+        "family": "frozen_refit",
+        "role": "candidate",
+        "refit": "week",
+        "extra": {
+          "markets": [
+            "winner",
+            "spread",
+            "total"
+          ],
+          "fit_seasons": "all",
+          "total_model": "running_points"
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I5 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T13:00:00Z",
+        "note": "Manual operator seed for the prospective NCAAB challengers (docs/NCAAB_PLAN.md): the served NCAAB models stay frozen; only calibration and sigmas are refit weekly, point-in-time. Owner decision 2026-11-18: challengers may be fitted on the already-spent test seasons 2025/2026; evidence comes only from rows recorded before tip-off."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "ncaab_total_college_eff_c3",
+        "head": "total",
+        "features": "college_eff",
+        "why": "C3: the total priced by the existing college_eff joint-normal total instead of the served running_points model (the one alternative total model already in the codebase), sigma refit as C1.",
+        "sport": "ncaab",
+        "family": "frozen_refit",
+        "role": "candidate",
+        "refit": "week",
+        "extra": {
+          "markets": [
+            "total"
+          ],
+          "fit_seasons": "exclude_test",
+          "total_model": "college_eff"
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I5 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T13:00:00Z",
+        "note": "Manual operator seed for the prospective NCAAB challengers (docs/NCAAB_PLAN.md): the served NCAAB models stay frozen; only calibration and sigmas are refit weekly, point-in-time. Owner decision 2026-11-18: challengers may be fitted on the already-spent test seasons 2025/2026; evidence comes only from rows recorded before tip-off."
+      },
+      "preregistered_n": null
+    },
+    {
+      "spec": {
+        "name": "ncaab_team_total_sigma_c4",
+        "head": "team_total_home+team_total_away",
+        "features": "college_eff",
+        "why": "C4: team-total sigmas (derived from the college_eff margin and total sigmas and their correlation) refit weekly as C1.",
+        "sport": "ncaab",
+        "family": "frozen_refit",
+        "role": "candidate",
+        "refit": "week",
+        "extra": {
+          "markets": [
+            "team_total_home",
+            "team_total_away"
+          ],
+          "fit_seasons": "exclude_test"
+        }
+      },
+      "provenance": {
+        "source": "manual",
+        "trial_id": null,
+        "commit": null,
+        "trial_decision": null,
+        "registered_by": "learning-phase2 I5 seed (Claude Sonnet 5.5); owner review pending",
+        "registered_at": "2026-11-18T13:00:00Z",
+        "note": "Manual operator seed for the prospective NCAAB challengers (docs/NCAAB_PLAN.md): the served NCAAB models stay frozen; only calibration and sigmas are refit weekly, point-in-time. Owner decision 2026-11-18: challengers may be fitted on the already-spent test seasons 2025/2026; evidence comes only from rows recorded before tip-off."
+      },
+      "preregistered_n": null
+    }
+  ]
+}

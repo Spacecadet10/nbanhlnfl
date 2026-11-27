@@ -27,3 +27,19 @@ def test_rows_mean_recording_never_passed_and_only_for_their_sport(tmp_path):
 
 def test_the_published_bar_start_stays_unestablished():
     assert autoresearch.FORWARD_PAIRING["published_bar_from"] is None
+
+
+def test_retired_rows_are_counted_apart_and_never_make_a_sport_recording(tmp_path):
+    path = tmp_path / "challengers.sqlite"
+    conn = lc.open_store(path)
+    ins = ("INSERT INTO challenger_forecasts (policy_id, policy_sha, spec_name, spec_json, spec_hash, definition, game_id, market, line, "
+           "p_a, p_mid, p_b, cutoff_at, tipoff_at, generated_at, dataset_version, model_version, recorded_at) VALUES "
+           "(?,'s','n','{}','h','d','ncaab:1','winner',NULL,0.6,0,0.4,'2026-11-29T16:00:00Z','2026-11-29T18:00:00Z','2026-11-29T16:00:00Z','v','m','2026-11-29T16:01:00Z')")
+    conn.execute(ins, ("ncaab-challengers-v1",))
+    conn.commit()
+    st = forward_status.challenger_statuses(path)["ncaab"]
+    assert st["status"] == "waiting" and st["rows"] == 0 and st["pre_as_of_excluded"] == 1
+    conn.execute(ins.replace("'ncaab:1'", "'ncaab:2'"), ("ncaab-challengers-v2",))
+    conn.commit()
+    st = forward_status.challenger_statuses(path)["ncaab"]
+    assert st["status"] == "recording" and st["rows"] == 1 and st["policies"] == {"ncaab-challengers-v2": 1} and st["pre_as_of_excluded"] == 1
