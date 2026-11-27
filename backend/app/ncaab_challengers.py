@@ -183,13 +183,47 @@ def price(sp: Spec, market: str, line: Optional[float], means: dict, sig: dict, 
     return college.market_probs(market, float(line), mean, sd)
 
 
+def _bars(conn, accepted: list, now: str, out: dict) -> dict:
+    """{game_id: (information_at, [(market, line)])}: the published bar of each game under FORWARD_PAIRING, from the canonical ledger
+    (game_forecasts, status 'forecast', the game's current start): the latest run made by start - as_of_minutes, per market, with its
+    information time min(source_generated_at, generated_at) (as in learning_eval). One information time per game: the earliest of its
+    markets' runs, so the challenger never knows more than any bar it is compared with. A game whose bar is not yet fixed (now is
+    before start - as_of_minutes) or that has no published run by then is skipped with a reason and retried next cycle."""
+    from .autoresearch import FORWARD_PAIRING
+    asof_min = timedelta(minutes=FORWARD_PAIRING["as_of_minutes"])
+    bars = {}
+    for gid in accepted:
+        tip = conn.execute("SELECT tipoff_at FROM games WHERE game_id=?", (gid,)).fetchone()
+        start = datetime.strptime(tip[0], FMT).replace(tzinfo=timezone.utc)
+        asof = (start - asof_min).strftime(FMT)
+        if now < asof:
+            out["skipped"][gid] = f"bar_not_fixed: the published bar is the latest run by {asof}"
+            continue
+        latest = {}
+        for market, line, gen, src in conn.execute(
+                "SELECT market, line, generated_at, source_generated_at FROM game_forecasts WHERE game_id=? AND status='forecast' "
+                "AND tipoff_at=? AND generated_at<=? ORDER BY generated_at, forecast_id", (gid, tip[0], asof)):
+            latest[market] = (min(src or gen, gen), line)
+        if not latest:
+            out["skipped"][gid] = "no_published_bar"
+            continue
+        info = min(i for i, _ in latest.values())
+        if info < (start - timedelta(hours=2)).strftime(FMT):
+            out["skipped"][gid] = f"bar_outside_window: information time {info} is more than two hours before the start"
+            continue
+        bars[gid] = (info, [(m, ln) for m, (_, ln) in sorted(latest.items())])
+    return bars
+
+
 def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_run: bool = False,
            cache_dir: Optional[Path] = None) -> dict:
-    """Challenger rows for NCAAB games tipping off within two hours of `now`; `conn` is the NCAAB store, used read-only."""
+    """Challenger rows for NCAAB games tipping off within two hours of `now`, priced AS OF the information time of the published bar
+    they are compared with (never later): results, ratings and refit available at that instant, the bar's own lines, cutoff_at = that
+    time. `conn` is the NCAAB store, used read-only."""
     now = now or utc_now()
     cache_dir = Path(cache_dir) if cache_dir else Path(path).parent / "challengers" / "ncaab"
     out = {"status": "success", "dry_run": dry_run, "now": now, "created": 0, "would_record": 0, "already_recorded": 0,
-           "eligible_games": 0, "skipped": {}, "errors": {}, "fits": {}, "fits_cache": None, "lines_from": {"stored": 0, "recomputed": 0},
+           "eligible_games": 0, "skipped": {}, "errors": {}, "fits": {}, "fits_cache": None, "lines_from": {"published": 0},
            "policies": [{"policy_id": p.policy_id, "sha": p.sha} for p in policies]}
     try:
         lc.check_unique_names(policies)
@@ -197,57 +231,56 @@ def record(conn, path: Path, *, policies: list, now: Optional[str] = None, dry_r
         accepted = [f["game_id"] for f in near["forecasts"]]
         out["eligible_games"] = len(accepted)
         out["refused_by_served_cycle"] = [{k: r[k] for k in ("game_id", "reason")} for r in near["refused"]]
-        if not accepted:
-            return out
-        served = market_live.forecast(conn, now=now, policy="near_tipoff", game_ids=accepted, write=False)
-        fits, out["fits_cache"], fingerprint, cutoff = refit(conn, now, cache_dir, write_cache=not dry_run)
-        st = college.state(conn, now)
+        bars = _bars(conn, accepted, now, out)
     except Exception as exc:
         out["status"], out["errors"]["recorder"] = "failed", f"{type(exc).__name__}: {exc}"
         return out
-    out["fits"] = {k: {"n": v["n"], "seasons": v["seasons"], "cutoff": cutoff, **({"sigmas": v["sigmas"], "calibration": v["calibration"]} if "sigmas" in v else {"refused": v["refused"]})}
-                   for k, v in fits.items()}
-    games = {}
-    for gid in accepted:
+    by_info: dict = {}
+    for gid, (info, markets) in bars.items():
+        by_info.setdefault(info, {})[gid] = markets
+    caches = []
+    for info, group in sorted(by_info.items()):
         try:
-            g = college._pregame(conn, gid, now)
-            games[gid] = ({"eff": st.eff.expected(g), "points": st.points.expected(g)}, g.tipoff_at)
+            fits, cache, fingerprint, cutoff = refit(conn, info, cache_dir, write_cache=not dry_run)
+            st = college.state(conn, info)
         except Exception as exc:
-            out["errors"][gid] = f"{type(exc).__name__}: {exc}"
-    lines = []
-    for e in served["forecasts"]:
-        stored = conn.execute(
-            "SELECT line FROM market_forecasts WHERE game_id=? AND market=? AND policy='near_tipoff' AND run_type='live' AND tipoff_at=? "
-            "AND generated_at<=? AND model_version NOT LIKE 'research-%' ORDER BY generated_at DESC, forecast_id DESC LIMIT 1",
-            (e["game_id"], e["market"], games[e["game_id"]][1] if e["game_id"] in games else None, now)).fetchone() \
-            if e["game_id"] in games else None
-        out["lines_from"]["stored" if stored else "recomputed"] += 1       # the stored served line pairs with the incumbent
-        lines.append((e["game_id"], e["market"], stored[0] if stored else e["line"]))
-    lines += [(gid, "winner", None) for gid in accepted]
-    for pol in policies:
-        for c in pol.challengers:
-            sp, fit = c.spec, fits[c.spec.extra["fit_seasons"]]
-            if "sigmas" not in fit:
-                out["skipped"][sp.name] = f"fit refused: {fit['refused']}"
-                continue
-            sig = {**st.decision["sigmas"], **fit["sigmas"]}
-            definition = f"{st.decision['sha256'][:8]}+refit={cutoff[:10]}-{fingerprint}-{sp.extra['fit_seasons']}"
-            rows = []
-            for gid, market, line in lines:
-                if gid not in games:
+            out["status"], out["errors"]["recorder"] = "failed", f"{type(exc).__name__}: {exc}"
+            return out
+        caches.append(cache)
+        out["fits"] = out["fits"] or {k: {"n": v["n"], "seasons": v["seasons"], "cutoff": cutoff, **({"sigmas": v["sigmas"], "calibration": v["calibration"]} if "sigmas" in v else {"refused": v["refused"]})}
+                                      for k, v in fits.items()}
+        games = {}
+        for gid in group:
+            try:
+                g = college._pregame(conn, gid, info)
+                games[gid] = ({"eff": st.eff.expected(g), "points": st.points.expected(g)}, g.tipoff_at)
+            except Exception as exc:
+                out["errors"][gid] = f"{type(exc).__name__}: {exc}"
+        lines = [(gid, m, ln) for gid in games for m, ln in group[gid]]
+        out["lines_from"]["published"] += len(lines)
+        for pol in policies:
+            for c in pol.challengers:
+                sp, fit = c.spec, fits[c.spec.extra["fit_seasons"]]
+                if "sigmas" not in fit:
+                    out["skipped"][sp.name] = f"fit refused: {fit['refused']}"
                     continue
-                try:
-                    p = price(sp, market, line, games[gid][0], sig, fit["calibration"])
-                except Exception as exc:
-                    out["errors"][f"{sp.name}:{gid}:{market}"] = f"{type(exc).__name__}: {exc}"
-                    continue
-                if p is None:
-                    continue
-                pa, pm = round(p[0], 9), round(p[1], 9)
-                rows.append({"game_id": gid, "market": market, "line": line, "p": (pa, pm, round(1 - pa - pm, 9)),
-                             "generated_at": now, "tipoff_at": games[gid][1]})
-            lc.append_rows(path, pol, c, rows, definition=definition, dataset_version=served["dataset_version"], now=now,
-                           dry_run=dry_run, out=out)
+                sig = {**st.decision["sigmas"], **fit["sigmas"]}
+                definition = f"{st.decision['sha256'][:8]}+refit={cutoff[:10]}-{fingerprint}-{sp.extra['fit_seasons']}"
+                rows = []
+                for gid, market, line in lines:
+                    try:
+                        p = price(sp, market, line, games[gid][0], sig, fit["calibration"])
+                    except Exception as exc:
+                        out["errors"][f"{sp.name}:{gid}:{market}"] = f"{type(exc).__name__}: {exc}"
+                        continue
+                    if p is None:
+                        continue
+                    pa, pm = round(p[0], 9), round(p[1], 9)
+                    rows.append({"game_id": gid, "market": market, "line": line, "p": (pa, pm, round(1 - pa - pm, 9)),
+                                 "generated_at": info, "cutoff_at": info, "tipoff_at": games[gid][1]})
+                lc.append_rows(path, pol, c, rows, definition=definition, dataset_version=fingerprint, now=now,
+                               dry_run=dry_run, out=out)
+    out["fits_cache"] = None if not caches else "hit" if all(x == "hit" for x in caches) else "miss"
     if out["status"] == "success" and (out["errors"] or out["skipped"]):
         out["status"] = "partial"
     return out

@@ -12,6 +12,7 @@ from app import coverage, jobs, learning_challengers as lc, learning_eval as le,
 from app.models import college
 from ncaab_support import GAME, NOW, add_game, add_quote, make_store, seed
 
+PUB = NOW                                  # the published near-tipoff run: made exactly at the as-of instant (start - 60 min)
 SERVED_TABLES = ("predictions", "near_tipoff_forecasts", "market_forecasts", "adaptive_forecasts", "candidate_forecasts")
 
 
@@ -30,6 +31,9 @@ def store(tmp_path, monkeypatch):
                      hs + i % 3, aws + i % 2, season=season)
     add_quote(conn, GAME, "spread", -4.5, -110, -110, "2026-11-17T22:00:00Z")
     add_quote(conn, GAME, "total", 140.5, -110, -110, "2026-11-17T22:05:00Z")
+    near_tipoff.predict_now(conn, now=PUB, write=True)                                        # the published bar: made at PUB, before the
+    market_live.forecast(conn, now=PUB, policy="near_tipoff", game_ids=[GAME], write=True)    # as-of instant NOW (start - 60 min)
+    coverage.record(conn, now=PUB)
     yield conn
     conn.close()
 
@@ -257,21 +261,41 @@ def test_a_cache_file_without_fits_is_a_miss_not_an_error(store, tmp_path):
     assert out["fits_cache"] == "miss" and out["status"] in ("success", "partial") and not out["errors"]
 
 
-def test_the_stored_served_line_is_priced_when_it_exists_and_the_choice_is_recorded(store, tmp_path):
-    near_tipoff.predict_now(store, now=NOW, write=True)
-    market_live.forecast(store, now=NOW, policy="near_tipoff", game_ids=[GAME], write=True)        # stored served total 140.5
-    coverage.record(store, now=NOW)                                                       # the canonical published ledger the evaluator pairs with
-    add_quote(store, GAME, "total", 141.5, -110, -110, "2026-11-17T22:10:00Z")                     # the book moves before the challengers run
+def test_the_published_bars_line_is_priced_and_the_choice_is_recorded(store, tmp_path):
+    add_quote(store, GAME, "total", 141.5, -110, -110, "2026-11-17T22:10:00Z")                     # the book moves after the bar was published
     out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
-    assert {r["line"] for r in rows_of(tmp_path / "c.sqlite") if r["market"] == "total"} == {140.5}
-    assert out["lines_from"]["stored"] >= 1 and out["lines_from"]["recomputed"] == 0
+    assert {r["line"] for r in rows_of(tmp_path / "c.sqlite") if r["market"] == "total"} == {140.5}      # the bar's own line
+    assert out["lines_from"]["published"] >= 1
     g = {(x["spec_name"], x["market"]): x for x in _finalise_and_eval(store, tmp_path / "c.sqlite")["groups"]}
     assert all(x["n_scored"] == 1 and x["n_no_incumbent"] == 0 for x in g.values())
 
 
-def test_without_a_stored_served_line_the_recomputed_one_is_used_and_said(store, tmp_path):
-    out = nc.record(store, tmp_path / "c.sqlite", policies=policies(), now=NOW)
-    assert out["lines_from"]["recomputed"] >= 1 and out["lines_from"]["stored"] == 0
+def test_a_game_without_a_published_bar_or_before_the_as_of_instant_is_skipped_with_a_reason(store, tmp_path):
+    early = {"skipped": {}}
+    assert nc._bars(store, [GAME], "2026-11-17T22:15:00Z", early) == {} and "bar_not_fixed" in early["skipped"][GAME]   # before start - 60 min
+    store.execute("PRAGMA foreign_keys = OFF")
+    for t in store.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='game_forecasts'").fetchall():
+        store.execute(f"DROP TRIGGER {t[0]}")
+    store.execute("DELETE FROM game_forecasts")
+    out = nc.record(store, tmp_path / "d.sqlite", policies=policies(), now=NOW)
+    assert out["created"] == 0 and out["skipped"][GAME] == "no_published_bar" and not (tmp_path / "d.sqlite").exists()
+
+
+def test_the_challenger_is_priced_as_of_the_published_bars_information_time_never_later(store, tmp_path):
+    early = "2026-11-17T22:10:00Z"
+    store.execute("PRAGMA foreign_keys = OFF")
+    for t in store.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='game_forecasts'").fetchall():
+        store.execute(f"DROP TRIGGER {t[0]}")
+    store.execute("UPDATE game_forecasts SET generated_at=?, source_generated_at=?", (early, early))      # the bar was made 20 minutes before NOW
+    store.commit()
+    out = nc.record(store, tmp_path / "a.sqlite", policies=policies(), now=NOW)
+    ra = rows_of(tmp_path / "a.sqlite")
+    assert out["created"] == 9 and all(r["cutoff_at"] == early and r["generated_at"] == early for r in ra)
+    add_game(store, "970", "2026-11-17T12:00:00Z", "1", "2", "final", 140, 40, available="2026-11-17T22:20:00Z")     # a result AFTER the bar, before NOW
+    nc.record(store, tmp_path / "b.sqlite", policies=policies(), now=NOW)
+    assert [(r["spec_name"], r["market"], r["p_a"]) for r in ra] == [(r["spec_name"], r["market"], r["p_a"]) for r in rows_of(tmp_path / "b.sqlite")]
+    out = le.evaluate(store, lc.open_ro(tmp_path / "a.sqlite"))
+    assert out["pairing"] == {"paired": 9, "unpaired": {}}                                             # gap 0: same information time
 
 
 def _finalise_and_eval(store, path):
@@ -323,7 +347,7 @@ def test_old_refit_files_and_abandoned_temp_files_are_pruned_keeping_this_and_th
 # Values are those at 1179494 (the deployed code). Every file these fingerprints hash is untouched by the research work; the
 # research code lives in ncaab_cards.py and nfl_challengers.py, which no live fingerprint hashes.
 DEPLOYED_MIN_FIT_GAMES = 2000
-FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "24ec6d25", "nfl_live.definition": "b6074877a7e7ccfe",
+FINGERPRINTS_1179494 = {"ncaab_challengers.fit_code_version": "b0baddd2", "nfl_live.definition": "b6074877a7e7ccfe",
                         "best_pick_record.RECORDER_SHA256": "7cc3e6e1befef5206975dd580a278f6fd4184329d8b400e437e94d1d35e01000",
                         "selector.version": "selector-v1:SELF"}
 
