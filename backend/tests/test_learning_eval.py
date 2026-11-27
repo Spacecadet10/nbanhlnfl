@@ -128,19 +128,23 @@ def test_a_moving_line_scores_the_earliest_row_once_so_n_counts_games(env):
     assert g["n_scored"] == 1 and g["log_loss_challenger"] == pytest.approx(-math.log(0.10))     # the earliest row only
 
 
-# ---- pairing with the published forecast (NCAAB/NFL/Soccer; autoresearch.FORWARD_PAIRING) --------------------------------
-def _row(generated="2026-11-20T18:10:00Z", tipoff="2026-11-20T20:00:00Z", line=140.5):
-    return {"generated_at": generated, "tipoff_at": tipoff, "line": line}
+# ---- pairing with the published forecast (NCAAB/NFL/Soccer; autoresearch.FORWARD_PAIRING, on information times) -------------
+def _row(cutoff="2026-11-20T18:10:00Z", tipoff="2026-11-20T20:00:00Z", line=140.5):
+    return {"cutoff_at": cutoff, "tipoff_at": tipoff, "line": line}
 
 
-def _run(at, line=140.5, p=0.6):
-    return (at, line, [p, 0.0, 1 - p])
+def _run(info, made=None, line=140.5, p=0.6):
+    return (info, made or info, line, [p, 0.0, 1 - p])
 
 
-def test_pairing_takes_the_first_published_run_at_or_after_the_challenger_within_ten_minutes():
+def test_pairing_takes_the_first_published_run_whose_information_is_at_or_after_the_challengers_within_ten_minutes():
     runs = [_run("2026-11-20T18:00:00Z", p=0.1), _run("2026-11-20T18:15:00Z", p=0.2), _run("2026-11-20T18:40:00Z", p=0.3)]
     assert le.pair(_row(), runs) == ([0.2, 0.0, 0.8], None)
     assert le.pair(_row("2026-11-20T18:15:00Z"), runs)[1] is None                    # the same instant is allowed (never later)
+
+
+def test_a_published_row_written_late_still_pairs_by_its_information_time():
+    assert le.pair(_row("2026-11-20T18:00:00Z"), [_run("2026-11-20T18:00:00Z", made="2026-11-20T18:50:00Z")])[1] is None
 
 
 @pytest.mark.parametrize("runs,why", [
@@ -148,7 +152,7 @@ def test_pairing_takes_the_first_published_run_at_or_after_the_challenger_within
     ([_run("2026-11-20T18:12:00Z", line=141.5)], "line"),                              # exact line only
     ([_run("2026-11-20T18:00:00Z")], "candidate_later"),                               # the challenger knows more than the published run
     ([_run("2026-11-20T18:21:00Z")], "gap"),                                           # more than 10 minutes after the challenger
-    ([_run("2026-11-20T19:05:00Z")], "published_after_as_of"),                         # only after start - 60 min
+    ([_run("2026-11-20T18:12:00Z", made="2026-11-20T19:05:00Z")], "published_after_as_of"),   # made only after start - 60 min
 ])
 def test_unpaired_rows_say_why(runs, why):
     assert le.pair(_row(), runs) == (None, why)
@@ -156,3 +160,14 @@ def test_unpaired_rows_say_why(runs, why):
 
 def test_a_challenger_after_the_fixed_instant_is_unpaired():
     assert le.pair(_row("2026-11-20T19:10:00Z"), [_run("2026-11-20T19:12:00Z")]) == (None, "as_of_late")
+
+
+def test_a_pregame_soccer_1x2_row_that_stores_the_kickoff_as_cutoff_uses_the_real_06z_cutoff():
+    store = sqlite3.connect(":memory:")
+    store.execute("CREATE TABLE soccer_live_forecasts (match_id, version, generated_at, p_home, p_draw, p_away, cutoff_at)")
+    kick = "2026-11-25T20:00:00Z"
+    store.execute("INSERT INTO soccer_live_forecasts VALUES ('m', 1, '2026-11-25T18:25:00Z', 0.5, 0.3, 0.2, ?)", (kick,))   # kickoff stored as cutoff
+    row = {"policy_id": "soccer-challengers-v1", "market": "soccer_1x2", "game_id": "m", "tipoff_at": kick, "line": None,
+           "cutoff_at": "2026-11-25T06:00:00Z"}
+    assert le._published_soccer(store, row) == [("2026-11-25T06:00:00Z", "2026-11-25T18:25:00Z", None, [0.5, 0.3, 0.2])]
+    assert le.pair(row, le._published_soccer(store, row)) == ([0.5, 0.3, 0.2], None)

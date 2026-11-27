@@ -118,13 +118,24 @@ def test_evaluation_scores_against_the_served_row_and_claims_nothing(live_store,
     assert all("no claim" in g["claim"] and g["log_loss_diff"] is not None for g in out["groups"])
 
 
-def test_a_served_row_made_long_after_the_cutoff_is_unpaired_with_a_reason_not_dropped(live_store, tmp_path):
+def test_a_served_row_written_late_pairs_by_the_frozen_cutoff_it_read_its_results_at(live_store, tmp_path):
     c = live_store
-    nfl_live.record(c, now=NOW)                                         # 45 minutes after the cutoff: beyond the 10-minute pairing gap
+    nfl_live.record(c, now=NOW)                                         # written 45 minutes after the cutoff; its information is the cutoff
     nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
     out = le.evaluate(c, lc.open_ro(tmp_path / "ch.sqlite"))
-    assert out["groups"] and all(g["n_paired"] == 0 and g["unpaired"] == {"gap": 1} for g in out["groups"])
-    assert out["pairing"] == {"paired": 0, "unpaired": {"gap": len(out["groups"])}}
+    assert out["pairing"] == {"paired": len(out["groups"]), "unpaired": {}}
+
+
+def test_a_served_row_for_another_line_is_unpaired_with_a_reason_not_dropped(live_store, tmp_path):
+    c = live_store
+    nfl_live.record(c, now=NOW)
+    nc.record(c, tmp_path / "ch.sqlite", policies=pols(), now=NOW)
+    c.execute("PRAGMA foreign_keys = OFF")
+    c.execute("DROP TRIGGER IF EXISTS game_forecasts_no_update")
+    c.execute("UPDATE game_forecasts SET line = line + 1 WHERE market = 'total'")
+    out = le.evaluate(c, lc.open_ro(tmp_path / "ch.sqlite"))
+    assert set(out["pairing"]["unpaired"]) == {"line"} and out["pairing"]["unpaired"]["line"] > 0
+    assert all(g["n_paired"] == 0 for g in out["groups"] if g["market"] == "total")
 
 
 def test_a_dry_run_does_not_write_the_nfl_access_log_and_the_latest_served_row_wins(live_store, tmp_path):

@@ -13,14 +13,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from . import combine, config, learning_challengers as lc, markets, soccer_markets as sm
+from . import combine, config, learning_challengers as lc, markets, nfl_eval, soccer_markets as sm
 
 LABEL = ("PROSPECTIVE, NO CLAIM until the preregistered sample size is reached: these are paired differences on the games "
          "settled so far, with counts, not evidence that a challenger is better. Registration is not promotion.")
 SIDE = {"a": 0, "mid": 1, "b": 2}
-
-
-MINUTE = 60
 
 
 def _ts(at) -> Optional[datetime]:
@@ -32,29 +29,41 @@ def _ts(at) -> Optional[datetime]:
 
 def _published_ledger(store, row) -> list:
     """NCAAB/NFL: every published run (game_forecasts, the canonical ledger the cards and Telegram show, status 'forecast') of the
-    same game, market and current start: [(generated_at, line, p)], oldest first."""
-    return [(r[0], r[1], [r[2], r[3], r[4]]) for r in store.execute(
-        "SELECT generated_at, line, p_a, p_mid, p_b FROM game_forecasts WHERE game_id=? AND market=? AND status='forecast' AND tipoff_at=? "
-        "ORDER BY generated_at, forecast_id", (row["game_id"], row["market"], row["tipoff_at"]))]
+    same game, market and current start: [(information_at, made_at, line, p)], oldest first. Information time: the run that produced
+    the probability (source_generated_at, never later than the row), as for the NBA/NHL published bar; NFL: the frozen cutoff
+    (kickoff - 120 min) the sealed model reads its results at, however late the row was written."""
+    nfl = row["policy_id"].startswith("nfl-")
+    out = []
+    for gen, src, line, a, m, b in store.execute(
+            "SELECT generated_at, source_generated_at, line, p_a, p_mid, p_b FROM game_forecasts WHERE game_id=? AND market=? "
+            "AND status='forecast' AND tipoff_at=? ORDER BY generated_at, forecast_id", (row["game_id"], row["market"], row["tipoff_at"])):
+        info = min(src or gen, gen)
+        if nfl:
+            info = min(nfl_eval.cutoff_for(row["tipoff_at"]), gen)
+        out.append((info, gen, line, [a, m, b]))
+    return out
 
 
 def _published_soccer(store, row) -> list:
     """Soccer: every published run of the same match: the served 1X2 (Elo) triple, or the served Poisson goals joint priced at the
-    challenger's own line: [(generated_at, line, p)], oldest first."""
+    challenger's own line: [(information_at, made_at, line, p)], oldest first. Information time: the goals joint's cutoff_at is the real
+    data cutoff (06:00 UTC of its day; its inputs are exactly those settled by then). A live 1X2 row stores the KICKOFF as cutoff_at
+    (labelling risk, learning-evidence skill; a day-level row stores its real cutoff and that is used); its model reads inputs through min(generated_at, 06:00 UTC of the match day)."""
     if row["market"] == "soccer_1x2":
-        return [(r[0], None, [r[1], r[2], r[3]]) for r in store.execute(
-            "SELECT generated_at, p_home, p_draw, p_away FROM soccer_live_forecasts WHERE match_id=? ORDER BY generated_at, version",
+        day_cutoff = f"{row['tipoff_at'][:10]}T06:00:00Z"
+        return [(min(r[0], day_cutoff) if r[4] == row["tipoff_at"] else r[4], r[0], None, [r[1], r[2], r[3]]) for r in store.execute(
+            "SELECT generated_at, p_home, p_draw, p_away, cutoff_at FROM soccer_live_forecasts WHERE match_id=? ORDER BY generated_at, version",
             (row["game_id"],))]
     out = []
-    for gen, joint_json in store.execute("SELECT generated_at, joint_json FROM soccer_market_forecasts WHERE match_id=? AND family='goals' "
-                                         "ORDER BY generated_at, version", (row["game_id"],)):
+    for gen, cut, joint_json in store.execute("SELECT generated_at, cutoff_at, joint_json FROM soccer_market_forecasts WHERE match_id=? "
+                                              "AND family='goals' ORDER BY generated_at, version", (row["game_id"],)):
         joint = json.loads(joint_json)
         if row["market"] == "soccer_btts":
             p = sm.probabilities(joint, "btts", "yes", None)
-            out.append((gen, None, [p["win"], 0.0, p["loss"]]))
+            out.append((cut, gen, None, [p["win"], 0.0, p["loss"]]))
         else:
             p = sm.probabilities(joint, row["market"][len("soccer_"):], "over", row["line"])
-            out.append((gen, row["line"], [p["win"], p["push"], p["loss"]]))
+            out.append((cut, gen, row["line"], [p["win"], p["push"], p["loss"]]))
     return out
 
 
@@ -63,34 +72,34 @@ def _published(store, row) -> list:
 
 
 def pair(row, runs: list) -> tuple:
-    """(published p, None) or (None, reason): the pairing rule of autoresearch.FORWARD_PAIRING. The challenger's information time is
-    its generated_at; the published run it is paired with is made at or after it and at most max_gap_minutes later (a challenger
-    never knows more than the forecast it is compared with), at the same exact line, and by the fixed as-of instant
-    (start - as_of_minutes). Reasons: no_published_row | line | as_of_late (the challenger itself is later than the instant) |
-    published_after_as_of | candidate_later (every eligible published run is before the challenger) | gap (the first one at or after
-    it is more than max_gap_minutes later)."""
+    """(published p, None) or (None, reason): the pairing rule of autoresearch.FORWARD_PAIRING, on INFORMATION times. The challenger's
+    is its cutoff_at; the published run's is stated in `_published_*`. A pair needs the published run's information time at or after
+    the challenger's and at most max_gap_minutes later (a challenger never knows more than the forecast it is compared with), the
+    same exact line, and the published row made by the fixed as-of instant (start - as_of_minutes). Reasons: no_published_row | line |
+    as_of_late (the challenger's information time is after the instant) | published_after_as_of | candidate_later (every eligible
+    published run knew less than the challenger) | gap (the first one at or after it is more than max_gap_minutes later)."""
     from .autoresearch import FORWARD_PAIRING
     if not runs:
         return None, "no_published_row"
-    same = [r for r in runs if r[1] == row["line"]]
+    same = [r for r in runs if r[2] == row["line"]]
     if not same:
         return None, "line"
-    start, t = _ts(row["tipoff_at"]), _ts(row["generated_at"])
+    start, t = _ts(row["tipoff_at"]), _ts(row["cutoff_at"])
     if start is None or t is None:
         return None, "no_published_row"
     as_of = start - timedelta(minutes=FORWARD_PAIRING["as_of_minutes"])
     if t > as_of:
         return None, "as_of_late"
-    eligible = [(_ts(r[0]), r) for r in same if _ts(r[0]) is not None and _ts(r[0]) <= as_of]
+    eligible = [(_ts(r[0]), r) for r in same if _ts(r[0]) is not None and _ts(r[1]) is not None and _ts(r[1]) <= as_of]
     if not eligible:
         return None, "published_after_as_of"
     gap = timedelta(minutes=FORWARD_PAIRING["max_gap_minutes"])
-    later = sorted((g, r) for g, r in eligible if g >= t)
+    later = sorted((g, r[1], r) for g, r in eligible if g >= t)
     if not later:
         return None, "candidate_later"
     if later[0][0] - t > gap:
         return None, "gap"
-    return later[0][1][2], None
+    return later[0][2][3], None
 
 
 def _soccer_side(store, row) -> str:
