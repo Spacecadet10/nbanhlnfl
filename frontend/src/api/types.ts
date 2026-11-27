@@ -999,6 +999,8 @@ export interface NflGame {
   kickoff: string;
   forecasts?: CanonicalForecast[];
   recommended_pick?: string | null;
+  recommendation_method?: string | null;
+  recommended_reason?: string | null;
   status: 'scheduled' | 'in_progress' | 'final' | 'postponed' | 'canceled' | 'other';
   home: NflTeam;
   away: NflTeam;

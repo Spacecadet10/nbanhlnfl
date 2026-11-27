@@ -105,7 +105,7 @@ export function GameDateControl({ date, dates, defaultDate, onChange }: {
 const GAME_LEVEL = ['forecasts', 'odds', 'injuries'];
 
 function ForecastUnavailable({ capabilities }: { capabilities: NflCapability[] }) {
-  if (capabilities.some(c => c.id === "forecasts" && c.available)) return <p className="notice">NFL live predictions active. Winner recommendations use the frozen 75% threshold. Spread and total markets are informational; injuries and weather are not included.</p>;
+  if (capabilities.some(c => c.id === "forecasts" && c.available)) return <p className="notice">NFL live predictions active. The recommended pick is the same context comparison Telegram cards use (not a probability threshold); injuries and weather are not included.</p>;
   return (
     <details className="notice nfl-notice">
       <summary><strong>NFL live forecasts are not active:</strong> schedule and results only, with no forecasts, odds or injuries. <span className="link-btn">Why</span></summary>
@@ -323,8 +323,8 @@ function NflForecasts({ game: g, detail = false }: { game: NflGame; detail?: boo
       : first?.reason ?? 'No forecast was recorded for this game.'}</p>;
   }
   return <>
-    <div className="notice"><strong>Recommended pick: {g.recommended_pick ?? 'No strong pick'}</strong>
-      <p className="small">Winner requires at least 75% model probability under the frozen NFL rule. Other markets are informational.</p></div>
+    <div className="notice"><strong>Recommended pick: {g.recommended_pick ?? 'No supported pick'}</strong>
+      <p className="small">{g.recommended_reason ? `${g.recommended_reason} ` : ''}Same context comparison as the Telegram card ({g.recommendation_method ?? 'context-card-v1'}); team totals are excluded and a pick whose original line moved is never recommended. It is a lean, not a proven edge.</p></div>
     {g.forecasts.map(c => <CanonicalBlock key={c.market} c={c} home={g.home} away={g.away} detail={detail} />)}
   </>;
 }

@@ -169,3 +169,32 @@ def test_nfl_price_ingestion_uses_exact_event_and_is_idempotent(live_store):
         retry=ingest.import_lines_fetch(live_store,fetch_id,'nfl')
     assert retry['inserted']==0
     assert all(r['sport']=='nfl' and r['game_id']=='nfl:live' for r in live_store.execute('SELECT * FROM market_quotes'))
+
+
+def test_nfl_page_and_telegram_choose_the_same_pick_for_one_snapshot(live_store, monkeypatch):
+    """Owner 2026-11-26: the game page's recommended pick is tickets.card_choice on the same enriched picks Telegram builds."""
+    from app import telegram, tickets
+    nfl_live.record(live_store, now=NOW)
+    monkeypatch.setattr(db, 'utc_now', lambda: NOW)
+    game = nfl.game_detail(live_store, 'nfl:live')['game']
+    # Telegram's path, step for step (run_once): ranked_picks -> decorate -> prepare_picks -> card_choice -> card text
+    report = nfl_live.Views(live_store, NOW).ranked_picks(date(2026, 11, 2))
+    from app import record_basis
+    record_basis.decorate_report(live_store, 'nfl', report)
+    telegram.prepare_picks(live_store, 'nfl', report)
+    choice = tickets.card_choice('nfl', report['picks'])
+    text = message_batches(report, '123', context_selection=True)[0][1]
+    assert choice['pick'] is not None and choice['method'] == tickets.CARD_METHOD
+    assert game['recommended_pick'] == choice['pick']['pick_label']
+    assert game['recommendation_method'] == tickets.CARD_METHOD
+    assert game['recommended_reason'] == choice['reason']
+    assert choice['pick']['pick_label'] in text and 'Recommended pick' in text
+
+
+def test_nfl_page_keeps_failed_exclusions_and_no_pick_is_stated(live_store, monkeypatch):
+    from app import tickets
+    nfl_live.record(live_store, now=NOW)
+    monkeypatch.setattr(db, 'utc_now', lambda: NOW)
+    monkeypatch.setattr(tickets, 'card_choice', lambda sport, picks: dict(method=tickets.CARD_METHOD, pick=None, reason='none', assessments=[]))
+    game = nfl.game_detail(live_store, 'nfl:live')['game']
+    assert game['recommended_pick'] is None and game['recommended_reason'] == 'none'

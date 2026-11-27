@@ -986,6 +986,30 @@ def deliver(bot, conn, chat_id, key, text, now, *, photo=None, caption=None, sen
     return 'sent'
 
 
+def prepare_picks(source, sport, report, now=None):
+    """Enrich a ranked report's picks exactly as a card is built (implied lines, quote check, book price, lineups, facts).
+    Telegram and the NFL game page both call this, so card_choice sees the same input in both."""
+    from . import additional_odds
+    now = now or datetime.fromisoformat(report['as_of'].replace('Z', '+00:00'))
+    card_implied_lines(source, sport, report, now)
+    from . import rundown_odds, tickets
+    cached_odds = rundown_odds.read_cache(now) if sport == 'nhl' else None
+    for pick in report['picks']:
+        pick['quote_check'] = tickets.quote_check(source, pick, report['as_of'])
+        if sport in ('nhl', 'nfl'):
+            pick['card_market_prob'] = tickets.card_market_prob(source, pick)
+            if cached_odds is not None and pick['card_market_prob'] is None and pick['market'] == 'reg3':
+                pick.update(rundown_odds.regulation_card_comparison(pick, cached_odds, now))
+        if pick['market'] in ('team_total_home', 'team_total_away'):
+            history = pick.get('percentage_history')
+            model_side = history.get('side') if isinstance(history, dict) else getattr(history, 'side', None)
+            side = {'a': 'over', 'b': 'under'}.get(model_side)
+            pick.update(additional_odds.comparison(sport, pick, report['as_of'], side=side,
+                                                   line=pick['quote_check']['line_at_forecast']))
+    tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
+    tickets.attach_facts(source, sport, report['picks'], report['as_of'])
+
+
 def run_once(bot, settings, conn, *, now=None):
     from . import additional_odds, db, freshness
     from .providers.real import RealProvider
@@ -1031,23 +1055,7 @@ def run_once(bot, settings, conn, *, now=None):
                     report = RealProvider(source, now.strftime('%Y-%m-%dT%H:%M:%SZ')).ranked_picks(now.astimezone(TORONTO).date())
                 lineups = card_lineups(source, sport, report, now)
                 pictures = best_pick_pictures(source, sport, report, now)
-                card_implied_lines(source, sport, report, now)
-                from . import rundown_odds, tickets
-                cached_odds = rundown_odds.read_cache(now) if sport == 'nhl' else None
-                for pick in report['picks']:
-                    pick['quote_check'] = tickets.quote_check(source, pick, report['as_of'])
-                    if sport in ('nhl', 'nfl'):
-                        pick['card_market_prob'] = tickets.card_market_prob(source, pick)
-                        if cached_odds is not None and pick['card_market_prob'] is None and pick['market'] == 'reg3':
-                            pick.update(rundown_odds.regulation_card_comparison(pick, cached_odds, now))
-                    if pick['market'] in ('team_total_home', 'team_total_away'):
-                        history = pick.get('percentage_history')
-                        model_side = history.get('side') if isinstance(history, dict) else getattr(history, 'side', None)
-                        side = {'a': 'over', 'b': 'under'}.get(model_side)
-                        pick.update(additional_odds.comparison(sport, pick, report['as_of'], side=side,
-                                                               line=pick['quote_check']['line_at_forecast']))
-                tickets.attach_lineups(source, sport, report['picks'], report['as_of'])
-                tickets.attach_facts(source, sport, report['picks'], report['as_of'])
+                prepare_picks(source, sport, report, now)
                 saved = snapshot_seen(sport, report, now, source)
             finally:
                 source.close()

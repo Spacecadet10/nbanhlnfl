@@ -138,9 +138,9 @@ def forecast_key(sport: str, pick_or_id) -> str:
     return str(raw if rid is None else rid)
 
 
-def _recommended(report: dict, picks: list) -> dict:
-    """{game_id: (market, forecast_id) its card recommends, ('none',) without one} for the games that have a card now (the card's own
-    rule and order). A game whose choice cannot be read is absent."""
+def card_choices(report: dict, picks: list) -> dict:
+    """{game_id: tickets.card_choice result} for the games in `picks`, in the card's own market order. A game whose choice cannot
+    be read is absent. The one place the card rule is applied to a report: history, Telegram and the NFL page all use it."""
     from . import sports, tickets
     sport, out, games = report["sport"], {}, {}
     for p in picks:
@@ -149,10 +149,19 @@ def _recommended(report: dict, picks: list) -> dict:
         order = (list(dict.fromkeys(p["market"] for p in ps)) if sport == "soccer" else list(sports.store(sport).markets))
         ps = sorted(ps, key=lambda p: order.index(p["market"]) if p["market"] in order else len(order))
         try:
-            chosen = tickets.card_choice(sport, ps)["pick"]
-            out[gid] = ("none",) if chosen is None else (chosen["market"], str(chosen["forecast_id"]))
+            out[gid] = tickets.card_choice(sport, ps)
         except Exception:
             pass                               # not known: saved as NULL, never as "not recommended"
+    return out
+
+
+def _recommended(report: dict, picks: list) -> dict:
+    """{game_id: (market, forecast_id) its card recommends, ('none',) without one} for the games that have a card now (the card's own
+    rule and order). A game whose choice cannot be read is absent."""
+    out = {}
+    for gid, choice in card_choices(report, picks).items():
+        chosen = choice["pick"]
+        out[gid] = ("none",) if chosen is None else (chosen["market"], str(chosen["forecast_id"]))
     return out
 
 

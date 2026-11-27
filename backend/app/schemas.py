@@ -869,6 +869,8 @@ class NflGame(BaseModel):
     result_availability_basis: Optional[Literal["observed_retrieval", "assumed_tipoff_plus_4h"]]
     forecasts: Optional[list[CanonicalForecast]] = None
     recommended_pick: Optional[str] = None
+    recommendation_method: Optional[str] = None
+    recommended_reason: Optional[str] = None
 
 
 class NflMeta(BaseModel):
